@@ -24,5 +24,7 @@ public interface PermissionRepository extends JpaRepository<Permission, UUID> {
 
     @Query("SELECT p FROM Permission p WHERE p.key IN :keys AND p.isDeprecated = false")
     List<Permission> findByKeysAndActive(@Param("keys") Set<String> keys);
+
+    boolean existsByKey(String key);
 }
 

@@ -9,7 +9,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode
-class ScopeClosureId implements java.io.Serializable {
+public class ScopeClosureId implements java.io.Serializable {
     private UUID ancestorId;
     private UUID descendantId;
 }

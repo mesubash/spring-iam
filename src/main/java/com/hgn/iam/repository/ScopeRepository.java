@@ -20,4 +20,9 @@ public interface ScopeRepository extends JpaRepository<Scope, UUID> {
 
     @Query("SELECT s FROM Scope s WHERE s.active = true")
     List<Scope> findAllActive();
+
+    @Query("SELECT s FROM Scope s WHERE s.parentId = :parentId AND s.active = true")
+    List<Scope> findByParentId(@Param("parentId") UUID parentId);
+
+    boolean existsByCode(String code);
 }

@@ -35,6 +35,7 @@ spring:
               max-idle: 10
               min-idle: 5
           timeout: 2000
+
 authorization:
   cache:
     jwt-ttl: 3600              # 1 hour
@@ -44,7 +45,38 @@ authorization:
     enable-batch-loading: true
     batch-size: 50
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,loggers
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      environment: ${spring.profiles.active}
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+server:
+  port: 8080
+  compression:
+    enabled: true
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 10
+
+# Logging
 logging:
   level:
-    com.yourcompany.auth: INFO
+    root: INFO
+    com.yourcompany.auth: DEBUG
     org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
