@@ -6,18 +6,20 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.HealthIndicator;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.HealthIndicator;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @RestController
@@ -50,8 +52,8 @@ public class HealthController {
 
         // Timer statistics
         var timer = meterRegistry.timer("authorization.check.duration");
-        metrics.put("authorization.avg.latency.ms", timer.mean());
-        metrics.put("authorization.max.latency.ms", timer.max());
+        metrics.put("authorization.avg.latency.ms", timer.mean(TimeUnit.MILLISECONDS));
+        metrics.put("authorization.max.latency.ms", timer.max(TimeUnit.MILLISECONDS));
         metrics.put("authorization.total.checks", timer.count());
 
         // Cache statistics
@@ -64,51 +66,70 @@ public class HealthController {
 /**
  * Custom health indicator for Redis cache
  */
-@Component
+
+@Configuration
 @RequiredArgsConstructor
-@Slf4j
-class RedisHealthIndicator implements HealthIndicator {
+class RedisHealthConfig {
 
     private final RedisTemplate<String, Object> redisTemplate;
 
-    @Override
-    public Health health() {
-        try {
-            redisTemplate.opsForValue().get("health-check");
-            return Health.up()
-                    .withDetail("redis", "Connection successful")
-                    .build();
-        } catch (Exception e) {
-            log.error("Redis health check failed", e);
-            return Health.down()
-                    .withDetail("redis", "Connection failed: " + e.getMessage())
-                    .build();
-        }
+    @Bean
+    HealthIndicator redisHealthIndicator() {
+        return () -> {
+            try {
+                redisTemplate.opsForValue().get("health-check");
+                return Health.up()
+                        .withDetail("redis", "Connection successful")
+                        .build();
+            } catch (Exception e) {
+                return Health.down(e)
+                        .withDetail("redis", "Connection failed")
+                        .build();
+            }
+        };
     }
 }
+
 
 /**
  * Custom health indicator for database
  */
-@Component
+@Configuration
 @RequiredArgsConstructor
-@Slf4j
-class DatabaseHealthIndicator implements HealthIndicator {
+class HealthIndicatorsConfig {
 
+    private final RedisTemplate<String, Object> redisTemplate;
     private final JdbcTemplate jdbcTemplate;
 
-    @Override
-    public Health health() {
-        try {
-            jdbcTemplate.queryForObject("SELECT 1", Integer.class);
-            return Health.up()
-                    .withDetail("database", "Connection successful")
-                    .build();
-        } catch (Exception e) {
-            log.error("Database health check failed", e);
-            return Health.down()
-                    .withDetail("database", "Connection failed: " + e.getMessage())
-                    .build();
-        }
+    @Bean
+    HealthIndicator redisHealthIndicator() {
+        return () -> {
+            try {
+                redisTemplate.opsForValue().get("health-check");
+                return Health.up()
+                        .withDetail("redis", "Connection successful")
+                        .build();
+            } catch (Exception e) {
+                return Health.down(e)
+                        .withDetail("redis", "Connection failed")
+                        .build();
+            }
+        };
+    }
+
+    @Bean
+    HealthIndicator databaseHealthIndicator() {
+        return () -> {
+            try {
+                jdbcTemplate.queryForObject("SELECT 1", Integer.class);
+                return Health.up()
+                        .withDetail("database", "Connection successful")
+                        .build();
+            } catch (Exception e) {
+                return Health.down(e)
+                        .withDetail("database", "Connection failed")
+                        .build();
+            }
+        };
     }
 }
