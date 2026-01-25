@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: authorization-service
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/auth_db
+    username: auth_user
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 1200000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 20
+
+  redis:
+    data:
+      host: localhost
+      port: 6379
+      password: ${REDIS_PASSWORD}
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+      timeout: 2000ms
+
+authorization:
+  cache:
+    jwt-ttl: 3600              # 1 hour
+    redis-ttl: 300             # 5 minutes
+    redis-deny-ttl: 60         # 1 minute
+  performance:
+    enable-batch-loading: true
+    batch-size: 50
+
+logging:
+  level:
+    com.yourcompany.auth: INFO
+    org.hibernate.SQL: DEBUG
