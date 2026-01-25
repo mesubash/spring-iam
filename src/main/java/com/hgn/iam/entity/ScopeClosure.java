@@ -17,6 +17,7 @@ public class ScopeClosure {
 
     @Id
     @Column(name = "ancestor_id")
+
     private UUID ancestorId;
 
     @Id
