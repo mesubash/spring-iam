@@ -1,82 +1,136 @@
 spring:
   application:
-    name: authorization-service
+    name: iam-service
 
+  # Database Configuration
   datasource:
     url: jdbc:postgresql://localhost:5432/iam_db
-    username: iam_user
-    password: ${DB_PASSWORD}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 50
-      minimum-idle: 10
-      connection-timeout: 20000
-      idle-timeout: 300000
-      max-lifetime: 1200000
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      pool-name: IAM-HikariPool
 
+  # JPA Configuration
   jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: validate
+      ddl-auto: validate  # Use Flyway/Liquibase for migrations
+    show-sql: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
         jdbc:
           batch_size: 20
+        order_inserts: true
+        order_updates: true
 
-  redis:
+  # Redis Configuration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 8
+          min-idle: 2
+          max-wait: 2000ms
+      timeout: 2000ms
+
+  # Session Configuration
+  session:
+    store-type: redis
     data:
       redis:
-          host: localhost
-          port: 6379
-          password: ${REDIS_PASSWORD}
-          lettuce:
-            pool:
-              max-active: 20
-              max-idle: 10
-              min-idle: 5
-          timeout: 2000
+        namespace: spring:session
 
-authorization:
+  # Cache Configuration
   cache:
-    jwt-ttl: 3600              # 1 hour
-    redis-ttl: 300             # 5 minutes
-    redis-deny-ttl: 60         # 1 minute
-  performance:
-    enable-batch-loading: true
-    batch-size: 50
+    type: redis
+    redis:
+      time-to-live: 300000  # 5 minutes default
+      cache-null-values: false
 
+# Actuator Configuration
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus,loggers
+        include: health,info,metrics,prometheus
+      base-path: /actuator
   endpoint:
     health:
       show-details: always
   metrics:
-    tags:
-      application: ${spring.application.name}
-      environment: ${spring.profiles.active}
+    distribution:
+      percentiles-histogram:
+        authorization.check.duration: true
   prometheus:
     metrics:
       export:
         enabled: true
 
-server:
-  port: 8080
-  compression:
-    enabled: true
-  tomcat:
-    threads:
-      max: 200
-      min-spare: 10
+# Application-Specific Configuration
+iam:
+  authorization:
+    # Cache TTL settings
+    cache:
+      permissions-ttl: 300  # 5 minutes
+      deny-rules-ttl: 60    # 1 minute (security-critical)
+      scope-ttl: 3600       # 1 hour (changes rarely)
+      role-ttl: 1800        # 30 minutes
 
-# Logging
+    # Audit settings
+    audit:
+      async: true
+      batch-size: 100
+      flush-interval: 5000  # 5 seconds
+
+    # Performance settings
+    performance:
+      max-authorization-time-ms: 50  # Log warning if exceeded
+      enable-metrics: true
+
+# Logging Configuration
 logging:
   level:
     root: INFO
-    com.yourcompany.auth: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    com.hgn.iam: DEBUG
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+    org.springframework.cache: DEBUG
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/iam-service.log
+    max-size: 10MB
+    max-history: 30
+
+# Server Configuration
+server:
+  port: 8080
+  servlet:
+    context-path: /
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+  tomcat:
+    max-threads: 200
+    min-spare-threads: 10
+
+# Swagger/OpenAPI Configuration
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha

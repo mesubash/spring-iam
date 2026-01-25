@@ -9,6 +9,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +27,7 @@ public class AuthorizationService {
     private final DenyRuleRepository denyRuleRepository;
     private final ScopeClosureRepository scopeClosureRepository;
     private final PermissionRepository permissionRepository;
+    private final RolePermissionRepository rolePermissionRepository;
     private final AuthorizationAuditRepository auditRepository;
     private final CacheService cacheService;
     private final MeterRegistry meterRegistry;
@@ -42,6 +44,7 @@ public class AuthorizationService {
             DenyRuleRepository denyRuleRepository,
             ScopeClosureRepository scopeClosureRepository,
             PermissionRepository permissionRepository,
+            RolePermissionRepository rolePermissionRepository, // ✅ ADD THIS
             AuthorizationAuditRepository auditRepository,
             CacheService cacheService,
             MeterRegistry meterRegistry) {
@@ -50,6 +53,7 @@ public class AuthorizationService {
         this.denyRuleRepository = denyRuleRepository;
         this.scopeClosureRepository = scopeClosureRepository;
         this.permissionRepository = permissionRepository;
+        this.rolePermissionRepository = rolePermissionRepository; // ✅ ADD THIS
         this.auditRepository = auditRepository;
         this.cacheService = cacheService;
         this.meterRegistry = meterRegistry;
@@ -74,9 +78,6 @@ public class AuthorizationService {
 
     /**
      * MAIN AUTHORIZATION METHOD with MULTI-LAYER CACHING
-     *
-     * This is the method that gets called for EVERY request!
-     * Performance is CRITICAL here!
      */
     public AuthorizationResponse authorize(AuthorizationRequest request) {
         return authorizationTimer.record(() -> doAuthorize(request));
@@ -95,26 +96,22 @@ public class AuthorizationService {
 
             // ================================================================
             // STEP 1: CHECK DENY RULES (Highest Priority)
-            // Use cache first!
             // ================================================================
 
             Set<String> cachedDenyRules = cacheService.getCachedDenyRules(subject);
             Set<String> deniedPermissions;
 
             if (cachedDenyRules != null) {
-                // CACHE HIT! ⚡
                 cacheHitCounter.increment();
                 deniedPermissions = cachedDenyRules;
                 log.debug("Deny rules cache HIT for subject: {}", subject);
             } else {
-                // Cache miss - query database
                 cacheMissCounter.increment();
                 deniedPermissions = fetchDenyRules(subject);
                 cacheService.cacheDenyRules(subject, deniedPermissions);
                 log.debug("Deny rules cache MISS for subject: {}", subject);
             }
 
-            // Check if permission is denied
             if (deniedPermissions.contains(permissionKey) ||
                     deniedPermissions.contains("*.*.*")) {
 
@@ -126,27 +123,25 @@ public class AuthorizationService {
             }
 
             // ================================================================
-            // STEP 2-5: CHECK PERMISSIONS
-            // Use cache first!
+            // STEP 2: CHECK PERMISSIONS
             // ================================================================
 
-            Set<String> cachedPermissions = cacheService.getCachedUserPermissions(subject);
+            // Build cache key with scope for more accurate caching
+            String cacheKey = subject + ":" + resourceScopeId;
+            Set<String> cachedPermissions = cacheService.getCachedUserPermissions(cacheKey);
             Set<String> userPermissions;
 
             if (cachedPermissions != null) {
-                // CACHE HIT! ⚡
                 cacheHitCounter.increment();
                 userPermissions = cachedPermissions;
                 log.debug("Permission cache HIT for subject: {}", subject);
             } else {
-                // Cache miss - query database and build permission set
                 cacheMissCounter.increment();
                 userPermissions = fetchUserPermissions(subject, resourceScopeId);
-                cacheService.cacheUserPermissions(subject, userPermissions);
+                cacheService.cacheUserPermissions(cacheKey, userPermissions);
                 log.debug("Permission cache MISS for subject: {}", subject);
             }
 
-            // Check if user has the required permission
             if (!userPermissions.contains(permissionKey)) {
                 String reason = "DENY: Permission not granted by any role";
                 logAuditAsync(request, false, reason);
@@ -167,7 +162,7 @@ public class AuthorizationService {
 
         } catch (Exception e) {
             log.error("Authorization check failed", e);
-            String reason = "DENY: Authorization service error";
+            String reason = "DENY: Authorization service error - " + e.getMessage();
             logAuditAsync(request, false, reason);
             denyCounter.increment();
 
@@ -179,7 +174,7 @@ public class AuthorizationService {
      * Fetch deny rules from database
      */
     private Set<String> fetchDenyRules(String subjectId) {
-        List<DenyRule> rules = denyRuleRepository.findActiveDenyRulesForSubject(
+        List<DenyRule> rules = denyRuleRepository.findAllActiveDenyRulesForSubject(
                 subjectId, Instant.now());
 
         return rules.stream()
@@ -188,12 +183,10 @@ public class AuthorizationService {
     }
 
     /**
-     * Fetch and compute user's permissions
-     * This is expensive - that's why we cache it!
+     * ✅ FIXED: Fetch and compute user's permissions
      */
     private Set<String> fetchUserPermissions(String subjectId, UUID resourceScopeId) {
 
-        // Get active assignments
         List<Assignment> assignments = assignmentRepository.findActiveAssignments(
                 subjectId, Instant.now());
 
@@ -209,7 +202,6 @@ public class AuthorizationService {
                     assignment.getScopeId(), resourceScopeId);
 
             if (scopeContains == null) {
-                // Cache miss - query database
                 scopeContains = scopeClosureRepository.scopeContains(
                         assignment.getScopeId(), resourceScopeId);
                 cacheService.cacheScopeContainment(
@@ -217,8 +209,7 @@ public class AuthorizationService {
             }
 
             if (scopeContains) {
-                // Get permissions for this role
-                // TODO: This should also be cached per role
+                // ✅ FIXED: Get actual role permissions
                 Set<String> rolePermissions = getRolePermissions(assignment.getRoleId());
                 permissions.addAll(rolePermissions);
             }
@@ -228,20 +219,34 @@ public class AuthorizationService {
     }
 
     /**
-     * Get permissions for a role
-     * TODO: Add role-level caching
+     * ✅ FIXED: Get permissions for a role
+     * Uses role-level caching for performance
      */
     private Set<String> getRolePermissions(UUID roleId) {
-        // This query should be optimized with batch loading
-        return permissionRepository.findAll().stream()
-                .map(Permission::getKey)
-                .collect(Collectors.toSet());
-        // TODO: Actually query role_permissions table
+        // Try cache first
+        String cacheKey = "role:" + roleId;
+        Set<String> cached = cacheService.getCachedRolePermissions(cacheKey);
+
+        if (cached != null) {
+            cacheHitCounter.increment();
+            return cached;
+        }
+
+        // Cache miss - fetch from database
+        cacheMissCounter.increment();
+        Set<String> permissions = rolePermissionRepository
+                .findPermissionKeysByRoleId(roleId);
+
+        // Cache the result (roles change infrequently, so longer TTL is OK)
+        cacheService.cacheRolePermissions(cacheKey, permissions);
+
+        return permissions;
     }
 
     /**
-     * Log audit entry asynchronously to avoid blocking
+     * Log audit entry asynchronously
      */
+    @Async("auditExecutor")
     @Transactional
     protected void logAuditAsync(AuthorizationRequest request,
                                  boolean decision,
@@ -269,13 +274,9 @@ public class AuthorizationService {
             auditRepository.save(audit);
         } catch (Exception e) {
             log.error("Failed to save audit log", e);
-            // Don't fail the authorization if audit fails
         }
     }
 
-    /**
-     * Build authorization response
-     */
     private AuthorizationResponse buildResponse(boolean authorized,
                                                 String reason,
                                                 Instant startTime) {
@@ -301,9 +302,20 @@ public class AuthorizationService {
      * Invalidate cache when assignments change
      */
     public void invalidateUserCache(String subjectId) {
+        // Invalidate all permission caches for this user
+        // (across all scopes)
         cacheService.invalidateUserPermissions(subjectId);
         cacheService.invalidateDenyRules(subjectId);
         cacheService.incrementAssignmentVersion(subjectId);
         log.info("Invalidated all caches for subject: {}", subjectId);
+    }
+
+    /**
+     * ✅ NEW: Invalidate role cache when role permissions change
+     */
+    public void invalidateRoleCache(UUID roleId) {
+        String cacheKey = "role:" + roleId;
+        cacheService.invalidateRolePermissions(cacheKey);
+        log.info("Invalidated role cache for roleId: {}", roleId);
     }
 }

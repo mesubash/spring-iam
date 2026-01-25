@@ -2,14 +2,15 @@ package com.hgn.iam.service;
 
 import com.hgn.iam.entity.Permission;
 import com.hgn.iam.entity.Role;
+import com.hgn.iam.entity.RolePermission;
 import com.hgn.iam.repository.PermissionRepository;
+import com.hgn.iam.repository.RolePermissionRepository;
 import com.hgn.iam.repository.RoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -20,8 +21,10 @@ import java.util.UUID;
 public class RoleService {
 
     private final RoleRepository roleRepository;
+    private final RolePermissionRepository rolePermissionRepository;
     private final PermissionRepository permissionRepository;
     private final CacheService cacheService;
+    private final AuthorizationService authorizationService;
 
     @Transactional(readOnly = true)
     public List<Role> getAllActive() {
@@ -45,8 +48,7 @@ public class RoleService {
 
     @Transactional(readOnly = true)
     public List<Permission> getRolePermissions(UUID roleId) {
-        // TODO: Implement via RolePermissionRepository
-        return new ArrayList<>();
+        return rolePermissionRepository.findPermissionsByRoleId(roleId);
     }
 
     @Transactional
@@ -59,6 +61,14 @@ public class RoleService {
             throw new IllegalArgumentException("Role already exists: " + name);
         }
 
+        // Validate all permissions exist
+        for (UUID permissionId : permissionIds) {
+            permissionRepository.findById(permissionId)
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Permission not found: " + permissionId));
+        }
+
+        // Create role
         Role role = Role.builder()
                 .name(name)
                 .displayName(displayName)
@@ -69,15 +79,21 @@ public class RoleService {
                 .createdBy("system")
                 .build();
 
-        Role saved = roleRepository.save(role);
+        Role savedRole = roleRepository.save(role);
 
-        // Add permissions
-        if (permissionIds != null && !permissionIds.isEmpty()) {
-            updatePermissions(saved.getId(), permissionIds);
+        // Create role-permission mappings
+        for (UUID permissionId : permissionIds) {
+            RolePermission rp = RolePermission.builder()
+                    .roleId(savedRole.getId())
+                    .permissionId(permissionId)
+                    .grantedBy("system")
+                    .build();
+            rolePermissionRepository.save(rp);
         }
 
-        log.info("Created role: {}", name);
-        return saved;
+        log.info("Created role: {} with {} permissions", name, permissionIds.size());
+
+        return savedRole;
     }
 
     @Transactional
@@ -85,10 +101,53 @@ public class RoleService {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new IllegalArgumentException("Role not found"));
 
-        // TODO: Delete existing role_permissions
-        // TODO: Insert new role_permissions
+        if (role.getIsSystemRole()) {
+            throw new IllegalArgumentException("Cannot modify system role permissions");
+        }
 
-        // Invalidate cache for all users with this role
-        log.info("Updated permissions for role: {}", role.getName());
+        // Validate all permissions exist
+        for (UUID permissionId : permissionIds) {
+            permissionRepository.findById(permissionId)
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Permission not found: " + permissionId));
+        }
+
+        // Delete existing mappings
+        rolePermissionRepository.deleteByRoleId(roleId);
+
+        // Create new mappings
+        for (UUID permissionId : permissionIds) {
+            RolePermission rp = RolePermission.builder()
+                    .roleId(roleId)
+                    .permissionId(permissionId)
+                    .grantedBy("system")
+                    .build();
+            rolePermissionRepository.save(rp);
+        }
+
+        // Invalidate role cache
+        authorizationService.invalidateRoleCache(roleId);
+
+        log.info("Updated permissions for role: {} (new count: {})",
+                role.getName(), permissionIds.size());
+    }
+
+    @Transactional
+    public Role deactivate(UUID roleId) {
+        Role role = roleRepository.findById(roleId)
+                .orElseThrow(() -> new IllegalArgumentException("Role not found"));
+
+        if (role.getIsSystemRole()) {
+            throw new IllegalArgumentException("Cannot deactivate system role");
+        }
+
+        role.setActive(false);
+        Role updated = roleRepository.save(role);
+
+        // Invalidate role cache
+        authorizationService.invalidateRoleCache(roleId);
+
+        log.info("Deactivated role: {}", role.getName());
+        return updated;
     }
 }
