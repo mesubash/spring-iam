@@ -64,34 +64,6 @@ public class HealthController {
 }
 
 /**
- * Custom health indicator for Redis cache
- */
-
-@Configuration
-@RequiredArgsConstructor
-class RedisHealthConfig {
-
-    private final RedisTemplate<String, Object> redisTemplate;
-
-    @Bean
-    HealthIndicator redisHealthIndicator() {
-        return () -> {
-            try {
-                redisTemplate.opsForValue().get("health-check");
-                return Health.up()
-                        .withDetail("redis", "Connection successful")
-                        .build();
-            } catch (Exception e) {
-                return Health.down(e)
-                        .withDetail("redis", "Connection failed")
-                        .build();
-            }
-        };
-    }
-}
-
-
-/**
  * Custom health indicator for database
  */
 @Configuration

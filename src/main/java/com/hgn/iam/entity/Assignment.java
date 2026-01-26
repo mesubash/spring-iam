@@ -1,10 +1,9 @@
 package com.hgn.iam.entity;
 
-import com.vladmihalcea.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.Type;
-
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -18,7 +17,6 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@TypeDef(name = "jsonb", typeClass = JsonBinaryType.class)
 public class Assignment {
 
     @Id
@@ -49,7 +47,7 @@ public class Assignment {
     @Column(name = "expires_at")
     private Instant expiresAt;
 
-    @Type(type = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> conditions = new HashMap<>();
 

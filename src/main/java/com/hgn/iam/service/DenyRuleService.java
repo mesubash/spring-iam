@@ -32,8 +32,12 @@ public class DenyRuleService {
                            UUID scopeId, String reason, String referenceId,
                            String createdBy, Instant expiresAt) {
 
-        // Validate permission exists (unless wildcard)
-        if (!"*.*.*".equals(permissionKey)) {
+        // Validate permission exists (unless wildcard pattern)
+        if (permissionKey.contains("*")) {
+            if (!permissionKey.matches("^[a-z_*]+\\.[a-z_*]+\\.[a-z_*]+$")) {
+                throw new IllegalArgumentException("Invalid permission pattern: " + permissionKey);
+            }
+        } else {
             permissionRepository.findByKey(permissionKey)
                     .orElseThrow(() -> new IllegalArgumentException(
                             "Permission not found: " + permissionKey));

@@ -21,6 +21,7 @@ public class CacheService {
     private static final String SCOPE_CACHE_PREFIX = "auth:scope:";
     private static final String ROLE_CACHE_PREFIX = "auth:role:";  // ✅ NEW
     private static final String ASSIGNMENT_VERSION_PREFIX = "auth:version:";
+    private static final String POLICY_CACHE_PREFIX = "auth:policy:";
 
     // ========================================================================
     // PERMISSION CACHING
@@ -69,7 +70,7 @@ public class CacheService {
     // DENY RULE CACHING
     // ========================================================================
 
-    public void cacheDenyRules(String subjectId, Set<String> deniedPermissions) {
+    public void cacheDenyRules(String subjectId, Set<CachedDenyRule> deniedPermissions) {
         String key = DENY_CACHE_PREFIX + subjectId;
         try {
             redisTemplate.opsForValue().set(key, deniedPermissions, Duration.ofMinutes(1));
@@ -80,10 +81,10 @@ public class CacheService {
     }
 
     @SuppressWarnings("unchecked")
-    public Set<String> getCachedDenyRules(String subjectId) {
+    public Set<CachedDenyRule> getCachedDenyRules(String subjectId) {
         String key = DENY_CACHE_PREFIX + subjectId;
         try {
-            return (Set<String>) redisTemplate.opsForValue().get(key);
+            return (Set<CachedDenyRule>) redisTemplate.opsForValue().get(key);
         } catch (Exception e) {
             log.error("Failed to get cached deny rules for subject: {}", subjectId, e);
             return null;
@@ -129,6 +130,14 @@ public class CacheService {
         String key = ROLE_CACHE_PREFIX + cacheKey;
         redisTemplate.delete(key);
         log.info("Invalidated role permissions cache for key: {}", cacheKey);
+    }
+
+    public void invalidateAllRolePermissions() {
+        Set<String> keys = redisTemplate.keys(ROLE_CACHE_PREFIX + "*");
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
+            log.warn("Invalidated all role permissions cache entries");
+        }
     }
 
     // ========================================================================
@@ -184,7 +193,9 @@ public class CacheService {
     /**
      * Warm up cache with frequently accessed data
      */
-    public void warmUpCache(String subjectId, Set<String> permissions, Set<String> denyRules) {
+    public void warmUpCache(String subjectId,
+                            Set<String> permissions,
+                            Set<CachedDenyRule> denyRules) {
         cacheUserPermissions(subjectId, permissions);
         cacheDenyRules(subjectId, denyRules);
         log.info("Warmed up cache for subject: {}", subjectId);
@@ -209,13 +220,15 @@ public class CacheService {
         long denyCount = countKeys(DENY_CACHE_PREFIX + "*");
         long scopeCount = countKeys(SCOPE_CACHE_PREFIX + "*");
         long roleCount = countKeys(ROLE_CACHE_PREFIX + "*");
+        long policyCount = countKeys(POLICY_CACHE_PREFIX + "*");
 
         return CacheStats.builder()
                 .permissionCacheSize(permCount)
                 .denyRuleCacheSize(denyCount)
                 .scopeCacheSize(scopeCount)
                 .roleCacheSize(roleCount)
-                .totalCacheSize(permCount + denyCount + scopeCount + roleCount)
+                .policyCacheSize(policyCount)
+                .totalCacheSize(permCount + denyCount + scopeCount + roleCount + policyCount)
                 .build();
     }
 
@@ -226,11 +239,100 @@ public class CacheService {
 
     @lombok.Data
     @lombok.Builder
+    @lombok.NoArgsConstructor
+    @lombok.AllArgsConstructor
+    public static class CachedDenyRule {
+        private String permissionKey;
+        private UUID scopeId;
+    }
+
+    @lombok.Data
+    @lombok.Builder
+    @lombok.NoArgsConstructor
+    @lombok.AllArgsConstructor
+    public static class PolicySnapshot {
+        private UUID id;
+        private String name;
+        private String description;
+        private String permissionKey;
+        private String resourceType;
+        private UUID scopeId;
+        private String effect;
+        private Integer priority;
+        private java.util.Map<String, Object> conditions;
+        private Boolean active;
+
+        public static PolicySnapshot fromPolicy(com.hgn.iam.entity.Policy policy) {
+            return PolicySnapshot.builder()
+                    .id(policy.getId())
+                    .name(policy.getName())
+                    .description(policy.getDescription())
+                    .permissionKey(policy.getPermissionKey())
+                    .resourceType(policy.getResourceType())
+                    .scopeId(policy.getScopeId())
+                    .effect(policy.getEffect())
+                    .priority(policy.getPriority())
+                    .conditions(policy.getConditions())
+                    .active(policy.getActive())
+                    .build();
+        }
+
+        public com.hgn.iam.entity.Policy toPolicy() {
+            return com.hgn.iam.entity.Policy.builder()
+                    .id(id)
+                    .name(name)
+                    .description(description)
+                    .permissionKey(permissionKey)
+                    .resourceType(resourceType)
+                    .scopeId(scopeId)
+                    .effect(effect)
+                    .priority(priority)
+                    .conditions(conditions)
+                    .active(active != null ? active : true)
+                    .build();
+        }
+    }
+
+    @lombok.Data
+    @lombok.Builder
     public static class CacheStats {
         private long permissionCacheSize;
         private long denyRuleCacheSize;
         private long scopeCacheSize;
         private long roleCacheSize;
+        private long policyCacheSize;
         private long totalCacheSize;
+    }
+
+    // ========================================================================
+    // POLICY CACHING
+    // ========================================================================
+
+    public void cachePolicies(String cacheKey, java.util.List<PolicySnapshot> policies) {
+        String key = POLICY_CACHE_PREFIX + cacheKey;
+        try {
+            redisTemplate.opsForValue().set(key, policies, Duration.ofMinutes(2));
+        } catch (Exception e) {
+            log.error("Failed to cache policies for key: {}", cacheKey, e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public java.util.List<PolicySnapshot> getCachedPolicies(String cacheKey) {
+        String key = POLICY_CACHE_PREFIX + cacheKey;
+        try {
+            return (java.util.List<PolicySnapshot>) redisTemplate.opsForValue().get(key);
+        } catch (Exception e) {
+            log.error("Failed to get cached policies for key: {}", cacheKey, e);
+            return null;
+        }
+    }
+
+    public void invalidatePolicyCache() {
+        Set<String> keys = redisTemplate.keys(POLICY_CACHE_PREFIX + "*");
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
+            log.info("Invalidated policy cache");
+        }
     }
 }

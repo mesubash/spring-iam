@@ -1,5 +1,4 @@
 package com.hgn.iam.config;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
@@ -9,7 +8,7 @@ import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
@@ -30,8 +29,7 @@ public class CacheConfig {
         template.setHashKeySerializer(new StringRedisSerializer());
 
         // Use JSON serializer for values
-        GenericJackson2JsonRedisSerializer serializer =
-                new GenericJackson2JsonRedisSerializer();
+        RedisSerializer<Object> serializer = RedisSerializer.json();
         template.setValueSerializer(serializer);
         template.setHashValueSerializer(serializer);
 
@@ -41,6 +39,7 @@ public class CacheConfig {
 
     @Bean
     public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
+        RedisSerializer<Object> serializer = RedisSerializer.json();
         RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofMinutes(5))  // Default 5 minutes
                 .serializeKeysWith(
@@ -48,7 +47,7 @@ public class CacheConfig {
                                 new StringRedisSerializer()))
                 .serializeValuesWith(
                         RedisSerializationContext.SerializationPair.fromSerializer(
-                                new GenericJackson2JsonRedisSerializer()))
+                                serializer))
                 .disableCachingNullValues();
 
         return RedisCacheManager.builder(connectionFactory)

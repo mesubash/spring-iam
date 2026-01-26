@@ -2,6 +2,7 @@ package com.hgn.iam.controller;
 
 import com.hgn.iam.dto.CreateScopeRequest;
 import com.hgn.iam.entity.Scope;
+import com.hgn.iam.service.ScopeService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

@@ -1,9 +1,8 @@
 package com.hgn.iam.entity;
 
-import com.vladmihalcea.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.Type;
+import org.hibernate.annotations.ColumnTransformer;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -15,7 +14,6 @@ import java.util.UUID;
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor
 @Builder
-@TypeDef(name = "jsonb", typeClass = JsonBinaryType.class)
 public class Scope {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -33,13 +31,14 @@ public class Scope {
     @Column(name = "parent_id")
     private UUID parentId;
 
-    @Column(nullable = false, length = 500)
+    @ColumnTransformer(write = "CAST(? AS ltree)")
+    @Column(nullable = false, columnDefinition = "ltree")
     private String path;  // Materialized path
 
     @Column(nullable = false)
     private Integer depth = 0;
 
-    @Type(type = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> metadata = new HashMap<>();
 

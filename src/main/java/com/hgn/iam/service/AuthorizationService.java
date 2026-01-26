@@ -1,36 +1,46 @@
 package com.hgn.iam.service;
 
 import com.hgn.iam.entity.*;
-import com.hgn.iam.repository.*;
+import com.hgn.iam.repository.AssignmentRepository;
+import com.hgn.iam.repository.AuthorizationAuditRepository;
+import com.hgn.iam.repository.DenyRuleRepository;
+import com.hgn.iam.repository.RoleHierarchyRepository;
+import com.hgn.iam.repository.RolePermissionRepository;
+import com.hgn.iam.repository.ScopeClosureRepository;
 import com.hgn.iam.dto.AuthorizationRequest;
 import com.hgn.iam.dto.AuthorizationResponse;
+import com.hgn.iam.util.IpRangeMatcher;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class AuthorizationService {
 
     private final AssignmentRepository assignmentRepository;
     private final DenyRuleRepository denyRuleRepository;
     private final ScopeClosureRepository scopeClosureRepository;
-    private final PermissionRepository permissionRepository;
     private final RolePermissionRepository rolePermissionRepository;
+    private final RoleHierarchyRepository roleHierarchyRepository;
     private final AuthorizationAuditRepository auditRepository;
     private final CacheService cacheService;
     private final MeterRegistry meterRegistry;
+    private final PolicyService policyService;
+    private final PolicyEvaluator policyEvaluator;
 
     // Metrics
     private final Counter allowCounter;
@@ -43,20 +53,24 @@ public class AuthorizationService {
             AssignmentRepository assignmentRepository,
             DenyRuleRepository denyRuleRepository,
             ScopeClosureRepository scopeClosureRepository,
-            PermissionRepository permissionRepository,
             RolePermissionRepository rolePermissionRepository, // ✅ ADD THIS
+            RoleHierarchyRepository roleHierarchyRepository,
             AuthorizationAuditRepository auditRepository,
             CacheService cacheService,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            PolicyService policyService,
+            PolicyEvaluator policyEvaluator) {
 
         this.assignmentRepository = assignmentRepository;
         this.denyRuleRepository = denyRuleRepository;
         this.scopeClosureRepository = scopeClosureRepository;
-        this.permissionRepository = permissionRepository;
         this.rolePermissionRepository = rolePermissionRepository; // ✅ ADD THIS
+        this.roleHierarchyRepository = roleHierarchyRepository;
         this.auditRepository = auditRepository;
         this.cacheService = cacheService;
         this.meterRegistry = meterRegistry;
+        this.policyService = policyService;
+        this.policyEvaluator = policyEvaluator;
 
         // Initialize metrics
         this.allowCounter = Counter.builder("authorization.decision.allow")
@@ -98,8 +112,8 @@ public class AuthorizationService {
             // STEP 1: CHECK DENY RULES (Highest Priority)
             // ================================================================
 
-            Set<String> cachedDenyRules = cacheService.getCachedDenyRules(subject);
-            Set<String> deniedPermissions;
+            Set<CacheService.CachedDenyRule> cachedDenyRules = cacheService.getCachedDenyRules(subject);
+            Set<CacheService.CachedDenyRule> deniedPermissions;
 
             if (cachedDenyRules != null) {
                 cacheHitCounter.increment();
@@ -112,14 +126,13 @@ public class AuthorizationService {
                 log.debug("Deny rules cache MISS for subject: {}", subject);
             }
 
-            if (deniedPermissions.contains(permissionKey) ||
-                    deniedPermissions.contains("*.*.*")) {
-
+            if (matchesDenyRule(deniedPermissions, permissionKey, resourceScopeId)) {
                 String reason = "DENY: Explicit deny rule exists";
-                logAuditAsync(request, false, reason);
+                UUID auditId = UUID.randomUUID();
+                logAuditAsync(auditId, request, false, reason);
                 denyCounter.increment();
 
-                return buildResponse(false, reason, startTime);
+                return buildResponse(false, reason, startTime, Collections.emptySet(), auditId);
             }
 
             // ================================================================
@@ -128,8 +141,16 @@ public class AuthorizationService {
 
             // Build cache key with scope for more accurate caching
             String cacheKey = subject + ":" + resourceScopeId;
-            Set<String> cachedPermissions = cacheService.getCachedUserPermissions(cacheKey);
+            Set<String> cachedPermissions = null;
             Set<String> userPermissions;
+            PermissionsResult permissionsResult = null;
+
+            boolean hasConditionalAssignments = assignmentRepository
+                    .existsActiveConditionalAssignments(subject, Instant.now());
+
+            if (!hasConditionalAssignments) {
+                cachedPermissions = cacheService.getCachedUserPermissions(cacheKey);
+            }
 
             if (cachedPermissions != null) {
                 cacheHitCounter.increment();
@@ -137,17 +158,47 @@ public class AuthorizationService {
                 log.debug("Permission cache HIT for subject: {}", subject);
             } else {
                 cacheMissCounter.increment();
-                userPermissions = fetchUserPermissions(subject, resourceScopeId);
-                cacheService.cacheUserPermissions(cacheKey, userPermissions);
+                permissionsResult = fetchUserPermissions(subject, permissionKey,
+                        resourceScopeId, request);
+                userPermissions = permissionsResult.permissions;
+                if (permissionsResult.cacheable && !hasConditionalAssignments) {
+                    cacheService.cacheUserPermissions(cacheKey, userPermissions);
+                }
                 log.debug("Permission cache MISS for subject: {}", subject);
             }
 
             if (!userPermissions.contains(permissionKey)) {
-                String reason = "DENY: Permission not granted by any role";
-                logAuditAsync(request, false, reason);
+                String reason;
+                if (permissionsResult != null && permissionsResult.permissionBlockedByConditions) {
+                    reason = permissionsResult.conditionFailureReason != null
+                            ? permissionsResult.conditionFailureReason
+                            : "DENY: Assignment conditions not satisfied";
+                } else if (hasConditionalAssignments) {
+                    reason = "DENY: Permission not granted or assignment conditions not satisfied";
+                } else {
+                    reason = "DENY: Permission not granted by any role";
+                }
+                UUID auditId = UUID.randomUUID();
+                logAuditAsync(auditId, request, false, reason);
                 denyCounter.increment();
 
-                return buildResponse(false, reason, startTime);
+                return buildResponse(false, reason, startTime, Collections.emptySet(), auditId);
+            }
+
+            // ================================================================
+            // STEP 3: POLICY ENGINE (ABAC/ReBAC)
+            // ================================================================
+
+            PolicyDecision policyDecision = evaluatePolicies(request);
+            if (!policyDecision.allowed) {
+                UUID auditId = UUID.randomUUID();
+                String reason = policyDecision.reason != null
+                        ? policyDecision.reason
+                        : "DENY: Policy evaluation failed";
+                logAuditAsync(auditId, request, false, reason);
+                denyCounter.increment();
+
+                return buildResponse(false, reason, startTime, Collections.emptySet(), auditId);
             }
 
             // ================================================================
@@ -155,48 +206,65 @@ public class AuthorizationService {
             // ================================================================
 
             String reason = "ALLOW: Permission granted via role assignment";
-            logAuditAsync(request, true, reason);
+            UUID auditId = UUID.randomUUID();
+            logAuditAsync(auditId, request, true, reason);
             allowCounter.increment();
 
-            return buildResponse(true, reason, startTime, userPermissions);
+            return buildResponse(true, reason, startTime, userPermissions, auditId);
 
         } catch (Exception e) {
             log.error("Authorization check failed", e);
             String reason = "DENY: Authorization service error - " + e.getMessage();
-            logAuditAsync(request, false, reason);
+            UUID auditId = UUID.randomUUID();
+            logAuditAsync(auditId, request, false, reason);
             denyCounter.increment();
 
-            return buildResponse(false, reason, startTime);
+            return buildResponse(false, reason, startTime, Collections.emptySet(), auditId);
         }
     }
 
     /**
      * Fetch deny rules from database
      */
-    private Set<String> fetchDenyRules(String subjectId) {
+    private Set<CacheService.CachedDenyRule> fetchDenyRules(String subjectId) {
         List<DenyRule> rules = denyRuleRepository.findAllActiveDenyRulesForSubject(
                 subjectId, Instant.now());
 
         return rules.stream()
-                .map(DenyRule::getPermissionKey)
+                .map(rule -> CacheService.CachedDenyRule.builder()
+                        .permissionKey(rule.getPermissionKey())
+                        .scopeId(rule.getScopeId())
+                        .build())
                 .collect(Collectors.toSet());
     }
 
     /**
      * ✅ FIXED: Fetch and compute user's permissions
      */
-    private Set<String> fetchUserPermissions(String subjectId, UUID resourceScopeId) {
+    private PermissionsResult fetchUserPermissions(String subjectId,
+                                                   String permissionKey,
+                                                   UUID resourceScopeId,
+                                                   AuthorizationRequest request) {
 
         List<Assignment> assignments = assignmentRepository.findActiveAssignments(
                 subjectId, Instant.now());
 
         if (assignments.isEmpty()) {
-            return Collections.emptySet();
+            return PermissionsResult.empty();
         }
 
         Set<String> permissions = new HashSet<>();
+        boolean cacheable = true;
+        boolean permissionBlockedByConditions = false;
+        String conditionFailureReason = null;
 
         for (Assignment assignment : assignments) {
+            boolean hasConditions = assignment.getConditions() != null
+                    && !assignment.getConditions().isEmpty();
+            if (hasConditions) {
+                cacheable = false;
+            }
+
             // Check if assignment scope contains resource scope
             Boolean scopeContains = cacheService.getCachedScopeContainment(
                     assignment.getScopeId(), resourceScopeId);
@@ -209,13 +277,404 @@ public class AuthorizationService {
             }
 
             if (scopeContains) {
-                // ✅ FIXED: Get actual role permissions
                 Set<String> rolePermissions = getRolePermissions(assignment.getRoleId());
+                if (hasConditions) {
+                    ConditionResult conditionResult = evaluateConditions(assignment, request);
+                    if (!conditionResult.allowed) {
+                        if (rolePermissions.contains(permissionKey)) {
+                            permissionBlockedByConditions = true;
+                            if (conditionFailureReason == null) {
+                                conditionFailureReason = conditionResult.reason;
+                            }
+                        }
+                        continue;
+                    }
+                }
                 permissions.addAll(rolePermissions);
             }
         }
 
-        return permissions;
+        return new PermissionsResult(permissions, cacheable,
+                permissionBlockedByConditions, conditionFailureReason);
+    }
+
+    private boolean matchesDenyRule(Set<CacheService.CachedDenyRule> rules,
+                                    String permissionKey,
+                                    UUID resourceScopeId) {
+        if (rules == null || rules.isEmpty()) {
+            return false;
+        }
+
+        for (CacheService.CachedDenyRule rule : rules) {
+            if (!permissionMatches(rule.getPermissionKey(), permissionKey)) {
+                continue;
+            }
+
+            if (rule.getScopeId() == null) {
+                return true;
+            }
+
+            if (resourceScopeId == null) {
+                continue;
+            }
+
+            if (scopeContainsCached(rule.getScopeId(), resourceScopeId)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean permissionMatches(String rulePermission, String permissionKey) {
+        if ("*.*.*".equals(rulePermission)) {
+            return true;
+        }
+
+        if (rulePermission.equals(permissionKey)) {
+            return true;
+        }
+
+        String[] ruleParts = rulePermission.split("\\.");
+        String[] permParts = permissionKey.split("\\.");
+
+        if (ruleParts.length != permParts.length) {
+            return false;
+        }
+
+        for (int i = 0; i < ruleParts.length; i++) {
+            if ("*".equals(ruleParts[i])) {
+                continue;
+            }
+            if (!ruleParts[i].equals(permParts[i])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private boolean scopeContainsCached(UUID ancestorId, UUID descendantId) {
+        Boolean cached = cacheService.getCachedScopeContainment(ancestorId, descendantId);
+        if (cached != null) {
+            return cached;
+        }
+
+        boolean contains = scopeClosureRepository.scopeContains(ancestorId, descendantId);
+        cacheService.cacheScopeContainment(ancestorId, descendantId, contains);
+        return contains;
+    }
+
+    private PolicyDecision evaluatePolicies(AuthorizationRequest request) {
+        String permissionKey = request.getPermission();
+        String resourceType = request.getResource() != null ? request.getResource().getType() : null;
+        UUID resourceScopeId = request.getResource() != null ? request.getResource().getScopeId() : null;
+
+        List<com.hgn.iam.entity.Policy> candidates =
+                policyService.getApplicablePolicies(permissionKey, resourceType);
+
+        if (candidates.isEmpty()) {
+            return PolicyDecision.allow();
+        }
+
+        boolean hasAllowPolicies = false;
+        boolean allowMatched = false;
+
+        for (com.hgn.iam.entity.Policy policy : candidates) {
+            if (!policyApplies(policy, permissionKey, resourceType, resourceScopeId)) {
+                continue;
+            }
+
+            boolean match = policyEvaluator.evaluate(policy.getConditions(), request);
+            if ("DENY".equalsIgnoreCase(policy.getEffect()) && match) {
+                return PolicyDecision.deny("DENY: Policy " + policy.getName());
+            }
+
+            if ("ALLOW".equalsIgnoreCase(policy.getEffect())) {
+                hasAllowPolicies = true;
+                if (match) {
+                    allowMatched = true;
+                }
+            }
+        }
+
+        if (hasAllowPolicies && !allowMatched) {
+            return PolicyDecision.deny("DENY: No policy matched");
+        }
+
+        return PolicyDecision.allow();
+    }
+
+    private boolean policyApplies(com.hgn.iam.entity.Policy policy,
+                                  String permissionKey,
+                                  String resourceType,
+                                  UUID resourceScopeId) {
+        if (policy.getPermissionKey() != null
+                && !permissionMatches(policy.getPermissionKey(), permissionKey)) {
+            return false;
+        }
+
+        if (policy.getResourceType() != null
+                && resourceType != null
+                && !policy.getResourceType().equals(resourceType)) {
+            return false;
+        }
+
+        if (policy.getResourceType() != null && resourceType == null) {
+            return false;
+        }
+
+        if (policy.getScopeId() != null) {
+            if (resourceScopeId == null) {
+                return false;
+            }
+            return scopeContainsCached(policy.getScopeId(), resourceScopeId);
+        }
+
+        return true;
+    }
+
+    private ConditionResult evaluateConditions(Assignment assignment, AuthorizationRequest request) {
+        Map<String, Object> conditions = assignment.getConditions();
+        if (conditions == null || conditions.isEmpty()) {
+            return ConditionResult.allowed();
+        }
+
+        AuthorizationRequest.RequestContext context = request.getContext();
+        AuthorizationRequest.ResourceContext resource = request.getResource();
+        String subjectId = request.getSubject();
+
+        String timeWindow = getStringCondition(conditions, "time_window", "timeWindow");
+        if (timeWindow != null) {
+            ZoneId zoneId = resolveZoneId(conditions, context);
+            Instant timestamp = context != null && context.getTimestamp() != null
+                    ? context.getTimestamp()
+                    : Instant.now();
+            if (!isWithinTimeWindow(timeWindow, timestamp, zoneId)) {
+                return ConditionResult.deny("DENY: Outside allowed time window");
+            }
+        }
+
+        List<String> ipRanges = getStringListCondition(conditions, "ip_ranges", "ipRanges");
+        if (!ipRanges.isEmpty()) {
+            String ipAddress = context != null ? context.getIpAddress() : null;
+            if (ipAddress == null || !matchesAnyRange(ipAddress, ipRanges)) {
+                return ConditionResult.deny("DENY: IP address not allowed");
+            }
+        }
+
+        boolean requireMfa = getBooleanCondition(conditions, "require_mfa", "requireMfa");
+        if (requireMfa && !isMfaVerified(context)) {
+            return ConditionResult.deny("DENY: MFA required");
+        }
+
+        boolean ownershipRequired = getBooleanCondition(conditions, "ownership_required", "ownershipRequired")
+                || getBooleanCondition(conditions, "can_only_access_own_created", "canOnlyAccessOwnCreated");
+        if (ownershipRequired && !isSubjectOwner(subjectId, resource, context)) {
+            return ConditionResult.deny("DENY: Ownership required");
+        }
+
+        boolean cannotApproveOwnCreated = getBooleanCondition(conditions,
+                "cannot_approve_own_created", "cannotApproveOwnCreated");
+        if (cannotApproveOwnCreated && isSubjectOwner(subjectId, resource, context)) {
+            return ConditionResult.deny("DENY: Cannot approve own created resource");
+        }
+
+        List<String> subjectMatchFields = getStringListCondition(conditions,
+                "subject_match_fields", "subjectMatchFields");
+        if (!subjectMatchFields.isEmpty()
+                && !matchesAllResourceFields(subjectId, resource, context, subjectMatchFields)) {
+            return ConditionResult.deny("DENY: Assignment requires subject match");
+        }
+
+        return ConditionResult.allowed();
+    }
+
+    private ZoneId resolveZoneId(Map<String, Object> conditions,
+                                 AuthorizationRequest.RequestContext context) {
+        String zone = getStringCondition(conditions, "timezone", "timeZone");
+        if (zone == null && context != null && context.getAdditionalContext() != null) {
+            zone = getStringValue(context.getAdditionalContext().get("timezone"));
+        }
+        if (zone == null || zone.isBlank()) {
+            zone = "UTC";
+        }
+        try {
+            return ZoneId.of(zone);
+        } catch (DateTimeException e) {
+            return ZoneId.of("UTC");
+        }
+    }
+
+    private boolean isWithinTimeWindow(String window, Instant timestamp, ZoneId zoneId) {
+        String[] parts = window.split("-");
+        if (parts.length != 2) {
+            return false;
+        }
+
+        try {
+            LocalTime start = LocalTime.parse(parts[0].trim());
+            LocalTime end = LocalTime.parse(parts[1].trim());
+            LocalTime now = ZonedDateTime.ofInstant(timestamp, zoneId).toLocalTime();
+
+            if (start.equals(end)) {
+                return true;
+            }
+
+            if (start.isBefore(end)) {
+                return !now.isBefore(start) && !now.isAfter(end);
+            }
+
+            return !now.isBefore(start) || !now.isAfter(end);
+        } catch (DateTimeException e) {
+            return false;
+        }
+    }
+
+    private boolean matchesAnyRange(String ipAddress, List<String> ranges) {
+        for (String range : ranges) {
+            if (IpRangeMatcher.isInRange(ipAddress, range)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isMfaVerified(AuthorizationRequest.RequestContext context) {
+        if (context == null || context.getAdditionalContext() == null) {
+            return false;
+        }
+
+        Object mfaFlag = context.getAdditionalContext().get("mfa");
+        if (mfaFlag == null) {
+            mfaFlag = context.getAdditionalContext().get("mfaVerified");
+        }
+        if (mfaFlag == null) {
+            mfaFlag = context.getAdditionalContext().get("mfa_authenticated");
+        }
+
+        return parseBoolean(mfaFlag);
+    }
+
+    private boolean isSubjectOwner(String subjectId,
+                                   AuthorizationRequest.ResourceContext resource,
+                                   AuthorizationRequest.RequestContext context) {
+        if (subjectId == null) {
+            return false;
+        }
+
+        String ownerId = null;
+        if (resource != null && resource.getMetadata() != null) {
+            ownerId = getStringValue(resource.getMetadata().get("ownerId"));
+            if (ownerId == null) {
+                ownerId = getStringValue(resource.getMetadata().get("createdBy"));
+            }
+            if (ownerId == null) {
+                ownerId = getStringValue(resource.getMetadata().get("created_by"));
+            }
+        }
+
+        if (ownerId == null && context != null && context.getAdditionalContext() != null) {
+            ownerId = getStringValue(context.getAdditionalContext().get("ownerId"));
+        }
+
+        return subjectId.equals(ownerId);
+    }
+
+    private boolean matchesAllResourceFields(String subjectId,
+                                             AuthorizationRequest.ResourceContext resource,
+                                             AuthorizationRequest.RequestContext context,
+                                             List<String> fields) {
+        if (subjectId == null || fields.isEmpty()) {
+            return false;
+        }
+
+        Map<String, Object> metadata = resource != null ? resource.getMetadata() : null;
+        Map<String, Object> contextData = context != null ? context.getAdditionalContext() : null;
+
+        for (String field : fields) {
+            Object value = metadata != null ? metadata.get(field) : null;
+            if (value == null && contextData != null) {
+                value = contextData.get(field);
+            }
+            if (!subjectId.equals(getStringValue(value))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private String getStringCondition(Map<String, Object> conditions, String... keys) {
+        Object value = getConditionValue(conditions, keys);
+        return getStringValue(value);
+    }
+
+    private List<String> getStringListCondition(Map<String, Object> conditions, String... keys) {
+        Object value = getConditionValue(conditions, keys);
+        if (value == null) {
+            return Collections.emptyList();
+        }
+
+        if (value instanceof List<?> list) {
+            List<String> results = new ArrayList<>();
+            for (Object item : list) {
+                String stringValue = getStringValue(item);
+                if (stringValue != null && !stringValue.isBlank()) {
+                    results.add(stringValue);
+                }
+            }
+            return results;
+        }
+
+        String stringValue = getStringValue(value);
+        if (stringValue == null || stringValue.isBlank()) {
+            return Collections.emptyList();
+        }
+
+        if (stringValue.contains(",")) {
+            return Arrays.stream(stringValue.split(","))
+                    .map(String::trim)
+                    .filter(part -> !part.isBlank())
+                    .collect(Collectors.toList());
+        }
+
+        return List.of(stringValue.trim());
+    }
+
+    private boolean getBooleanCondition(Map<String, Object> conditions, String... keys) {
+        Object value = getConditionValue(conditions, keys);
+        return parseBoolean(value);
+    }
+
+    private Object getConditionValue(Map<String, Object> conditions, String... keys) {
+        for (String key : keys) {
+            if (conditions.containsKey(key)) {
+                return conditions.get(key);
+            }
+        }
+        return null;
+    }
+
+    private String getStringValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String stringValue = value.toString();
+        return stringValue.isBlank() ? null : stringValue;
+    }
+
+    private boolean parseBoolean(Object value) {
+        if (value == null) {
+            return false;
+        }
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (value instanceof Number number) {
+            return number.intValue() != 0;
+        }
+        return Boolean.parseBoolean(value.toString());
     }
 
     /**
@@ -234,8 +693,9 @@ public class AuthorizationService {
 
         // Cache miss - fetch from database
         cacheMissCounter.increment();
+        Set<UUID> roleIds = resolveRoleHierarchy(roleId);
         Set<String> permissions = rolePermissionRepository
-                .findPermissionKeysByRoleId(roleId);
+                .findPermissionKeysByRoleIds(roleIds);
 
         // Cache the result (roles change infrequently, so longer TTL is OK)
         cacheService.cacheRolePermissions(cacheKey, permissions);
@@ -243,17 +703,44 @@ public class AuthorizationService {
         return permissions;
     }
 
+    private Set<UUID> resolveRoleHierarchy(UUID roleId) {
+        Set<UUID> resolved = new HashSet<>();
+        Deque<UUID> queue = new ArrayDeque<>();
+        queue.add(roleId);
+
+        while (!queue.isEmpty()) {
+            UUID current = queue.removeFirst();
+            if (!resolved.add(current)) {
+                continue;
+            }
+
+            Set<UUID> parents = roleHierarchyRepository.findParentRoleIdsByChildId(current);
+            if (parents != null) {
+                for (UUID parent : parents) {
+                    if (!resolved.contains(parent)) {
+                        queue.add(parent);
+                    }
+                }
+            }
+        }
+
+        return resolved;
+    }
+
     /**
      * Log audit entry asynchronously
      */
     @Async("auditExecutor")
     @Transactional
-    protected void logAuditAsync(AuthorizationRequest request,
+    protected void logAuditAsync(UUID auditId,
+                                 AuthorizationRequest request,
                                  boolean decision,
                                  String reason) {
 
         try {
+            Instant now = Instant.now();
             AuthorizationAudit audit = AuthorizationAudit.builder()
+                    .id(auditId)
                     .subjectId(request.getSubject())
                     .permissionKey(request.getPermission())
                     .resourceType(request.getResource().getType())
@@ -269,6 +756,7 @@ public class AuthorizationService {
                             request.getContext().getIpAddress() : null)
                     .userAgent(request.getContext() != null ?
                             request.getContext().getUserAgent() : null)
+                    .timestamp(now)
                     .build();
 
             auditRepository.save(audit);
@@ -279,23 +767,76 @@ public class AuthorizationService {
 
     private AuthorizationResponse buildResponse(boolean authorized,
                                                 String reason,
-                                                Instant startTime) {
-        return buildResponse(authorized, reason, startTime, Collections.emptySet());
-    }
-
-    private AuthorizationResponse buildResponse(boolean authorized,
-                                                String reason,
                                                 Instant startTime,
-                                                Set<String> permissions) {
+                                                Set<String> permissions,
+                                                UUID auditId) {
         long latencyMs = Duration.between(startTime, Instant.now()).toMillis();
 
         return AuthorizationResponse.builder()
                 .authorized(authorized)
                 .reason(reason)
                 .effectivePermissions(new ArrayList<>(permissions))
+                .auditId(auditId)
                 .timestamp(Instant.now())
                 .latencyMs(latencyMs)
                 .build();
+    }
+
+    private static final class PermissionsResult {
+        private final Set<String> permissions;
+        private final boolean cacheable;
+        private final boolean permissionBlockedByConditions;
+        private final String conditionFailureReason;
+
+        private PermissionsResult(Set<String> permissions,
+                                  boolean cacheable,
+                                  boolean permissionBlockedByConditions,
+                                  String conditionFailureReason) {
+            this.permissions = permissions;
+            this.cacheable = cacheable;
+            this.permissionBlockedByConditions = permissionBlockedByConditions;
+            this.conditionFailureReason = conditionFailureReason;
+        }
+
+        private static PermissionsResult empty() {
+            return new PermissionsResult(Collections.emptySet(), true, false, null);
+        }
+    }
+
+    private static final class ConditionResult {
+        private final boolean allowed;
+        private final String reason;
+
+        private ConditionResult(boolean allowed, String reason) {
+            this.allowed = allowed;
+            this.reason = reason;
+        }
+
+        private static ConditionResult allowed() {
+            return new ConditionResult(true, "ALLOW");
+        }
+
+        private static ConditionResult deny(String reason) {
+            return new ConditionResult(false, reason);
+        }
+    }
+
+    private static final class PolicyDecision {
+        private final boolean allowed;
+        private final String reason;
+
+        private PolicyDecision(boolean allowed, String reason) {
+            this.allowed = allowed;
+            this.reason = reason;
+        }
+
+        private static PolicyDecision allow() {
+            return new PolicyDecision(true, null);
+        }
+
+        private static PolicyDecision deny(String reason) {
+            return new PolicyDecision(false, reason);
+        }
     }
 
     /**

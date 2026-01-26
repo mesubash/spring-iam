@@ -1,9 +1,10 @@
 package com.hgn.iam.entity;
 
-import com.vladmihalcea.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.Type;
+import org.hibernate.annotations.Immutable;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -12,15 +13,15 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "authorization_audit")
+@Immutable
+@IdClass(AuthorizationAuditId.class)
 @Getter @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@TypeDef(name = "jsonb", typeClass = JsonBinaryType.class)
 public class AuthorizationAudit {
 
     @Id
-    @GeneratedValue
     private UUID id;
 
     @Column(name = "subject_id", nullable = false)
@@ -44,7 +45,7 @@ public class AuthorizationAudit {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String reason;
 
-    @Type(type = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> context = new HashMap<>();
 
@@ -57,6 +58,7 @@ public class AuthorizationAudit {
     @Column(name = "user_agent", columnDefinition = "TEXT")
     private String userAgent;
 
+    @Id
     @Column(nullable = false)
     private Instant timestamp;
 

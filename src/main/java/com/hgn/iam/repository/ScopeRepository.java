@@ -15,7 +15,8 @@ public interface ScopeRepository extends JpaRepository<Scope, UUID> {
 
     List<Scope> findByType(String type);
 
-    @Query("SELECT s FROM Scope s WHERE s.path LIKE CONCAT(:path, '%') AND s.active = true")
+    @Query(value = "SELECT * FROM scopes s WHERE s.path::text LIKE CONCAT(:path, '%') AND s.active = true",
+            nativeQuery = true)
     List<Scope> findDescendants(@Param("path") String path);
 
     @Query("SELECT s FROM Scope s WHERE s.active = true")

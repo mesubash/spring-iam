@@ -4,6 +4,7 @@ import com.hgn.iam.entity.Permission;
 import com.hgn.iam.entity.Role;
 import com.hgn.iam.entity.RolePermission;
 import com.hgn.iam.repository.PermissionRepository;
+import com.hgn.iam.repository.RoleHierarchyRepository;
 import com.hgn.iam.repository.RolePermissionRepository;
 import com.hgn.iam.repository.RoleRepository;
 import lombok.RequiredArgsConstructor;
@@ -11,8 +12,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -22,8 +27,8 @@ public class RoleService {
 
     private final RoleRepository roleRepository;
     private final RolePermissionRepository rolePermissionRepository;
+    private final RoleHierarchyRepository roleHierarchyRepository;
     private final PermissionRepository permissionRepository;
-    private final CacheService cacheService;
     private final AuthorizationService authorizationService;
 
     @Transactional(readOnly = true)
@@ -48,7 +53,8 @@ public class RoleService {
 
     @Transactional(readOnly = true)
     public List<Permission> getRolePermissions(UUID roleId) {
-        return rolePermissionRepository.findPermissionsByRoleId(roleId);
+        Set<UUID> roleIds = resolveRoleHierarchy(roleId);
+        return rolePermissionRepository.findPermissionsByRoleIds(roleIds);
     }
 
     @Transactional
@@ -149,5 +155,24 @@ public class RoleService {
 
         log.info("Deactivated role: {}", role.getName());
         return updated;
+    }
+
+    private Set<UUID> resolveRoleHierarchy(UUID roleId) {
+        Set<UUID> resolved = new HashSet<>();
+        Deque<UUID> queue = new ArrayDeque<>();
+        queue.add(roleId);
+
+        while (!queue.isEmpty()) {
+            UUID current = queue.removeFirst();
+            if (!resolved.add(current)) {
+                continue;
+            }
+            Set<UUID> parents = roleHierarchyRepository.findParentRoleIdsByChildId(current);
+            if (parents != null) {
+                queue.addAll(parents);
+            }
+        }
+
+        return resolved;
     }
 }

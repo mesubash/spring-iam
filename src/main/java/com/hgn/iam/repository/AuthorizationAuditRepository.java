@@ -7,9 +7,8 @@ import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 @Repository
-public interface AuthorizationAuditRepository extends JpaRepository<AuthorizationAudit, UUID> {
+public interface AuthorizationAuditRepository extends JpaRepository<AuthorizationAudit, AuthorizationAuditId> {
 
     @Query("SELECT aa FROM AuthorizationAudit aa " +
             "WHERE aa.subjectId = :subjectId " +

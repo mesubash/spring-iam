@@ -33,5 +33,16 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
     @Query("SELECT COUNT(a) FROM Assignment a " +
             "WHERE a.subjectId = :subjectId AND a.active = true")
     long countActiveAssignmentsBySubject(@Param("subjectId") String subjectId);
-}
 
+    @Query(value = "SELECT EXISTS (" +
+            "SELECT 1 FROM assignments a " +
+            "WHERE a.subject_id = :subjectId " +
+            "AND a.active = true " +
+            "AND a.effect = 'ALLOW' " +
+            "AND (a.expires_at IS NULL OR a.expires_at > :now) " +
+            "AND a.conditions IS NOT NULL " +
+            "AND a.conditions <> '{}'::jsonb" +
+            ")", nativeQuery = true)
+    boolean existsActiveConditionalAssignments(@Param("subjectId") String subjectId,
+                                               @Param("now") Instant now);
+}
