@@ -27,12 +27,15 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/v1/health/**",
                                 "/actuator/**",
+                                "/api-docs",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/api-docs/**",
                                 "/v3/api-docs/**")
                         .permitAll()
-                        .requestMatchers("/api/v1/authorize/**")
+                        .requestMatchers(
+                                "/api/v1/authorize/**",
+                                "/api/v1/effective-permissions")
                         .hasAnyRole("INTERNAL", "IAM_ADMIN", "IAM_CLIENT")
                         .requestMatchers(
                                 "/api/v1/permissions/**",

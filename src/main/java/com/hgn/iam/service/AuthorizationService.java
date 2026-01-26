@@ -9,6 +9,8 @@ import com.hgn.iam.repository.RolePermissionRepository;
 import com.hgn.iam.repository.ScopeClosureRepository;
 import com.hgn.iam.dto.AuthorizationRequest;
 import com.hgn.iam.dto.AuthorizationResponse;
+import com.hgn.iam.dto.EffectivePermissionsRequest;
+import com.hgn.iam.dto.EffectivePermissionsResponse;
 import com.hgn.iam.util.IpRangeMatcher;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -95,6 +97,90 @@ public class AuthorizationService {
      */
     public AuthorizationResponse authorize(AuthorizationRequest request) {
         return authorizationTimer.record(() -> doAuthorize(request));
+    }
+
+    public EffectivePermissionsResponse getEffectivePermissions(EffectivePermissionsRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("Request is required");
+        }
+
+        String subject = request.getSubject();
+        if (subject == null || subject.isBlank()) {
+            throw new IllegalArgumentException("subject is required");
+        }
+
+        UUID scopeId = request.getScopeId();
+        AuthorizationRequest.ResourceContext resource = request.getResource();
+        if (scopeId == null && resource != null) {
+            scopeId = resource.getScopeId();
+        }
+        if (scopeId == null) {
+            throw new IllegalArgumentException("scopeId is required");
+        }
+
+        if (resource == null) {
+            resource = AuthorizationRequest.ResourceContext.builder()
+                    .scopeId(scopeId)
+                    .build();
+        } else if (resource.getScopeId() == null) {
+            resource.setScopeId(scopeId);
+        }
+
+        AuthorizationRequest.RequestContext context = request.getContext();
+
+        AuthorizationRequest baseRequest = AuthorizationRequest.builder()
+                .subject(subject)
+                .permission("*.*.*")
+                .resource(resource)
+                .context(context)
+                .build();
+
+        PermissionsResult permissionsResult = fetchUserPermissions(
+                subject, null, scopeId, baseRequest);
+
+        Set<String> allowedPermissions = new HashSet<>(permissionsResult.permissions);
+        Set<String> deniedPermissions = new HashSet<>();
+
+        Set<CacheService.CachedDenyRule> denyRules = cacheService.getCachedDenyRules(subject);
+        if (denyRules == null) {
+            denyRules = fetchDenyRules(subject);
+            cacheService.cacheDenyRules(subject, denyRules);
+        }
+
+        if (denyRules != null && !denyRules.isEmpty()) {
+            for (String permission : new HashSet<>(allowedPermissions)) {
+                if (matchesDenyRule(denyRules, permission, scopeId)) {
+                    allowedPermissions.remove(permission);
+                    if (request.isIncludeDenied()) {
+                        deniedPermissions.add(permission);
+                    }
+                }
+            }
+        }
+
+        for (String permission : new HashSet<>(allowedPermissions)) {
+            AuthorizationRequest policyRequest = AuthorizationRequest.builder()
+                    .subject(subject)
+                    .permission(permission)
+                    .resource(resource)
+                    .context(context)
+                    .build();
+
+            PolicyDecision policyDecision = evaluatePolicies(policyRequest);
+            if (!policyDecision.allowed) {
+                allowedPermissions.remove(permission);
+                if (request.isIncludeDenied()) {
+                    deniedPermissions.add(permission);
+                }
+            }
+        }
+
+        return EffectivePermissionsResponse.builder()
+                .subject(subject)
+                .scopeId(scopeId)
+                .permissions(allowedPermissions)
+                .deniedPermissions(request.isIncludeDenied() ? deniedPermissions : null)
+                .build();
     }
 
     private AuthorizationResponse doAuthorize(AuthorizationRequest request) {

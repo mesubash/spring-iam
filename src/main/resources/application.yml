@@ -166,8 +166,8 @@ server:
 # Swagger/OpenAPI Configuration
 springdoc:
   api-docs:
-    path: /api-docs
+    path: /api-docs/openapi.json
   swagger-ui:
-    path: /swagger-ui.html
+    path: /api-docs
     operations-sorter: method
     tags-sorter: alpha

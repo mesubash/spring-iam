@@ -52,7 +52,8 @@ public class AuthorizationAudit {
     @Column(name = "request_id")
     private String requestId;
 
-    @Column(name = "ip_address")
+    @org.hibernate.annotations.ColumnTransformer(write = "CAST(? AS inet)")
+    @Column(name = "ip_address", columnDefinition = "inet")
     private String ipAddress;
 
     @Column(name = "user_agent", columnDefinition = "TEXT")

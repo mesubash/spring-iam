@@ -3,6 +3,8 @@ package com.hgn.iam.controller;
 import com.hgn.iam.dto.AuthorizationRequest;
 import com.hgn.iam.dto.AuthorizationResponse;
 import com.hgn.iam.service.AuthorizationService;
+import com.hgn.iam.dto.EffectivePermissionsRequest;
+import com.hgn.iam.dto.EffectivePermissionsResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -68,5 +70,18 @@ public class AuthorizationController {
         }
 
         return ResponseEntity.ok(responses);
+    }
+
+    /**
+     * Bootstrap endpoint: returns effective permissions for a subject in a scope.
+     * Useful for UI capability loading or service-side caching.
+     */
+    @PostMapping("/effective-permissions")
+    @Operation(summary = "Get effective permissions for a subject/scope")
+    public ResponseEntity<EffectivePermissionsResponse> effectivePermissions(
+            @RequestBody EffectivePermissionsRequest request) {
+
+        EffectivePermissionsResponse response = authorizationService.getEffectivePermissions(request);
+        return ResponseEntity.ok(response);
     }
 }

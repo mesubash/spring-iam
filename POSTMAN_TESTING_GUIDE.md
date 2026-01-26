@@ -118,7 +118,56 @@ Scopes are **required** for assignments and authorization.
 }
 ```
 
-### 2.3 Create ORG scope
+### 2.3 Create COUNTRY scope
+**POST** `{{base_url}}/api/v1/scopes`
+**Auth:** Bearer admin token
+
+**Body**
+```json
+{
+  "type": "COUNTRY",
+  "name": "Nepal",
+  "code": "NP",
+  "parentId": "6b8c23e2-31bd-4f09-8dc0-5ac2f0b1b9e8",
+  "metadata": {
+    "countryCode": "NP"
+  }
+}
+```
+
+**Example Response**
+```json
+{
+  "id": "c1c3bb34-97fb-4f4f-bc22-6d9e7ad0b3d4",
+  "type": "COUNTRY",
+  "name": "Nepal",
+  "code": "NP",
+  "parentId": "6b8c23e2-31bd-4f09-8dc0-5ac2f0b1b9e8",
+  "path": "GLOBAL.NEPAL",
+  "depth": 1,
+  "metadata": {"countryCode": "NP"},
+  "active": true,
+  "createdAt": "2026-01-25T16:51:00Z",
+  "updatedAt": "2026-01-25T16:51:00Z",
+  "createdBy": "system"
+}
+```
+
+### 2.4 Create REGION scope
+**POST** `{{base_url}}/api/v1/scopes`
+**Auth:** Bearer admin token
+
+**Body**
+```json
+{
+  "type": "REGION",
+  "name": "Bagmati",
+  "code": "BAG",
+  "parentId": "c1c3bb34-97fb-4f4f-bc22-6d9e7ad0b3d4"
+}
+```
+
+### 2.5 Create ORG scope
 **POST** `{{base_url}}/api/v1/scopes`
 **Auth:** Bearer admin token
 
@@ -128,32 +177,16 @@ Scopes are **required** for assignments and authorization.
   "type": "ORG",
   "name": "Everest Travels",
   "code": "EVT",
-  "parentId": "6b8c23e2-31bd-4f09-8dc0-5ac2f0b1b9e8",
+  "parentId": "REGION_SCOPE_ID",
   "metadata": {
     "orgType": "TRAVEL_AGENCY"
   }
 }
 ```
 
-**Example Response**
-```json
-{
-  "id": "2efb5de7-9b9b-4746-a7b0-3bda1cc1c6b1",
-  "type": "ORG",
-  "name": "Everest Travels",
-  "code": "EVT",
-  "parentId": "6b8c23e2-31bd-4f09-8dc0-5ac2f0b1b9e8",
-  "path": "GLOBAL.EVEREST_TRAVELS",
-  "depth": 1,
-  "metadata": {"orgType": "TRAVEL_AGENCY"},
-  "active": true,
-  "createdAt": "2026-01-25T16:51:00Z",
-  "updatedAt": "2026-01-25T16:51:00Z",
-  "createdBy": "system"
-}
-```
+**Note:** Replace `REGION_SCOPE_ID` with the ID returned from the REGION scope creation.
 
-### 2.4 Get descendants
+### 2.6 Get descendants
 **GET** `{{base_url}}/api/v1/scopes/{{scope_id}}/descendants`
 **Auth:** Bearer admin token
 
@@ -646,6 +679,47 @@ This endpoint is used by other services at runtime.
   }
 }
 ```
+
+---
+
+### 9.3 Effective permissions (bootstrap)
+**POST** `{{base_url}}/api/v1/effective-permissions`
+**Auth:** `X-Internal-Api-Key: {{internal_api_key}}` (or Bearer token with IAM_ADMIN/IAM_CLIENT)
+
+**Body**
+```json
+{
+  "subject": "user-123",
+  "scopeId": "2efb5de7-9b9b-4746-a7b0-3bda1cc1c6b1",
+  "resource": {
+    "type": "reservation"
+  },
+  "context": {
+    "ipAddress": "10.1.2.3",
+    "additionalContext": {
+      "mfa": true
+    }
+  },
+  "includeDenied": true
+}
+```
+
+**Example Response**
+```json
+{
+  "subject": "user-123",
+  "scopeId": "2efb5de7-9b9b-4746-a7b0-3bda1cc1c6b1",
+  "permissions": [
+    "booking.reservation.read",
+    "booking.reservation.create"
+  ],
+  "deniedPermissions": [
+    "booking.reservation.cancel"
+  ]
+}
+```
+
+**Note:** If you omit `resource` or `context`, permissions that depend on conditions (MFA, ownership, time window) may be excluded.
 
 ---
 
