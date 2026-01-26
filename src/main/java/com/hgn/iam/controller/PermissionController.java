@@ -3,6 +3,7 @@ package com.hgn.iam.controller;
 import com.hgn.iam.dto.CreatePermissionRequest;
 import com.hgn.iam.entity.Permission;
 import com.hgn.iam.service.PermissionService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -39,17 +40,21 @@ public class PermissionController {
     }
 
     @PostMapping
-    public ResponseEntity<Permission> createPermission(
-            @Valid @RequestBody CreatePermissionRequest request) {
+    @Operation(
+            summary = "Create permission(s)",
+            description = "Accepts either a single permission object or an array of permission objects."
+    )
+    public ResponseEntity<?> createPermission(
+            @Valid @RequestBody List<@Valid CreatePermissionRequest> requests) {
 
-        Permission permission = permissionService.create(
-                request.getKey(),
-                request.getDomain(),
-                request.getResource(),
-                request.getAction(),
-                request.getDescription()
-        );
+        if (requests == null || requests.isEmpty()) {
+            throw new IllegalArgumentException("At least one permission is required.");
+        }
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(permission);
+        List<Permission> created = permissionService.createBatch(requests);
+        if (created.size() == 1) {
+            return ResponseEntity.status(HttpStatus.CREATED).body(created.get(0));
+        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 }

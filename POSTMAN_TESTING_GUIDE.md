@@ -169,7 +169,7 @@ Scopes are **required** for assignments and authorization.
 **GET** `{{base_url}}/api/v1/permissions/{{permission_id}}`
 **Auth:** Bearer admin token
 
-### 3.2 Create permission
+### 3.2 Create permission (single)
 **POST** `{{base_url}}/api/v1/permissions`
 **Auth:** Bearer admin token
 
@@ -197,6 +197,58 @@ Scopes are **required** for assignments and authorization.
   "createdAt": "2026-01-25T16:52:00Z",
   "createdBy": "system"
 }
+```
+
+### 3.3 Create permissions (batch)
+**POST** `{{base_url}}/api/v1/permissions`
+**Auth:** Bearer admin token
+
+**Body**
+```json
+[
+  {
+    "key": "booking.reservation.read",
+    "domain": "booking",
+    "resource": "reservation",
+    "action": "read",
+    "description": "Read reservation details"
+  },
+  {
+    "key": "booking.reservation.approve",
+    "domain": "booking",
+    "resource": "reservation",
+    "action": "approve",
+    "description": "Approve reservation"
+  }
+]
+```
+
+**Example Response**
+```json
+[
+  {
+    "id": "41cfe4cf-f3e4-42f9-aad1-7be79f4bf3c1",
+    "key": "booking.reservation.read",
+    "domain": "booking",
+    "resource": "reservation",
+    "action": "read",
+    "description": "Read reservation details",
+    "isDeprecated": false,
+    "createdAt": "2026-01-25T16:52:00Z",
+    "createdBy": "system"
+  },
+  {
+    "id": "7f8c2f20-3f94-45b9-a5c4-9c1e1250a3cd",
+    "key": "booking.reservation.approve",
+    "domain": "booking",
+    "resource": "reservation",
+    "action": "approve",
+    "description": "Approve reservation",
+    "isDeprecated": false,
+    "createdAt": "2026-01-25T16:52:00Z",
+    "createdBy": "system"
+  }
+]
 ```
 
 **More permissions (optional):**

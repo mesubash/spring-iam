@@ -63,6 +63,22 @@ public class PermissionService {
     }
 
     @Transactional
+    public List<Permission> createBatch(List<com.hgn.iam.dto.CreatePermissionRequest> requests) {
+        List<Permission> created = new ArrayList<>();
+        for (com.hgn.iam.dto.CreatePermissionRequest request : requests) {
+            Permission permission = create(
+                    request.getKey(),
+                    request.getDomain(),
+                    request.getResource(),
+                    request.getAction(),
+                    request.getDescription()
+            );
+            created.add(permission);
+        }
+        return created;
+    }
+
+    @Transactional
     public Permission deprecate(UUID id) {
         Permission permission = permissionRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Permission not found"));
@@ -74,4 +90,3 @@ public class PermissionService {
         return updated;
     }
 }
-
