@@ -58,7 +58,7 @@ Public endpoints:
   Roles bundle permissions
 
 - scopes, scope_closure
-  Hierarchical org tree (GLOBAL -> COUNTRY -> ...)
+  Hierarchical org tree (GLOBAL -> REGION -> COUNTRY -> ...)
   scope_closure = precomputed hierarchy for fast contains checks
 
 - assignments

@@ -118,19 +118,19 @@ Scopes are **required** for assignments and authorization.
 }
 ```
 
-### 2.3 Create COUNTRY scope
+### 2.3 Create REGION scope
 **POST** `{{base_url}}/api/v1/scopes`
 **Auth:** Bearer admin token
 
 **Body**
 ```json
 {
-  "type": "COUNTRY",
-  "name": "Nepal",
-  "code": "NP",
+  "type": "REGION",
+  "name": "Asia",
+  "code": "ASIA",
   "parentId": "6b8c23e2-31bd-4f09-8dc0-5ac2f0b1b9e8",
   "metadata": {
-    "countryCode": "NP"
+    "regionCode": "ASIA"
   }
 }
 ```
@@ -139,13 +139,13 @@ Scopes are **required** for assignments and authorization.
 ```json
 {
   "id": "c1c3bb34-97fb-4f4f-bc22-6d9e7ad0b3d4",
-  "type": "COUNTRY",
-  "name": "Nepal",
-  "code": "NP",
+  "type": "REGION",
+  "name": "Asia",
+  "code": "ASIA",
   "parentId": "6b8c23e2-31bd-4f09-8dc0-5ac2f0b1b9e8",
-  "path": "GLOBAL.NEPAL",
+  "path": "GLOBAL.ASIA",
   "depth": 1,
-  "metadata": {"countryCode": "NP"},
+  "metadata": {"regionCode": "ASIA"},
   "active": true,
   "createdAt": "2026-01-25T16:51:00Z",
   "updatedAt": "2026-01-25T16:51:00Z",
@@ -153,17 +153,20 @@ Scopes are **required** for assignments and authorization.
 }
 ```
 
-### 2.4 Create REGION scope
+### 2.4 Create COUNTRY scope
 **POST** `{{base_url}}/api/v1/scopes`
 **Auth:** Bearer admin token
 
 **Body**
 ```json
 {
-  "type": "REGION",
-  "name": "Bagmati",
-  "code": "BAG",
-  "parentId": "c1c3bb34-97fb-4f4f-bc22-6d9e7ad0b3d4"
+  "type": "COUNTRY",
+  "name": "Nepal",
+  "code": "NP",
+  "parentId": "REGION_SCOPE_ID",
+  "metadata": {
+    "countryCode": "NP"
+  }
 }
 ```
 
@@ -177,14 +180,14 @@ Scopes are **required** for assignments and authorization.
   "type": "ORG",
   "name": "Everest Travels",
   "code": "EVT",
-  "parentId": "REGION_SCOPE_ID",
+  "parentId": "COUNTRY_SCOPE_ID",
   "metadata": {
     "orgType": "TRAVEL_AGENCY"
   }
 }
 ```
 
-**Note:** Replace `REGION_SCOPE_ID` with the ID returned from the REGION scope creation.
+**Note:** Replace `REGION_SCOPE_ID` and `COUNTRY_SCOPE_ID` with the IDs returned from the REGION and COUNTRY scope creation.
 
 ### 2.6 Get descendants
 **GET** `{{base_url}}/api/v1/scopes/{{scope_id}}/descendants`
@@ -858,14 +861,16 @@ This endpoint is used by other services at runtime.
 ## 13) Full End‑to‑End Flow (Recommended Order)
 
 1. Create GLOBAL scope
-2. Create ORG scope under GLOBAL
-3. Create permissions
-4. Create role with permissions
-5. (Optional) add role hierarchy
-6. Create assignment for subject + scope
-7. (Optional) create deny rule or policy
-8. Call `/authorize`
-9. Fetch audit logs and stats
+2. Create REGION scope under GLOBAL
+3. Create COUNTRY scope under REGION
+4. Create ORG scope under COUNTRY
+5. Create permissions
+6. Create role with permissions
+7. (Optional) add role hierarchy
+8. Create assignment for subject + scope
+9. (Optional) create deny rule or policy
+10. Call `/authorize`
+11. Fetch audit logs and stats
 
 ---
 

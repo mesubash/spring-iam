@@ -137,8 +137,8 @@ Scopes are how IAM understands **organizations, tenants, and hierarchy**.
 Hierarchy enforced by DB trigger:
 ```
 GLOBAL (0)
-COUNTRY (1)
-REGION (2)
+REGION (1)
+COUNTRY (2)
 ORG (3)
 DEPT (4)
 TEAM (5)

@@ -32,7 +32,7 @@ This document defines a **centralized authorization system** that serves as the 
 ### 1.2 Key Capabilities
 
 ✅ **Multi-tenant isolation** - Complete data separation between organizations  
-✅ **Hierarchical scopes** - Global → Country → Region → Organization → Department → Team  
+✅ **Hierarchical scopes** - Global → Region → Country → Organization → Department → Team  
 ✅ **Fine-grained permissions** - Domain.Resource.Action pattern  
 ✅ **Role-based access** - Reusable role templates  
 ✅ **Attribute-based policies** - Context-aware decisions  
@@ -183,9 +183,9 @@ The system uses a **hybrid authorization model**:
 ```
 GLOBAL
  │
- └── COUNTRY (Nepal, Thailand, India)
+ └── REGION (Asia, Africa, Europe)
       │
-      └── REGION (Bagmati, Gandaki, Koshi)
+      └── COUNTRY (Nepal, Thailand, India)
            │
            └── ORGANIZATION (Travel Agency, Rescue Company, Hospital)
                 │
@@ -204,16 +204,16 @@ GLOBAL
 
 **Example:**
 ```
-User: Hari (Regional Admin for Bagmati)
-Scope: REGION:BAGMATI
+User: Hari (Regional Admin for Asia)
+Scope: REGION:ASIA
 
 Can access:
-✅ All organizations in Bagmati
-✅ Everest Travels (inside Bagmati)
-✅ Mountain Rescue (inside Bagmati)
+✅ All organizations in Asia
+✅ Everest Travels (inside Nepal)
+✅ Mountain Rescue (inside Nepal)
 
 Cannot access:
-❌ Organizations in Gandaki (different region)
+❌ Organizations in Africa (different region)
 ❌ Global data (higher level)
 ```
 
@@ -353,7 +353,7 @@ CREATE INDEX idx_scopes_type ON scopes(type);
 
 **Key Points:**
 - Uses PostgreSQL `ltree` extension for hierarchy
-- `path` format: `GLOBAL.NEPAL.BAGMATI.EVEREST_TRAVELS`
+- `path` format: `GLOBAL.ASIA.NEPAL.EVEREST_TRAVELS`
 - `metadata` stores type-specific data (country_code, org_type)
 
 **Sample Data:**
@@ -362,12 +362,12 @@ INSERT INTO scopes (id, type, name, parent_id, path, metadata)
 VALUES
 ('00000001', 'GLOBAL', 'Global', NULL, 
  'GLOBAL', '{}'),
-('00000002', 'COUNTRY', 'Nepal', '00000001', 
- 'GLOBAL.NEPAL', '{"country_code": "NP"}'),
-('00000003', 'REGION', 'Bagmati', '00000002', 
- 'GLOBAL.NEPAL.BAGMATI', '{"region_code": "BAG"}'),
+('00000002', 'REGION', 'Asia', '00000001', 
+ 'GLOBAL.ASIA', '{"region_code": "ASIA"}'),
+('00000003', 'COUNTRY', 'Nepal', '00000002', 
+ 'GLOBAL.ASIA.NEPAL', '{"country_code": "NP"}'),
 ('00000004', 'ORG', 'Everest Travels', '00000003', 
- 'GLOBAL.NEPAL.BAGMATI.EVEREST_TRAVELS', 
+ 'GLOBAL.ASIA.NEPAL.EVEREST_TRAVELS', 
  '{"org_type": "TRAVEL_AGENCY"}');
 ```
 
@@ -392,27 +392,27 @@ CREATE INDEX idx_closure_descendant ON scope_closure(descendant_id);
 
 **How It Works:**
 ```
-If hierarchy is: GLOBAL → NEPAL → BAGMATI → EVEREST_TRAVELS
+If hierarchy is: GLOBAL → ASIA → NEPAL → EVEREST_TRAVELS
 
 Table contains:
 (GLOBAL, GLOBAL, 0)              -- self-reference
-(GLOBAL, NEPAL, 1)               -- direct child
-(GLOBAL, BAGMATI, 2)             -- grandchild
+(GLOBAL, ASIA, 1)                -- direct child
+(GLOBAL, NEPAL, 2)               -- grandchild
 (GLOBAL, EVEREST_TRAVELS, 3)     -- great-grandchild
+(ASIA, ASIA, 0)
+(ASIA, NEPAL, 1)
+(ASIA, EVEREST_TRAVELS, 2)
 (NEPAL, NEPAL, 0)
-(NEPAL, BAGMATI, 1)
-(NEPAL, EVEREST_TRAVELS, 2)
-(BAGMATI, BAGMATI, 0)
-(BAGMATI, EVEREST_TRAVELS, 1)
+(NEPAL, EVEREST_TRAVELS, 1)
 (EVEREST_TRAVELS, EVEREST_TRAVELS, 0)
 ```
 
 **Query Example:**
 ```sql
--- Does BAGMATI contain EVEREST_TRAVELS?
+-- Does NEPAL contain EVEREST_TRAVELS?
 SELECT EXISTS (
     SELECT 1 FROM scope_closure
-    WHERE ancestor_id = 'BAGMATI'
+    WHERE ancestor_id = 'NEPAL'
     AND descendant_id = 'EVEREST_TRAVELS'
 );
 -- Result: TRUE (O(1) lookup!)
@@ -568,12 +568,12 @@ VALUES (
     'system'
 );
 
--- Hari is regional admin for Bagmati
+-- Hari is regional admin for Asia
 INSERT INTO assignments (subject_id, role_id, scope_id, granted_by)
 VALUES (
     'user_hari',
     (SELECT id FROM roles WHERE name = 'RegionalAdmin'),
-    (SELECT id FROM scopes WHERE name = 'Bagmati'),
+    (SELECT id FROM scopes WHERE name = 'Asia'),
     'user_rajesh'
 );
 ```
@@ -1429,7 +1429,7 @@ Create new scope.
   "type": "ORG",
   "name": "New Hospital",
   "parentId": "region_uuid",
-  "path": "GLOBAL.NEPAL.BAGMATI.NEW_HOSPITAL",
+  "path": "GLOBAL.ASIA.NEPAL.NEW_HOSPITAL",
   "metadata": {
     "orgType": "HOSPITAL",
     "licenseNumber": "HOSP-2026-001"
@@ -1449,8 +1449,8 @@ Get all descendants of a scope.
 ```json
 {
   "scope": {
-    "id": "bagmati_uuid",
-    "name": "Bagmati",
+    "id": "asia_uuid",
+    "name": "Asia",
     "type": "REGION"
   },
   "descendants": [
@@ -1727,7 +1727,7 @@ function OrderDetailsPage({ orderId }) {
 **Tasks:**
 1. Implement scope CRUD APIs
 2. Test ltree path queries
-3. Create default scope tree (Global → Nepal → Bagmati)
+3. Create default scope tree (Global → Asia → Nepal)
 4. Assign SuperAdmin, CountryAdmin, RegionalAdmin roles
 5. Test scope containment queries
 

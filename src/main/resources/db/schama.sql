@@ -48,7 +48,7 @@ COMMENT ON COLUMN permissions.is_deprecated IS 'Soft delete flag. Deprecated per
 
 -- ============================================================================
 -- TABLE 2: scopes
--- Purpose: Hierarchical organization structure (Global → Country → Region → Org → Dept → Team)
+-- Purpose: Hierarchical organization structure (Global → Region → Country → Org → Dept → Team)
 -- ============================================================================
 
 CREATE TABLE scopes (
@@ -86,8 +86,8 @@ CREATE INDEX idx_scopes_metadata ON scopes USING GIN(metadata);
 
 -- Comments
 COMMENT ON TABLE scopes IS 'Hierarchical organizational structure. Uses ltree for efficient hierarchy queries.';
-COMMENT ON COLUMN scopes.path IS 'Materialized path using ltree (e.g., GLOBAL.NEPAL.BAGMATI.EVEREST_TRAVELS)';
-COMMENT ON COLUMN scopes.depth IS 'Depth in hierarchy: GLOBAL=0, COUNTRY=1, REGION=2, etc.';
+COMMENT ON COLUMN scopes.path IS 'Materialized path using ltree (e.g., GLOBAL.ASIA.NEPAL.EVEREST_TRAVELS)';
+COMMENT ON COLUMN scopes.depth IS 'Depth in hierarchy: GLOBAL=0, REGION=1, COUNTRY=2, etc.';
 COMMENT ON COLUMN scopes.metadata IS 'Flexible storage for type-specific data (e.g., country_code, org_type, license_number)';
 
 -- ============================================================================
@@ -456,8 +456,8 @@ expected_depth INT;
 BEGIN
     expected_depth := CASE NEW.type
         WHEN 'GLOBAL' THEN 0
-        WHEN 'COUNTRY' THEN 1
-        WHEN 'REGION' THEN 2
+        WHEN 'REGION' THEN 1
+        WHEN 'COUNTRY' THEN 2
         WHEN 'ORG' THEN 3
         WHEN 'DEPT' THEN 4
         WHEN 'TEAM' THEN 5

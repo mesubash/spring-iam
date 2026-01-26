@@ -128,31 +128,31 @@ CREATE TABLE scopes (
 
 **Example Data:**
 ```sql
-| id   | type    | name            | parent_id | path                                  | depth | metadata                          |
-|------|---------|-----------------|-----------|---------------------------------------|-------|-----------------------------------|
-| s1   | GLOBAL  | Global          | NULL      | GLOBAL                                | 0     | {}                                |
-| s2   | COUNTRY | Nepal           | s1        | GLOBAL.NEPAL                          | 1     | {"country_code": "NP"}            |
-| s3   | REGION  | Bagmati         | s2        | GLOBAL.NEPAL.BAGMATI                  | 2     | {"region_code": "BAG"}            |
-| s4   | ORG     | Everest Travels | s3        | GLOBAL.NEPAL.BAGMATI.EVEREST_TRAVELS  | 3     | {"org_type": "TRAVEL_AGENCY"}     |
-| s5   | DEPT    | Sales           | s4        | GLOBAL.NEPAL.BAGMATI.EVEREST_TRAVELS.SALES | 4  | {}                           |
+| id   | type    | name            | parent_id | path                                       | depth | metadata                          |
+|------|---------|-----------------|-----------|--------------------------------------------|-------|-----------------------------------|
+| s1   | GLOBAL  | Global          | NULL      | GLOBAL                                     | 0     | {}                                |
+| s2   | REGION  | Asia            | s1        | GLOBAL.ASIA                                | 1     | {"region_code": "ASIA"}           |
+| s3   | COUNTRY | Nepal           | s2        | GLOBAL.ASIA.NEPAL                          | 2     | {"country_code": "NP"}            |
+| s4   | ORG     | Everest Travels | s3        | GLOBAL.ASIA.NEPAL.EVEREST_TRAVELS          | 3     | {"org_type": "TRAVEL_AGENCY"}     |
+| s5   | DEPT    | Sales           | s4        | GLOBAL.ASIA.NEPAL.EVEREST_TRAVELS.SALES    | 4     | {}                                |
 ```
 
 **Key Concepts:**
 
 1. **ltree (Materialized Path):**
    ```
-   Path: GLOBAL.NEPAL.BAGMATI.EVEREST_TRAVELS.SALES
+   Path: GLOBAL.ASIA.NEPAL.EVEREST_TRAVELS.SALES
    
    Meaning: Sales is inside Everest Travels, 
-            which is inside Bagmati, 
             which is inside Nepal,
+            which is inside Asia,
             which is inside Global
    ```
 
 2. **Depth:**
     - GLOBAL = 0
-    - COUNTRY = 1
-    - REGION = 2
+    - REGION = 1
+    - COUNTRY = 2
     - ORG = 3
     - DEPT = 4
     - TEAM = 5
@@ -190,22 +190,22 @@ CREATE TABLE scope_closure (
 );
 ```
 
-**Example Data (for hierarchy: GLOBAL → Nepal → Bagmati → Everest → Sales):**
+**Example Data (for hierarchy: GLOBAL → Asia → Nepal → Everest → Sales):**
 ```sql
 | ancestor_id      | descendant_id    | depth | Meaning                                    |
 |------------------|------------------|-------|---------------------------------------------|
 | GLOBAL           | GLOBAL           | 0     | GLOBAL contains itself                      |
-| GLOBAL           | Nepal            | 1     | GLOBAL contains Nepal (direct child)        |
-| GLOBAL           | Bagmati          | 2     | GLOBAL contains Bagmati (grandchild)        |
+| GLOBAL           | Asia             | 1     | GLOBAL contains Asia (direct child)         |
+| GLOBAL           | Nepal            | 2     | GLOBAL contains Nepal (grandchild)          |
 | GLOBAL           | Everest          | 3     | GLOBAL contains Everest (great-grandchild)  |
 | GLOBAL           | Sales            | 4     | GLOBAL contains Sales                       |
+| Asia             | Asia             | 0     | Asia contains itself                        |
+| Asia             | Nepal            | 1     | Asia contains Nepal                         |
+| Asia             | Everest          | 2     | Asia contains Everest                       |
+| Asia             | Sales            | 3     | Asia contains Sales                         |
 | Nepal            | Nepal            | 0     | Nepal contains itself                       |
-| Nepal            | Bagmati          | 1     | Nepal contains Bagmati                      |
-| Nepal            | Everest          | 2     | Nepal contains Everest                      |
-| Nepal            | Sales            | 3     | Nepal contains Sales                        |
-| Bagmati          | Bagmati          | 0     | Bagmati contains itself                     |
-| Bagmati          | Everest          | 1     | Bagmati contains Everest                    |
-| Bagmati          | Sales            | 2     | Bagmati contains Sales                      |
+| Nepal            | Everest          | 1     | Nepal contains Everest                      |
+| Nepal            | Sales            | 2     | Nepal contains Sales                        |
 | Everest          | Everest          | 0     | Everest contains itself                     |
 | Everest          | Sales            | 1     | Everest contains Sales                      |
 | Sales            | Sales            | 0     | Sales contains itself only                  |
@@ -377,8 +377,6 @@ Hari is CountryAdmin at Nepal
 Means:
 - Hari has Country-level admin permissions
 - Across ALL of Nepal
-- Can see Bagmati region (inside Nepal)
-- Can see Gandaki region (inside Nepal)
 - Can see Everest Travels (inside Nepal)
 - Can see Mountain Rescue (inside Nepal)
 - Cannot see Thailand (different country)
@@ -675,15 +673,15 @@ $$;
 -- Insert new scope
 INSERT INTO scopes (id, type, name, parent_id, path, depth)
 VALUES ('new_scope', 'DEPT', 'Marketing', 'everest_id', 
-        'GLOBAL.NEPAL.BAGMATI.EVEREST_TRAVELS.MARKETING', 4);
+        'GLOBAL.ASIA.NEPAL.EVEREST_TRAVELS.MARKETING', 4);
 
 -- Trigger automatically inserts into scope_closure:
 | ancestor_id | descendant_id | depth |
 |-------------|---------------|-------|
 | new_scope   | new_scope     | 0     | ← Self
 | everest_id  | new_scope     | 1     | ← From parent
-| bagmati_id  | new_scope     | 2     | ← From grandparent
-| nepal_id    | new_scope     | 3     | ← From great-grandparent
+| nepal_id    | new_scope     | 2     | ← From grandparent
+| asia_id     | new_scope     | 3     | ← From great-grandparent
 | global_id   | new_scope     | 4     | ← From root
 ```
 
@@ -808,7 +806,7 @@ Content-Type: application/json
   "type": "ORG",
   "name": "Himalaya Hospital",
   "code": "HOSP_001",
-  "parentId": "bagmati_region_id",
+  "parentId": "nepal_country_id",
   "metadata": {
     "orgType": "HOSPITAL",
     "licenseNumber": "HOSP-2026-001",
@@ -820,11 +818,11 @@ Content-Type: application/json
 **Database Operations:**
 ```sql
 -- Step 1: Get parent scope's path
-SELECT path, depth FROM scopes WHERE id = 'bagmati_region_id';
--- Result: path = 'GLOBAL.NEPAL.BAGMATI', depth = 2
+SELECT path, depth FROM scopes WHERE id = 'nepal_country_id';
+-- Result: path = 'GLOBAL.ASIA.NEPAL', depth = 2
 
 -- Step 2: Calculate new scope's path and depth
--- New path: GLOBAL.NEPAL.BAGMATI.HIMALAYA_HOSPITAL
+-- New path: GLOBAL.ASIA.NEPAL.HIMALAYA_HOSPITAL
 -- New depth: 3 (ORG level)
 
 -- Step 3: Insert into scopes
@@ -834,8 +832,8 @@ VALUES (
     'ORG',
     'Himalaya Hospital',
     'HOSP_001',
-    'bagmati_region_id',
-    'GLOBAL.NEPAL.BAGMATI.HIMALAYA_HOSPITAL',
+    'nepal_country_id',
+    'GLOBAL.ASIA.NEPAL.HIMALAYA_HOSPITAL',
     3,
     '{"orgType": "HOSPITAL", "licenseNumber": "HOSP-2026-001", "address": "Kathmandu, Nepal"}',
     'user_admin_123'
@@ -846,8 +844,8 @@ VALUES (
 | ancestor_id       | descendant_id     | depth |
 |-------------------|-------------------|-------|
 | hospital_new_id   | hospital_new_id   | 0     |
-| bagmati_region_id | hospital_new_id   | 1     |
-| nepal_country_id  | hospital_new_id   | 2     |
+| nepal_country_id  | hospital_new_id   | 1     |
+| asia_id           | hospital_new_id   | 2     |
 | global_id         | hospital_new_id   | 3     |
 ```
 
@@ -858,8 +856,8 @@ VALUES (
   "type": "ORG",
   "name": "Himalaya Hospital",
   "code": "HOSP_001",
-  "parentId": "bagmati_region_id",
-  "path": "GLOBAL.NEPAL.BAGMATI.HIMALAYA_HOSPITAL",
+  "parentId": "nepal_country_id",
+  "path": "GLOBAL.ASIA.NEPAL.HIMALAYA_HOSPITAL",
   "depth": 3,
   "metadata": {
     "orgType": "HOSPITAL",
@@ -1033,7 +1031,7 @@ AND (a.expires_at IS NULL OR a.expires_at > NOW());
 -- Result:
 | assignment_id | role_id       | role_name           | scope_id         | scope_name        | scope_path                       |
 |---------------|---------------|---------------------|------------------|-------------------|----------------------------------|
-| assignment1   | admin_role_id | TravelAgencyAdmin   | everest_travels_id | Everest Travels | GLOBAL.NEPAL.BAGMATI.EVEREST    |
+| assignment1   | admin_role_id | TravelAgencyAdmin   | everest_travels_id | Everest Travels | GLOBAL.ASIA.NEPAL.EVEREST    |
 
 -- ✅ Ram has 1 active assignment
 
@@ -1199,7 +1197,7 @@ SELECT EXISTS (
 
 -- Explanation:
 -- Mountain Rescue is NOT inside Everest Travels
--- They are sibling organizations (both under Bagmati region)
+-- They are sibling organizations (both under Nepal country)
 -- Ram's scope does NOT contain the resource scope
 
 -- DECISION: DENY
@@ -1506,7 +1504,7 @@ if (!authClient.authorize(user, "order.order.read", order.getScopeId())) {
 This schema provides:
 
 ✅ **Complete data isolation** between organizations  
-✅ **Unlimited hierarchy depth** (Global → Country → ... → Project)  
+✅ **Unlimited hierarchy depth** (Global → Region → Country → ... → Project)  
 ✅ **Fine-grained permissions** (domain.resource.action)  
 ✅ **Role-based access** with scope boundaries  
 ✅ **DENY rule overrides** for security  

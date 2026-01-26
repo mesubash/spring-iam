@@ -223,7 +223,7 @@ public class GlobalExceptionHandler {
             String expected = matcher.group(3);
             return "Invalid scope hierarchy: type " + type + " must be at depth " + expected
                     + ", but depth " + actual + " was provided. "
-                    + "Required hierarchy is GLOBAL -> COUNTRY -> REGION -> ORG -> DEPT -> TEAM -> PROJECT.";
+                    + "Required hierarchy is GLOBAL -> REGION -> COUNTRY -> ORG -> DEPT -> TEAM -> PROJECT.";
         }
 
         Pattern duplicatePattern = Pattern.compile(

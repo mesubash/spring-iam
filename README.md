@@ -1,4 +1,4 @@
-# spring-iam
+# spring-authZ
 
 Production‑grade Authorization (AuthZ) service with scoped RBAC + ABAC policies, explicit deny rules, and full audit logging. Services authenticate users themselves (AuthN) and call this service for authorization decisions.
 
@@ -6,7 +6,7 @@ Production‑grade Authorization (AuthZ) service with scoped RBAC + ABAC policie
 
 ## 1) What this service does (and doesn’t)
 
-**Does:**
+**Does:**s
 - Centralized authorization decisions for many services
 - Scoped RBAC + ABAC policies
 - Explicit deny overrides
@@ -32,13 +32,13 @@ This is a standard **AuthZ-as-a-service** model.
 
 ---
 
-## 3) Scope hierarchy (what “GLOBAL, COUNTRY, REGION, ORG” mean)
+## 3) Scope hierarchy (what “GLOBAL, REGION, COUNTRY, ORG” mean)
 
 Scopes represent a **hierarchical org tree**. Depth is enforced in the DB schema:
 
 - `GLOBAL` = depth 0
-- `COUNTRY` = depth 1
-- `REGION` = depth 2
+- `REGION` = depth 1
+- `COUNTRY` = depth 2
 - `ORG` = depth 3
 - `DEPT` = depth 4
 - `TEAM` = depth 5
@@ -48,12 +48,12 @@ Example:
 
 ```
 GLOBAL
-└── COUNTRY (Nepal)
-    └── REGION (Bagmati)
+└── REGION (Asia)
+    └── COUNTRY (Nepal)
         └── ORG (Everest Travels)
 ```
 
-Path example: `GLOBAL.NEPAL.BAGMATI.EVEREST_TRAVELS`
+Path example: `GLOBAL.ASIA.NEPAL.EVEREST_TRAVELS`
 
 Only **GLOBAL** is seeded by migration. All other scopes are created at runtime.
 
@@ -230,7 +230,7 @@ Invalidation occurs on:
 
 1. Start DB + service (Docker Compose)
 2. Create required scopes (GLOBAL already exists)
-   - COUNTRY → REGION → ORG
+   - REGION → COUNTRY → ORG
 3. Register permissions
 4. Create roles and attach permissions
 5. Create assignments for subjects

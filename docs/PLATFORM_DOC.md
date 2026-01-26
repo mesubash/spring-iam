@@ -69,7 +69,7 @@ role_hierarchy (optional)
 - Role inheritance (child inherits parent permissions)
 
 scopes
-- Hierarchical organization tree (GLOBAL -> COUNTRY -> REGION -> ORG -> DEPT -> TEAM -> PROJECT)
+- Hierarchical organization tree (GLOBAL -> REGION -> COUNTRY -> ORG -> DEPT -> TEAM -> PROJECT)
 
 scope_closure
 - Precomputed transitive closure for fast scope containment checks
