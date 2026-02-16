@@ -67,7 +67,7 @@ CREATE TABLE scopes (
 
     -- Constraints
                         CONSTRAINT chk_scope_type CHECK (type IN (
-                                                                  'GLOBAL', 'COUNTRY', 'REGION', 'ORG', 'DEPT', 'TEAM', 'PROJECT'
+                                                                  'GLOBAL', 'REGION', 'COUNTRY','ORG', 'DEPT', 'TEAM', 'PROJECT'
                             )),
                         CONSTRAINT chk_scope_global_no_parent
                             CHECK (type != 'GLOBAL' OR parent_id IS NULL),
