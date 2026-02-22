@@ -191,7 +191,7 @@ Optional rules evaluated after roles:
 
 ### JWT for admin APIs
 - Use `Authorization: Bearer <token>`
-- Must contain role `IAM_ADMIN`
+- Must contain role `SuperAdmin` or `CountryAdmin` (as currently enforced by `SecurityConfig`)
 
 ---
 
@@ -402,3 +402,131 @@ You can cache these lookups in the worker:
 - Scope by code or hierarchy: `/api/v1/scopes?type=...`
 
 ---
+
+## 19) Frontend Dynamic UI Integration (Scope-Aware)
+
+This section is for frontend developers building dynamic navigation, routes, and action buttons.
+
+### 19.1 Core principle
+Frontend should be **capability-based**, not role-string-based.
+
+Do not render UI using checks like:
+- `if role === "TravelAgencyAdmin"`
+
+Instead, render using permission keys:
+- `domain.resource.action`
+- Example: `order.order.create`
+
+### 19.2 Endpoints frontend should use
+For normal logged-in users:
+- `GET /api/authz/me/scopes`
+- `GET /api/authz/me/permissions?scopeId=<activeScopeId>`
+
+Use these to build UI dynamically per selected scope.
+
+### 19.3 Important current restriction
+In current backend security:
+- `/api/v1/authorize` and `/api/v1/effective-permissions` are not general user-facing checks.
+- They are restricted to internal/system roles.
+
+So browser frontend should not call `/api/v1/authorize` per button render.
+
+### 19.4 Recommended frontend flow
+1. Login and store JWT.
+2. Call `GET /api/authz/me/scopes`.
+3. Let user select active org/scope.
+4. Call `GET /api/authz/me/permissions?scopeId=<selected>`.
+5. Store permissions as `Set<string>`.
+6. Drive sidebar/routes/actions with `can(permission)`.
+
+### 19.5 Suggested state shape
+```ts
+type AuthzState = {
+  activeScopeId: string | null;
+  scopes: Array<{ id: string; name: string; type: string; code: string }>;
+  permissions: Set<string>;
+  loadedAt: number | null;
+};
+```
+
+Helper:
+```ts
+const can = (perm: string) => authz.permissions.has(perm);
+```
+
+### 19.6 Sidebar and action mapping pattern
+Keep UI config static; map visibility to permissions.
+
+```ts
+const nav = [
+  { id: "orders", label: "Orders", path: "/orders", anyOf: ["order.order.read"] },
+  { id: "createOrder", label: "Create Order", path: "/orders/new", anyOf: ["order.order.create"] },
+  { id: "payments", label: "Payments", path: "/payments", anyOf: ["payment.transaction.read"] }
+];
+```
+
+```ts
+function isVisible(item, perms) {
+  const anyOk = !item.anyOf || item.anyOf.some((p) => perms.has(p));
+  const allOk = !item.allOf || item.allOf.every((p) => perms.has(p));
+  return anyOk && allOk;
+}
+```
+
+Example order action mapping:
+```ts
+const orderActions = {
+  create: "order.order.create",
+  update: "order.order.update",
+  approve: "order.order.approve",
+  cancel: "order.order.cancel",
+  export: "order.report.export"
+};
+```
+
+### 19.7 Should every tiny UI element be dynamic?
+Use two layers:
+
+1) Coarse UI gating (frontend, local, fast):
+- route guards
+- sidebar visibility
+- page-level action buttons
+
+2) Final enforcement (backend, mandatory):
+- every protected business API must enforce authz
+- hidden button is UX only, not security
+
+### 19.8 Row-level dynamic actions
+Some permissions depend on conditions/policies (ownership, time, MFA, etc.).
+
+Avoid calling IAM per row from frontend.
+Prefer business APIs returning `allowedActions` for each resource:
+
+```json
+{
+  "id": "order-123",
+  "status": "PENDING",
+  "allowedActions": ["view", "update", "approve"]
+}
+```
+
+### 19.9 Cache and refresh guidance
+- Cache permissions per `scopeId`.
+- Re-fetch when:
+  - scope changes
+  - token refresh/login
+  - explicit user refresh
+  - known role/assignment update event
+
+### 19.10 Domain-to-module mapping
+Use `domain` to organize product areas:
+- `order.*.*` -> Orders
+- `payment.*.*` -> Payments
+- `insurance.*.*` -> Insurance
+- `rescue.*.*` -> Rescue
+- `document.*.*` -> Documents
+- `notification.*.*` -> Notifications
+- `organization.*.*` -> Organization
+- `platform.*.*` -> Platform Admin
+
+Use `resource.action` to map page features/buttons inside each module.

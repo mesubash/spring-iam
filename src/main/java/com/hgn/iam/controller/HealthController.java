@@ -1,7 +1,7 @@
 package com.hgn.iam.controller;
 
 
-import com.hgn.iam.service.CacheService;
+import com.hgn.iam.authz.service.CacheService;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;

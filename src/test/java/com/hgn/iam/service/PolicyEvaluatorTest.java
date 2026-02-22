@@ -1,6 +1,7 @@
 package com.hgn.iam.service;
 
-import com.hgn.iam.dto.AuthorizationRequest;
+import com.hgn.iam.authz.dto.AuthorizationRequest;
+import com.hgn.iam.authz.service.PolicyEvaluator;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;

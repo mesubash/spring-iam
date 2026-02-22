@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: ${DB_NAME:-iam_db}
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - iam_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -21,7 +21,7 @@ services:
     container_name: iam-redis
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - iam_redis_data:/data
 
@@ -33,30 +33,14 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+    env_file:
+      - .env
     environment:
+      # Override localhost values from .env with Docker network service names
       DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-iam_db}
-      DB_USERNAME: ${DB_USERNAME:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-postgres}
       REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      IAM_INTERNAL_API_KEY: ${IAM_INTERNAL_API_KEY:-}
-      IAM_JWT_SECRET: ${IAM_JWT_SECRET:-}
-      IAM_JWT_ISSUER: ${IAM_JWT_ISSUER:-}
-      IAM_JWT_AUDIENCE: ${IAM_JWT_AUDIENCE:-}
-      IAM_AUDIT_RETENTION_MONTHS: ${IAM_AUDIT_RETENTION_MONTHS:-24}
-      IAM_AUDIT_RETENTION_ACTION: ${IAM_AUDIT_RETENTION_ACTION:-DROP}
-      IAM_AUDIT_PARTITIONING_ENABLED: ${IAM_AUDIT_PARTITIONING_ENABLED:-true}
-      IAM_AUDIT_PARTITIONING_CREATE_AHEAD_MONTHS: ${IAM_AUDIT_PARTITIONING_CREATE_AHEAD_MONTHS:-2}
-      IAM_AUDIT_PARTITIONING_TIMEZONE: ${IAM_AUDIT_PARTITIONING_TIMEZONE:-UTC}
-      IAM_AUDIT_PARTITIONING_CRON: ${IAM_AUDIT_PARTITIONING_CRON:-0 15 0 * * *}
-      IAM_AUDIT_RETENTION_CRON: ${IAM_AUDIT_RETENTION_CRON:-0 30 1 * * *}
-      SERVER_PORT: ${SERVER_PORT:-8080}
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
     ports:
-      - "8080:8080"
+      - "${SERVER_PORT:-8080}:8080"
 
 volumes:
   iam_postgres_data:

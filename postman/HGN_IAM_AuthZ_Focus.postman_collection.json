@@ -1,0 +1,2864 @@
+{
+  "info": {
+    "_postman_id": "authz-focus-v2",
+    "name": "HGN IAM — AuthZ Org Testing",
+    "description": "Minimal AuthN + AuthZ collection aligned with V2/V3/V4 seeds.\n\nRun order:\n1) 00 - Core Users Login\n2) 01 - Core Admin Sanity\n3) Organization folders (02+)\n\nPattern:\n- Each organization folder logs in its own admin + secondary user and uses those tokens only in that folder.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "internalApiKey",
+      "value": "dev-internal-key",
+      "type": "string"
+    },
+    {
+      "key": "superAdminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "countryAdminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "accessAdminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "securityAdminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "operationsAdminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "operationsOfficerToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "travelAdminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "travelManagerToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "salesAdminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "salesAgentToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "rescueCentreAdminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "rescueDispatcherToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "rescueCompanyAdminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "rescueOperatorToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "insuranceAdminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "insuranceReviewerToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "hospitalAdminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "hospitalClinicianToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "serviceProviderAdminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "serviceProviderOperatorToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "govAdminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "govAnalystToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "superAdminId",
+      "value": "00000000-1000-0000-0000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "countryAdminId",
+      "value": "00000000-1000-0000-0000-000000000002",
+      "type": "string"
+    },
+    {
+      "key": "accessAdminId",
+      "value": "00000000-1000-0000-0000-000000000003",
+      "type": "string"
+    },
+    {
+      "key": "securityAdminId",
+      "value": "00000000-1000-0000-0000-000000000004",
+      "type": "string"
+    },
+    {
+      "key": "globalScopeId",
+      "value": "00000000-0000-0000-0000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "nepalScopeId",
+      "value": "00000000-0000-0000-0000-000000000100",
+      "type": "string"
+    },
+    {
+      "key": "operationsScopeId",
+      "value": "00000000-0000-0000-0001-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "travelAgencyScopeId",
+      "value": "00000000-0000-0000-0001-000000000002",
+      "type": "string"
+    },
+    {
+      "key": "salesAgencyScopeId",
+      "value": "00000000-0000-0000-0001-000000000003",
+      "type": "string"
+    },
+    {
+      "key": "rescueCentreScopeId",
+      "value": "00000000-0000-0000-0001-000000000004",
+      "type": "string"
+    },
+    {
+      "key": "rescueCompanyScopeId",
+      "value": "00000000-0000-0000-0001-000000000005",
+      "type": "string"
+    },
+    {
+      "key": "insuranceCompanyScopeId",
+      "value": "00000000-0000-0000-0001-000000000006",
+      "type": "string"
+    },
+    {
+      "key": "hospitalScopeId",
+      "value": "00000000-0000-0000-0001-000000000007",
+      "type": "string"
+    },
+    {
+      "key": "serviceProviderScopeId",
+      "value": "00000000-0000-0000-0001-000000000008",
+      "type": "string"
+    },
+    {
+      "key": "governmentBodiesScopeId",
+      "value": "00000000-0000-0000-0001-000000000009",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Core Users Login",
+      "item": [
+        {
+          "name": "Login - SuperAdmin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"superadmin@hgn.com\",\n  \"password\": \"Admin@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('superAdminToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login - CountryAdmin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nepal.admin@hgn.com\",\n  \"password\": \"Nepal@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('countryAdminToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login - AccessAdmin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"access.admin@hgn.com\",\n  \"password\": \"Access@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('accessAdminToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login - SecurityAdmin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"security.admin@hgn.com\",\n  \"password\": \"Security@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('securityAdminToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 - Core Admin Sanity",
+      "item": [
+        {
+          "name": "SuperAdmin - List Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{superAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "permissions"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "CountryAdmin - List Roles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{countryAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "roles"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "AccessAdmin - Authorize platform.policy.read",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"{{accessAdminId}}\",\n  \"permission\": \"platform.policy.read\",\n  \"resource\": {\n    \"type\": \"policy\",\n    \"id\": \"*\",\n    \"scopeId\": \"{{nepalScopeId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Authorized', () => pm.expect(body.authorized).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SecurityAdmin - Authorize user.account.suspend",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"{{securityAdminId}}\",\n  \"permission\": \"user.account.suspend\",\n  \"resource\": {\n    \"type\": \"account\",\n    \"id\": \"*\",\n    \"scopeId\": \"{{globalScopeId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Authorized', () => pm.expect(body.authorized).to.be.true);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - Operations Organization",
+      "item": [
+        {
+          "name": "Login - Operations Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@operations.hgn\",\n  \"password\": \"OrgAdmin@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('operationsAdminToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login - Operations Officer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"officer@operations.hgn\",\n  \"password\": \"OrgUser@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('operationsOfficerToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Operations Admin - My Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operationsAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/authz/me/permissions?scopeId={{operationsScopeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authz",
+                "me",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "scopeId",
+                  "value": "{{operationsScopeId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has organization.member.update', () => pm.expect(body.data).to.include('organization.member.update'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Operations Officer - My Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{operationsOfficerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/authz/me/permissions?scopeId={{operationsScopeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authz",
+                "me",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "scopeId",
+                  "value": "{{operationsScopeId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has order.order.read', () => pm.expect(body.data).to.include('order.order.read'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authorize - Operations Admin CAN organization.member.update",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"00000000-2000-0000-0000-000000000001\",\n  \"permission\": \"organization.member.update\",\n  \"resource\": {\n    \"type\": \"member\",\n    \"id\": \"*\",\n    \"scopeId\": \"{{operationsScopeId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Authorized true', () => pm.expect(body.authorized).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authorize - Operations Officer CANNOT organization.member.update",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"00000000-2000-0000-0000-000000000002\",\n  \"permission\": \"organization.member.update\",\n  \"resource\": {\n    \"type\": \"member\",\n    \"id\": \"*\",\n    \"scopeId\": \"{{operationsScopeId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Authorized false', () => pm.expect(body.authorized).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 - Travel Agency",
+      "item": [
+        {
+          "name": "Login - Travel Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@travel-agency.hgn\",\n  \"password\": \"OrgAdmin@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('travelAdminToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login - Travel Manager",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"manager@travel-agency.hgn\",\n  \"password\": \"OrgUser@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('travelManagerToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Travel Admin - My Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{travelAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/authz/me/permissions?scopeId={{travelAgencyScopeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authz",
+                "me",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "scopeId",
+                  "value": "{{travelAgencyScopeId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has payment.invoice.create', () => pm.expect(body.data).to.include('payment.invoice.create'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Travel Manager - My Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{travelManagerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/authz/me/permissions?scopeId={{travelAgencyScopeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authz",
+                "me",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "scopeId",
+                  "value": "{{travelAgencyScopeId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has payment.transaction.read', () => pm.expect(body.data).to.include('payment.transaction.read'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authorize - Travel Admin CAN payment.invoice.create",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"00000000-2000-0000-0000-000000000003\",\n  \"permission\": \"payment.invoice.create\",\n  \"resource\": {\n    \"type\": \"invoice\",\n    \"id\": \"*\",\n    \"scopeId\": \"{{travelAgencyScopeId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Authorized true', () => pm.expect(body.authorized).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authorize - Travel Manager CANNOT payment.invoice.create",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"00000000-2000-0000-0000-000000000004\",\n  \"permission\": \"payment.invoice.create\",\n  \"resource\": {\n    \"type\": \"invoice\",\n    \"id\": \"*\",\n    \"scopeId\": \"{{travelAgencyScopeId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Authorized false', () => pm.expect(body.authorized).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 - Sales Agency",
+      "item": [
+        {
+          "name": "Login - Sales Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@sales-agency.hgn\",\n  \"password\": \"OrgAdmin@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('salesAdminToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login - Sales Agent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"agent@sales-agency.hgn\",\n  \"password\": \"OrgUser@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('salesAgentToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sales Admin - My Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{salesAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/authz/me/permissions?scopeId={{salesAgencyScopeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authz",
+                "me",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "scopeId",
+                  "value": "{{salesAgencyScopeId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has order.order.approve', () => pm.expect(body.data).to.include('order.order.approve'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sales Agent - My Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{salesAgentToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/authz/me/permissions?scopeId={{salesAgencyScopeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authz",
+                "me",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "scopeId",
+                  "value": "{{salesAgencyScopeId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has order.order.create', () => pm.expect(body.data).to.include('order.order.create'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authorize - Sales Admin CAN order.order.approve",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"00000000-2000-0000-0000-000000000005\",\n  \"permission\": \"order.order.approve\",\n  \"resource\": {\n    \"type\": \"order\",\n    \"id\": \"*\",\n    \"scopeId\": \"{{salesAgencyScopeId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Authorized true', () => pm.expect(body.authorized).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authorize - Sales Agent CANNOT order.order.approve",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"00000000-2000-0000-0000-000000000006\",\n  \"permission\": \"order.order.approve\",\n  \"resource\": {\n    \"type\": \"order\",\n    \"id\": \"*\",\n    \"scopeId\": \"{{salesAgencyScopeId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Authorized false', () => pm.expect(body.authorized).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 - Rescue Centre",
+      "item": [
+        {
+          "name": "Login - Rescue Centre Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@rescue-centre.hgn\",\n  \"password\": \"OrgAdmin@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('rescueCentreAdminToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login - Rescue Dispatcher",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"dispatcher@rescue-centre.hgn\",\n  \"password\": \"OrgUser@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('rescueDispatcherToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rescue Centre Admin - My Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{rescueCentreAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/authz/me/permissions?scopeId={{rescueCentreScopeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authz",
+                "me",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "scopeId",
+                  "value": "{{rescueCentreScopeId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has rescue.mission.create', () => pm.expect(body.data).to.include('rescue.mission.create'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rescue Dispatcher - My Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{rescueDispatcherToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/authz/me/permissions?scopeId={{rescueCentreScopeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authz",
+                "me",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "scopeId",
+                  "value": "{{rescueCentreScopeId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has rescue.sos.escalate', () => pm.expect(body.data).to.include('rescue.sos.escalate'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authorize - Rescue Centre Admin CAN rescue.mission.create",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"00000000-2000-0000-0000-000000000007\",\n  \"permission\": \"rescue.mission.create\",\n  \"resource\": {\n    \"type\": \"mission\",\n    \"id\": \"*\",\n    \"scopeId\": \"{{rescueCentreScopeId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Authorized true', () => pm.expect(body.authorized).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authorize - Rescue Dispatcher CANNOT rescue.mission.create",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"00000000-2000-0000-0000-000000000008\",\n  \"permission\": \"rescue.mission.create\",\n  \"resource\": {\n    \"type\": \"mission\",\n    \"id\": \"*\",\n    \"scopeId\": \"{{rescueCentreScopeId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Authorized false', () => pm.expect(body.authorized).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 - Rescue Company",
+      "item": [
+        {
+          "name": "Login - Rescue Company Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@rescue-company.hgn\",\n  \"password\": \"OrgAdmin@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('rescueCompanyAdminToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login - Rescue Operator",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"operator@rescue-company.hgn\",\n  \"password\": \"OrgUser@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('rescueOperatorToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rescue Company Admin - My Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{rescueCompanyAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/authz/me/permissions?scopeId={{rescueCompanyScopeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authz",
+                "me",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "scopeId",
+                  "value": "{{rescueCompanyScopeId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has rescue.mission.create', () => pm.expect(body.data).to.include('rescue.mission.create'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rescue Operator - My Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{rescueOperatorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/authz/me/permissions?scopeId={{rescueCompanyScopeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authz",
+                "me",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "scopeId",
+                  "value": "{{rescueCompanyScopeId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has rescue.mission.read', () => pm.expect(body.data).to.include('rescue.mission.read'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authorize - Rescue Company Admin CAN rescue.mission.create",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"00000000-2000-0000-0000-000000000009\",\n  \"permission\": \"rescue.mission.create\",\n  \"resource\": {\n    \"type\": \"mission\",\n    \"id\": \"*\",\n    \"scopeId\": \"{{rescueCompanyScopeId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Authorized true', () => pm.expect(body.authorized).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authorize - Rescue Operator CANNOT rescue.mission.create",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"00000000-2000-0000-0000-000000000010\",\n  \"permission\": \"rescue.mission.create\",\n  \"resource\": {\n    \"type\": \"mission\",\n    \"id\": \"*\",\n    \"scopeId\": \"{{rescueCompanyScopeId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Authorized false', () => pm.expect(body.authorized).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 - Insurance Company",
+      "item": [
+        {
+          "name": "Login - Insurance Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@insurance-company.hgn\",\n  \"password\": \"OrgAdmin@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('insuranceAdminToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login - Insurance Reviewer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"reviewer@insurance-company.hgn\",\n  \"password\": \"OrgUser@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('insuranceReviewerToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Insurance Admin - My Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{insuranceAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/authz/me/permissions?scopeId={{insuranceCompanyScopeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authz",
+                "me",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "scopeId",
+                  "value": "{{insuranceCompanyScopeId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has insurance.provider.create', () => pm.expect(body.data).to.include('insurance.provider.create'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Insurance Reviewer - My Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{insuranceReviewerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/authz/me/permissions?scopeId={{insuranceCompanyScopeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authz",
+                "me",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "scopeId",
+                  "value": "{{insuranceCompanyScopeId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has insurance.claim.approve', () => pm.expect(body.data).to.include('insurance.claim.approve'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authorize - Insurance Admin CAN insurance.provider.create",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"00000000-2000-0000-0000-000000000011\",\n  \"permission\": \"insurance.provider.create\",\n  \"resource\": {\n    \"type\": \"provider\",\n    \"id\": \"*\",\n    \"scopeId\": \"{{insuranceCompanyScopeId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Authorized true', () => pm.expect(body.authorized).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authorize - Insurance Reviewer CANNOT insurance.provider.create",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"00000000-2000-0000-0000-000000000012\",\n  \"permission\": \"insurance.provider.create\",\n  \"resource\": {\n    \"type\": \"provider\",\n    \"id\": \"*\",\n    \"scopeId\": \"{{insuranceCompanyScopeId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Authorized false', () => pm.expect(body.authorized).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "08 - Hospital",
+      "item": [
+        {
+          "name": "Login - Hospital Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@hospital.hgn\",\n  \"password\": \"OrgAdmin@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('hospitalAdminToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login - Hospital Clinician",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"clinician@hospital.hgn\",\n  \"password\": \"OrgUser@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('hospitalClinicianToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Hospital Admin - My Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hospitalAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/authz/me/permissions?scopeId={{hospitalScopeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authz",
+                "me",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "scopeId",
+                  "value": "{{hospitalScopeId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has rescue.sos.respond', () => pm.expect(body.data).to.include('rescue.sos.respond'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Hospital Clinician - My Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{hospitalClinicianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/authz/me/permissions?scopeId={{hospitalScopeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authz",
+                "me",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "scopeId",
+                  "value": "{{hospitalScopeId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has rescue.sos.read', () => pm.expect(body.data).to.include('rescue.sos.read'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authorize - Hospital Admin CAN user.profile.update",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"00000000-2000-0000-0000-000000000013\",\n  \"permission\": \"user.profile.update\",\n  \"resource\": {\n    \"type\": \"profile\",\n    \"id\": \"*\",\n    \"scopeId\": \"{{hospitalScopeId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Authorized true', () => pm.expect(body.authorized).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authorize - Hospital Clinician CANNOT user.profile.update",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"00000000-2000-0000-0000-000000000014\",\n  \"permission\": \"user.profile.update\",\n  \"resource\": {\n    \"type\": \"profile\",\n    \"id\": \"*\",\n    \"scopeId\": \"{{hospitalScopeId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Authorized false', () => pm.expect(body.authorized).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "09 - Service Provider",
+      "item": [
+        {
+          "name": "Login - Service Provider Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@service-provider.hgn\",\n  \"password\": \"OrgAdmin@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('serviceProviderAdminToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login - Service Provider Operator",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"operator@service-provider.hgn\",\n  \"password\": \"OrgUser@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('serviceProviderOperatorToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Service Provider Admin - My Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{serviceProviderAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/authz/me/permissions?scopeId={{serviceProviderScopeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authz",
+                "me",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "scopeId",
+                  "value": "{{serviceProviderScopeId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has document.template.create', () => pm.expect(body.data).to.include('document.template.create'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Service Provider Operator - My Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{serviceProviderOperatorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/authz/me/permissions?scopeId={{serviceProviderScopeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authz",
+                "me",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "scopeId",
+                  "value": "{{serviceProviderScopeId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has document.file.upload', () => pm.expect(body.data).to.include('document.file.upload'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authorize - Service Provider Admin CAN document.template.create",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"00000000-2000-0000-0000-000000000015\",\n  \"permission\": \"document.template.create\",\n  \"resource\": {\n    \"type\": \"template\",\n    \"id\": \"*\",\n    \"scopeId\": \"{{serviceProviderScopeId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Authorized true', () => pm.expect(body.authorized).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authorize - Service Provider Operator CANNOT document.template.create",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"00000000-2000-0000-0000-000000000016\",\n  \"permission\": \"document.template.create\",\n  \"resource\": {\n    \"type\": \"template\",\n    \"id\": \"*\",\n    \"scopeId\": \"{{serviceProviderScopeId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Authorized false', () => pm.expect(body.authorized).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "10 - Government Bodies",
+      "item": [
+        {
+          "name": "Login - Government Body Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@gov-bodies.hgn\",\n  \"password\": \"OrgAdmin@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('govAdminToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login - Government Body Analyst",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"analyst@gov-bodies.hgn\",\n  \"password\": \"OrgUser@123!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('govAnalystToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Government Admin - My Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{govAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/authz/me/permissions?scopeId={{governmentBodiesScopeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authz",
+                "me",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "scopeId",
+                  "value": "{{governmentBodiesScopeId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has platform.analytics.view', () => pm.expect(body.data).to.include('platform.analytics.view'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Government Analyst - My Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{govAnalystToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/authz/me/permissions?scopeId={{governmentBodiesScopeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authz",
+                "me",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "scopeId",
+                  "value": "{{governmentBodiesScopeId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has order.report.read', () => pm.expect(body.data).to.include('order.report.read'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authorize - Government Admin CAN platform.analytics.view",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"00000000-2000-0000-0000-000000000017\",\n  \"permission\": \"platform.analytics.view\",\n  \"resource\": {\n    \"type\": \"analytics\",\n    \"id\": \"*\",\n    \"scopeId\": \"{{governmentBodiesScopeId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Authorized true', () => pm.expect(body.authorized).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Authorize - Government Analyst CANNOT platform.analytics.view",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"00000000-2000-0000-0000-000000000018\",\n  \"permission\": \"platform.analytics.view\",\n  \"resource\": {\n    \"type\": \"analytics\",\n    \"id\": \"*\",\n    \"scopeId\": \"{{governmentBodiesScopeId}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Authorized false', () => pm.expect(body.authorized).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
