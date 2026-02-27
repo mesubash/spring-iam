@@ -241,7 +241,8 @@ public class SecurityConfig {
                 "Content-Type",
                 "Accept",
                 "X-Requested-With",
-                "X-Api-Key"
+                "X-Api-Key",
+                "X-Internal-Api-Key"
             );
         }
 
