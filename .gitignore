@@ -36,3 +36,4 @@ build/
 .env.local
 .env.prod
 /logs/
+.claude/

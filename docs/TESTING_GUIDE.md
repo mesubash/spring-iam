@@ -1,117 +1,150 @@
 # IAM Testing Guide
 
-This guide explains how to use the two Postman collections in this repo and how they differ.
+This guide walks through testing the IAM service using Postman, step by step, with example requests and the full flow needed to validate authorization behavior.
 
-## 1) Collections and Purpose
+---
 
-### A) `postman/HGN_IAM_AuthZ_Focus.postman_collection.json`
-Use this as the primary, deterministic authorization test suite for the current implementation.
+## 1. Environment Setup
 
-What it validates:
-- Core admin login and sanity checks
-- Org-by-org login (`admin` + secondary user)
-- `/api/authz/me/permissions` behavior per scope
-- `/api/v1/authorize` behavior using `X-Internal-Api-Key`
-- Positive + negative authorization outcomes per org role pair
+### Postman variables
 
-### B) `postman/HGN_IAM_Platform.postman_collection.json`
-Use this as a broad platform/regression playground.
+Create a Postman environment with these variables:
 
-What it covers:
-- Larger endpoint surface (permissions, scopes, roles, policies, assignments, deny rules, audit)
-- Runtime authz checks
-- Access-denied scenarios
-- Delegation-style scenarios (org admin management), some of which are aspirational vs current enforcement
+| Variable | Value |
+|----------|-------|
+| `base_url` | `http://localhost:8080` |
+| `admin_jwt` | JWT with role `IAM_ADMIN` (see below) |
+| `internal_api_key` | Value from `.env` `IAM_INTERNAL_API_KEY` (e.g., `dev-internal-key`) |
 
-## 2) Current Backend Enforcement (Important)
+### JWT requirements (admin endpoints)
 
-Current security rules in code:
-- `/api/v1/authorize/**` and `/api/v1/effective-permissions` -> `INTERNAL`, `SuperAdmin`, `CountryAdmin`
-- `/api/v1/permissions/**`, `/roles/**`, `/scopes/**`, `/assignments/**`, `/deny-rules/**`, `/permission-groups/**`, `/role-hierarchy/**`, `/policies/**`, `/audit/**` -> `SuperAdmin`, `CountryAdmin`
+Your JWT must contain `roles` with `IAM_ADMIN`. Minimal payload:
 
-Reference:
-- `src/main/java/com/hgn/iam/config/SecurityConfig.java:156`
-- `src/main/java/com/hgn/iam/config/SecurityConfig.java:169`
+```json
+{
+  "sub": "admin-user-1",
+  "iss": "iam-service",
+  "aud": "iam-admin",
+  "roles": ["IAM_ADMIN"],
+  "iat": 1700000000,
+  "exp": 1893456000
+}
+```
 
-Implication:
-- Org admins (TravelAdmin, OperationsAdmin, RescueCentreAdmin, etc.) are not allowed to call admin management endpoints in the current code.
+Sign with **HS256** using the secret from `IAM_JWT_SECRET` in your `.env` file.
 
-## 3) Which Collection to Use for What
+### Headers
 
-| Goal | Use | Notes |
-|------|-----|-------|
-| Validate current authz correctness end-to-end | `HGN_IAM_AuthZ_Focus` | Best signal, aligned with current seeds and auth gates |
-| Explore full API surface manually | `HGN_IAM_Platform` | Good for exploration; not all assertions represent current enforcement |
-| CI pass/fail gate | `HGN_IAM_AuthZ_Focus` | Recommended |
-| Future delegated-admin behavior spec | `HGN_IAM_Platform` (selected sections) | Treat parts as target-state tests |
+- Admin endpoints: `Authorization: Bearer {{admin_jwt}}`
+- Internal authorize endpoints: `X-Internal-Api-Key: {{internal_api_key}}`
+- All requests: `Content-Type: application/json`
 
-## 4) Key Differences Between the Two
+---
 
-1. Scope of testing
-- `AuthZ_Focus`: compact and role/scope behavior-focused.
-- `Platform`: much wider API coverage and scenario breadth.
+## 2. Bootstrap Admin
 
-2. Stability
-- `AuthZ_Focus`: expected to be mostly green against current code and seed data.
-- `Platform`: includes expectation sets that can fail under current security config.
+**Option A:** If dev seed data is loaded (e.g., V3 migration), log in with the seeded admin:
+- Email: `admin@example.com`
+- Password: `Admin@123!`
 
-3. Runtime authorize usage
-- Both use `X-Internal-Api-Key` for `/api/v1/authorize` checks.
-- This is correct for service-to-service style authorization checks.
+**Option B:** Generate a JWT manually with `SuperAdmin` or `IAM_ADMIN` role for admin endpoint access. Use jwt.io or a script to sign with your `IAM_JWT_SECRET`.
 
-4. Delegation assumptions
-- `AuthZ_Focus`: does not rely on org-admin delegated management for admin APIs.
-- `Platform`: includes delegated management assumptions for org admins.
+---
 
-## 5) Known Mismatches in `HGN_IAM_Platform` (Current Code)
+## 3. Recommended Testing Order
 
-These examples conflict with current security config and will fail if executed as strict assertions:
+Follow this order to build up the data needed for authorization checks:
 
-- CountryAdmin expected `403` on admin endpoints, but current code allows CountryAdmin:
-  - `postman/HGN_IAM_Platform.postman_collection.json:1617`
-  - `postman/HGN_IAM_Platform.postman_collection.json:2091`
-  - `postman/HGN_IAM_Platform.postman_collection.json:2914`
+1. **Health check** (no auth required)
+   - `GET {{base_url}}/api/v1/health/cache-stats`
+   - `GET {{base_url}}/api/v1/health/metrics`
 
-- TravelAdmin expected to list/create roles via admin APIs:
-  - `postman/HGN_IAM_Platform.postman_collection.json:2962`
-  - `postman/HGN_IAM_Platform.postman_collection.json:3151`
+2. **Create scopes** (hierarchy: GLOBAL > REGION > COUNTRY > ORG)
+   - `POST {{base_url}}/api/v1/scopes` -- create GLOBAL first
+   - Then REGION with `parentId` = GLOBAL scope ID
+   - Then COUNTRY with `parentId` = REGION scope ID
+   - Then ORG with `parentId` = COUNTRY scope ID
 
-- TravelAdmin expected to create assignments and deny rules:
-  - `postman/HGN_IAM_Platform.postman_collection.json:3364`
-  - `postman/HGN_IAM_Platform.postman_collection.json:4201`
+3. **Create permissions**
+   - `POST {{base_url}}/api/v1/permissions` (single or batch)
+   - Example: `{"key": "billing.invoice.read", "domain": "billing", "resource": "invoice", "action": "read"}`
 
-- Delegated folder description states org-admin role management is allowed, but backend gate currently does not allow this:
-  - `postman/HGN_IAM_Platform.postman_collection.json:2958`
+4. **Create role with permissions**
+   - `POST {{base_url}}/api/v1/roles` with `permissionIds` array
 
-## 6) Recommended Execution Strategy
+5. **(Optional) Create role hierarchy**
+   - `POST {{base_url}}/api/v1/role-hierarchy` to set parent-child role inheritance
 
-### For reliable verification (today)
-1. Run `HGN_IAM_AuthZ_Focus` fully.
-2. Treat failures there as real regressions (seed/authz/runtime issues).
+6. **Create assignment** (attach role to subject at scope)
+   - `POST {{base_url}}/api/v1/assignments` with `subjectId`, `roleId`, `scopeId`
 
-### For platform exploration
-1. Run `HGN_IAM_Platform` selectively.
-2. Use it for manual exploration and future-behavior planning.
-3. Do not treat all current red tests there as engine bugs; some are expectation-model mismatches.
+7. **(Optional) Create deny rule or policy**
+   - `POST {{base_url}}/api/v1/deny-rules` for explicit deny
+   - `POST {{base_url}}/api/v1/policies` for ABAC/ReBAC rules
 
-## 7) Seed Credentials Used by Current Collections
+8. **Call POST /api/v1/authorize** (verify ALLOW)
+   - Use `X-Internal-Api-Key` header
+   - Expect `authorized: true`
 
-Core users:
-- `superadmin@hgn.com` / `Admin@123!`
-- `nepal.admin@hgn.com` / `Nepal@123!`
-- `access.admin@hgn.com` / `Access@123!`
-- `security.admin@hgn.com` / `Security@123!`
+9. **Call POST /api/v1/authorize with deny rule active** (verify DENY)
+   - Same request as step 8 but with a deny rule in place
+   - Expect `authorized: false` with reason referencing deny rule
 
-Org users use:
-- admin account password: `OrgAdmin@123!`
-- secondary account password: `OrgUser@123!`
+10. **Check audit logs**
+    - `GET {{base_url}}/api/v1/audit/subject/{subjectId}`
+    - `GET {{base_url}}/api/v1/audit/statistics/{subjectId}?sinceDaysAgo=7`
 
-These align with:
-- `src/main/resources/db/migration/V3__dev_users.sql`
-- `src/main/resources/db/migration/V4__dev_orgs.sql`
+---
 
-## 8) Practical Rule of Thumb
+## 4. Key Test Scenarios
 
-- If you want truth for current system behavior: run `HGN_IAM_AuthZ_Focus`.
-- If you want broad coverage plus future delegated scenarios: use `HGN_IAM_Platform`, but separate current-pass checks from target-state checks.
+### ALLOW: user has role at correct scope
+- Subject has an assignment with a role that includes the requested permission.
+- The assignment scope contains the resource scope.
+- Expected: `authorized: true`.
 
+### DENY by missing role
+- Subject has no assignment at all (or no assignment with the needed permission).
+- Expected: `authorized: false`, reason mentions no matching role.
+
+### DENY by scope mismatch
+- Subject has the correct role but at a different scope that does not contain the resource scope.
+- Example: user assigned at ORG "Company A", resource scoped to ORG "Company B" (sibling scopes).
+- Expected: `authorized: false`, reason mentions scope.
+
+### DENY by deny rule
+- Subject has the correct role and scope, but an active deny rule exists for that permission.
+- Expected: `authorized: false`, reason mentions explicit deny rule.
+- Deny rules override everything.
+
+### DENY by assignment conditions
+- Subject has the role, but the assignment has conditions that are not met:
+  - `time_window`: request is outside allowed hours
+  - `ip_ranges`: request IP is not in allowed ranges
+  - `require_mfa`: MFA context is false or missing
+  - `ownership_required`: subject is not the resource owner
+- Expected: `authorized: false`, reason mentions condition failure.
+
+### DENY by policy
+- An ALLOW policy exists for the permission but its conditions do not match.
+- Example: policy requires `subject != resource.ownerId` (cannot approve own work), but subject is the owner.
+- Expected: `authorized: false`.
+
+### Batch authorization
+- `POST /api/v1/authorize/batch` with multiple permission checks.
+- Returns a map of results, each independently evaluated.
+
+### Effective permissions
+- `POST /api/v1/effective-permissions` with subject and scope.
+- Returns the full list of allowed (and optionally denied) permissions for that subject at that scope.
+
+---
+
+## 5. Tips
+
+- **Deny rules override everything**, including policies and role assignments. If an ALLOW test unexpectedly returns DENY, check for active deny rules.
+- **Policy evaluation order:** If any ALLOW policies exist for a permission, at least one must match. If none match, the request is denied even if the role grants the permission.
+- **scopeId is crucial.** Assignments are scoped, and scope containment is enforced. Double-check that the resource scopeId is a descendant of (or equal to) the assignment scopeId.
+- **Conditional assignments skip the permission cache.** If an assignment has conditions (time window, IP, MFA, ownership), the authorization engine evaluates them at request time rather than relying on cached permissions.
+- **Audit trail:** Every authorization decision is recorded. Use the audit endpoints to verify that decisions were logged correctly and to debug unexpected results.
+- **Order matters during setup.** You cannot create an assignment without first having a scope, role, and permissions. Follow the recommended testing order in section 3.

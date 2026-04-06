@@ -1,445 +1,195 @@
-# IAM Service Integration Guide (Single Source of Truth)
+# IAM Integration Guide
 
-This document explains how to integrate this IAM authorization service with any other service that already has its own authentication system. It is written for a production setup where **authentication happens in the calling services** and **authorization happens in IAM**.
+This document explains how to integrate the IAM authorization service with any backend service or frontend application. IAM handles authorization; your services handle authentication.
 
 ---
 
-## 1) Roles of Each System
+## 1. Roles of Each System
 
-### Your application services (already have auth)
-- Authenticate users with their own auth system (JWT/session/OAuth/SSO).
-- Extract a stable `subjectId` (user UUID or service account ID).
-- Call IAM to check permissions.
-- Enforce IAM’s ALLOW/DENY decision locally.
+### Your application service (already has auth)
+- Authenticates users with its own auth system (JWT, session, OAuth, SSO).
+- Extracts a stable `subjectId` (user UUID or service account ID).
+- Calls IAM to check permissions.
+- Enforces IAM's ALLOW/DENY decision locally.
 
 ### IAM service (this project)
-- Stores permissions, roles, scopes, assignments, deny rules, policies.
-- Evaluates authorization with those rules.
-- Logs audit trail for each decision.
+- Stores permissions, roles, scopes, assignments, deny rules, and policies.
+- Evaluates authorization requests against those rules.
+- Logs an audit trail for every decision.
 
-**Key principle:** IAM does **not** manage user accounts. It only knows **subjectIds** and their **assignments**.
+**Key principle:** IAM does not manage user accounts. It only knows subjectIds and their assignments.
 
 ---
 
-## 2) Identity and Subject IDs
+## 2. Identity and Subject IDs
 
-### What is `subjectId`?
-A stable identifier used across your system (e.g., user UUID from your auth DB). IAM uses this as the lookup key for assignments.
+### What is subjectId?
+A stable UUID used across your system (e.g., user UUID from your auth database). IAM uses this as the lookup key for assignments.
 
 ### Does IAM need all users stored?
-No. IAM only stores assignments. Users without assignments never appear in IAM.
+No. IAM only stores assignments. Users without assignments never appear in IAM. A user with no assignment receives DENY for all permissions.
 
 ### Business membership vs authorization roles
-Services may store **business membership roles** (e.g., staff type, org membership, invitation state). IAM stores **authorization roles/permissions**. A provisioning worker maps business roles → IAM roles/assignments.
+Your services may store business membership data (staff type, org membership, invitation state). IAM stores authorization roles and permissions. A provisioning layer maps business roles to IAM assignments.
 
 ---
 
-## 3) Provisioning / Syncing Assignments
+## 3. Authorization Call Flow
 
-IAM does **not** auto-discover users. You must push assignments into IAM when users are created or their roles change.
+Step-by-step:
 
-### Recommended pattern: Event-driven sync
-1. User service emits events:
-   - `UserCreated`
-   - `UserRoleChanged`
-   - `UserDeactivated`
-2. An “IAM sync” worker maps local roles → IAM roles.
-3. Worker calls IAM Admin APIs to create or revoke assignments.
+1. Your service authenticates the user with its own auth system.
+2. Your service extracts `subjectId` from the authenticated session/token.
+3. Your service calls IAM:
 
-### Alternative: Direct provisioning from user service
-When a user is created/updated, the user service directly calls IAM:
-- `POST /api/v1/assignments`
-- `DELETE /api/v1/assignments/{id}` for revoke
+```
+POST /api/v1/authorize
+X-Internal-Api-Key: <internal-key>
+Content-Type: application/json
+```
 
-### IMPORTANT: ScopeId must be deterministic
-IAM assignments require a `scopeId`. Production systems solve this by **creating IAM scopes when orgs are created**, and storing the mapping:
+```json
+{
+  "subject": "user-123",
+  "permission": "billing.invoice.approve",
+  "resource": {
+    "type": "invoice",
+    "id": "inv-456",
+    "scopeId": "<scope-uuid>",
+    "metadata": { "ownerId": "user-789" }
+  },
+  "context": {
+    "ipAddress": "10.1.2.3",
+    "requestId": "req-001",
+    "additionalContext": { "mfa": true }
+  }
+}
+```
+
+4. IAM evaluates in order: deny rules, assignments + role permissions, scope containment, assignment conditions, optional policies (ABAC/ReBAC).
+5. IAM returns ALLOW or DENY with a reason and audit ID.
+
+```json
+{
+  "authorized": true,
+  "reason": "ALLOW: Permission granted via role assignment",
+  "effectivePermissions": ["billing.invoice.approve"],
+  "auditId": "fa2bd0c0-7052-48b8-99c8-0fd3c4e06264",
+  "timestamp": "2026-01-25T17:00:00Z",
+  "latencyMs": 3
+}
+```
+
+6. Your service enforces the decision locally (allow the action or return 403).
+
+---
+
+## 4. Provisioning Assignments
+
+IAM does not auto-discover users. You must push assignments into IAM when users are created or their roles change.
+
+### Recommended: Event-driven sync
+
+1. Your user service emits events: `UserCreated`, `UserRoleChanged`, `UserDeactivated`.
+2. An "IAM sync" worker consumes these events and maps local roles to IAM roles.
+3. The worker calls IAM admin APIs to create or revoke assignments.
+
+### Alternative: Direct provisioning
+
+Your user service calls IAM directly when users are created or updated:
+
+- `POST /api/v1/assignments` to grant access
+- `DELETE /api/v1/assignments/{id}?revokedBy=...&reason=...` to revoke
+
+### ScopeId must be deterministic
+
+IAM assignments require a `scopeId`. Create IAM scopes when organizations are created and store the mapping:
 
 ```
 org.id -> iam_scope_id
 ```
 
 Event payloads should include `iamScopeId` directly:
+
 ```json
 {
   "eventType": "UserCreated",
   "userId": "user-123",
   "iamScopeId": "2efb5de7-...",
-  "role": "TRAVEL_AGENT"
+  "role": "STAFF"
 }
 ```
 
-If you don’t store `iamScopeId`, the worker must resolve it by a stable **scope code** (e.g., `orgCode -> scopes.code`). In that case, org codes must be globally unique.
+If you do not store `iamScopeId`, the worker must resolve it by a stable scope code (e.g., `orgCode -> scopes.code`). Scope codes must be globally unique.
 
 ---
 
-## 4) Role Mapping Strategy
+## 5. Role Mapping Strategy
 
-If your services already have local roles, you need a **mapping layer**:
+If your services already have local roles, you need a mapping layer.
 
 Example:
-- Local role `TRAVEL_AGENT` → IAM role `ReservationAgent`
-- Local role `ORG_ADMIN` → IAM role `OrgAdmin`
 
-Mapping can live in:
-- A dedicated mapping service
-- A config table in the user system
-- A policy document that drives assignment provisioning
+| Local Role | IAM Role |
+|------------|----------|
+| `STAFF` | `OrgStaff` |
+| `MANAGER` | `OrgManager` |
+| `ORG_ADMIN` | `OrgAdmin` |
 
-**IAM should remain the final source of truth for permissions.**
+The mapping can live in a config table, a dedicated mapping service, or a policy document that drives assignment provisioning.
 
----
-
-## 5) Authorization Call Flow
-
-### Step-by-step
-1. Service authenticates the user with its own auth system.
-2. Service extracts `subjectId`.
-3. Service calls IAM:
-
-```
-POST /api/v1/authorize
-X-Internal-Api-Key: <internal-key>   (or Bearer token with IAM_CLIENT)
-```
-
-Body:
-```json
-{
-  "subject": "user-123",
-  "permission": "booking.reservation.read",
-  "resource": {
-    "type": "reservation",
-    "id": "res-999",
-    "scopeId": "<scope-uuid>",
-    "metadata": {"ownerId": "user-123"}
-  },
-  "context": {
-    "ipAddress": "10.1.2.3",
-    "requestId": "req-123",
-    "additionalContext": {"mfa": true}
-  }
-}
-```
-
-4. IAM evaluates:
-   - Deny rules
-   - Assignments + role permissions
-   - Scope containment
-   - Optional policies (ABAC/ReBAC)
-5. IAM returns ALLOW/DENY.
-6. Service enforces decision locally.
+**IAM should remain the final source of truth for permissions.** Local roles are business labels; IAM roles are authorization grants.
 
 ---
 
-## 6) Scopes and Multi‑Tenancy
+## 6. Authentication Between Services and IAM
 
-Scopes are how IAM understands **organizations, tenants, and hierarchy**.
+### API Key for /authorize (service-to-service)
 
-Hierarchy enforced by DB trigger:
-```
-GLOBAL (0)
-REGION (1)
-COUNTRY (2)
-ORG (3)
-DEPT (4)
-TEAM (5)
-PROJECT (6)
-```
-
-Assignments are scoped:
-- A user assigned at `ORG` can act on resources inside that ORG and its descendants.
-- IAM checks scope containment before granting permission.
-
----
-
-## 7) Permissions and Roles
-
-### Permissions
-Structured as `domain.resource.action`, e.g.:
-- `booking.reservation.read`
-- `booking.reservation.approve`
-
-### Roles
-Roles bundle permissions. Assignments attach roles to subjects at scopes.
-
----
-
-## 8) Deny Rules and Policies
-
-### Deny Rules
-Override everything. Use for emergency suspensions.
-
-### Policies (ABAC)
-Optional rules evaluated after roles:
-- Example: allow only if `subject == resource.ownerId`
-
----
-
-## 9) Authentication Between Services and IAM
-
-### Internal API key (recommended for service-to-service)
-- Use header `X-Internal-Api-Key`
+- Header: `X-Internal-Api-Key: <key>` (or `Authorization: ApiKey <key>`)
 - Grants `ROLE_INTERNAL`
-- Only valid for `/authorize` endpoints
-
-**Production hardening (recommended):**
-- Per‑service API keys (not a shared key)
-- Rotation strategy (short‑lived / quarterly rotation)
-- Rate limiting
-- Network allowlist or mTLS
-- Include `X-Service-Id` header and validate it
-- Store service ID in audit logs (caller attribution)
+- Only valid for `/authorize` and `/effective-permissions` endpoints
 
 ### JWT for admin APIs
-- Use `Authorization: Bearer <token>`
-- Must contain role `SuperAdmin` or `CountryAdmin` (as currently enforced by `SecurityConfig`)
+
+- Header: `Authorization: Bearer <token>`
+- Must contain role `IAM_ADMIN` (or `SuperAdmin`, `CountryAdmin` as configured)
+
+### Production hardening
+
+- Use per-service API keys (not a single shared key)
+- Implement key rotation (quarterly or shorter)
+- Apply rate limiting per API key
+- Use network allowlist or mTLS
+- Include `X-Service-Id` header for caller attribution in audit logs
 
 ---
 
-## 10) Error Handling Expectations
+## 7. Frontend Integration
 
-- `401 Unauthorized`: missing/invalid auth to IAM
-- `403 Forbidden`: authenticated but insufficient role
-- `400 Bad Request`: validation or constraint error
-- `404 Not Found`: invalid route (only after auth)
+### Core principle
 
----
+Frontend should be **permission-driven, not role-string-driven**.
 
-## 11) Audit and Compliance
-
-Every authorization decision is recorded in `authorization_audit`.
-You can query it via:
-- `/api/v1/audit/subject/{subjectId}`
-- `/api/v1/audit/resource/{type}/{id}`
-
----
-
-## 12) Baseline Access Strategy
-
-If users with no assignment should still access basic features, choose one:
-- Create a default `BaseUser` assignment at GLOBAL on user creation
-- Or mark certain endpoints as public (no IAM check)
-
----
-
-## 13) Provisioning Example (User Onboarding)
-
-**When a user is created in user service:**
-1. Determine desired local role.
-2. Map to IAM role.
-3. Call IAM:
-
-```json
-POST /api/v1/assignments
-{
-  "subjectId": "user-123",
-  "subjectType": "USER",
-  "roleId": "<iam-role-uuid>",
-  "scopeId": "<org-scope-uuid>",
-  "grantedBy": "user-service"
-}
+Do NOT render UI with:
+```js
+if (role === "OrgAdmin") { showButton() }
 ```
 
----
-
-## 14) Capabilities / Bootstrap Endpoint (Implemented)
-
-To avoid each service inventing its own “what can this user do” logic, IAM exposes:
-
-**POST** `/api/v1/effective-permissions`
-
-**Request**
-```json
-{
-  "subject": "user-123",
-  "scopeId": "2efb5de7-9b9b-4746-a7b0-3bda1cc1c6b1",
-  "resource": { "type": "reservation" },
-  "context": { "additionalContext": { "mfa": true } },
-  "includeDenied": true
-}
+Instead, use permission keys:
+```js
+if (can("billing.invoice.approve")) { showButton() }
 ```
 
-**Response**
-```json
-{
-  "subject": "user-123",
-  "scopeId": "2efb5de7-9b9b-4746-a7b0-3bda1cc1c6b1",
-  "permissions": ["booking.reservation.read"],
-  "deniedPermissions": ["booking.reservation.cancel"]
-}
-```
+### Recommended flow
 
-**Notes**
-- This endpoint uses the same deny + assignment-condition + policy evaluation as `/authorize`.
-- If you omit `resource` or `context`, any condition that depends on them may exclude permissions.
+1. User logs in and stores JWT.
+2. Call `GET /api/authz/me/scopes` to get the list of scopes (orgs) the user belongs to.
+3. User selects an active org/scope (or default to the first one).
+4. Call `GET /api/authz/me/permissions?scopeId=<selected>` to get permissions for that scope.
+5. Store permissions as a `Set<string>` in frontend state.
+6. Render sidebar, routes, and action buttons using a helper:
 
----
-
-## 15) Minimal Integration Checklist
-
-- [ ] Use stable `subjectId` across all systems
-- [ ] Map local membership roles → IAM roles
-- [ ] Provision assignments into IAM (with **scopeId**)
-- [ ] Create IAM scopes alongside org creation
-- [ ] Call `/authorize` for permission checks
-- [ ] Enforce IAM decision in service
-- [ ] Monitor audit logs
-
----
-
-## 16) FAQ
-
-**Q: Do services keep their own role tables?**
-A: Services can store business membership roles. IAM stores authorization roles/permissions.
-
-**Q: What if a user has no assignment?**
-A: IAM returns DENY for all permissions.
-
-**Q: Can we assign temporary access?**
-A: Yes. Use `expiresAt` in assignments.
-
----
-
-If you want, I can add a detailed sequence diagram (PlantUML) and a sample “IAM sync worker” implementation.
-
----
-
-## 17) Sequence Diagram (PlantUML)
-
-Use this diagram to visualize the integration flow. You can render it with any PlantUML tool.
-
-```plantuml
-@startuml
-actor User
-participant "Service A\n(Own Auth)" as ServiceA
-participant "IAM Service" as IAM
-database "IAM DB" as IAMDB
-
-User -> ServiceA: Request with auth token
-ServiceA -> ServiceA: Validate token\nExtract subjectId
-ServiceA -> IAM: POST /api/v1/authorize\n(subjectId, permission, resource, context)
-IAM -> IAMDB: Load assignments/roles/scopes\nCheck deny rules/policies
-IAM --> ServiceA: ALLOW/DENY decision
-ServiceA --> User: Allow or reject
-IAM -> IAMDB: Persist audit log
-@enduml
-```
-
----
-
-## 18) IAM Sync Worker (Example)
-
-This is a simple example of how a user system can keep IAM assignments in sync.
-
-### 16.1 Inputs (events)
-
-**UserCreated**
-```json
-{
-  "eventType": "UserCreated",
-  "userId": "user-123",
-  "orgId": "org-789",
-  "role": "TRAVEL_AGENT"
-}
-```
-
-**UserRoleChanged**
-```json
-{
-  "eventType": "UserRoleChanged",
-  "userId": "user-123",
-  "orgId": "org-789",
-  "role": "ORG_ADMIN"
-}
-```
-
-**UserDeactivated**
-```json
-{
-  "eventType": "UserDeactivated",
-  "userId": "user-123"
-}
-```
-
-### 16.2 Mapping table (local → IAM)
-
-```
-TRAVEL_AGENT -> ReservationAgent
-ORG_ADMIN    -> OrgAdmin
-FINANCE      -> FinanceManager
-```
-
-### 16.3 Worker logic (high level)
-
-1) Read event from queue\n
-2) Map local role → IAM role name\n
-3) Resolve IAM roleId + scopeId\n
-4) Create or revoke assignment\n
-
-### 16.4 Example calls to IAM
-
-**Create assignment**
-```json
-POST /api/v1/assignments
-{
-  "subjectId": "user-123",
-  "subjectType": "USER",
-  "roleId": "<iam-role-uuid>",
-  "scopeId": "<org-scope-uuid>",
-  "grantedBy": "user-service"
-}
-```
-
-**Revoke assignment**
-```json
-DELETE /api/v1/assignments/<assignment-id>?revokedBy=user-service&reason=deactivated
-```
-
-### 16.5 Required IAM lookups
-
-You can cache these lookups in the worker:
-
-- Role by name: `/api/v1/roles?orgType=...` or `/api/v1/roles/{id}`
-- Scope by code or hierarchy: `/api/v1/scopes?type=...`
-
----
-
-## 19) Frontend Dynamic UI Integration (Scope-Aware)
-
-This section is for frontend developers building dynamic navigation, routes, and action buttons.
-
-### 19.1 Core principle
-Frontend should be **capability-based**, not role-string-based.
-
-Do not render UI using checks like:
-- `if role === "TravelAgencyAdmin"`
-
-Instead, render using permission keys:
-- `domain.resource.action`
-- Example: `order.order.create`
-
-### 19.2 Endpoints frontend should use
-For normal logged-in users:
-- `GET /api/authz/me/scopes`
-- `GET /api/authz/me/permissions?scopeId=<activeScopeId>`
-
-Use these to build UI dynamically per selected scope.
-
-### 19.3 Important current restriction
-In current backend security:
-- `/api/v1/authorize` and `/api/v1/effective-permissions` are not general user-facing checks.
-- They are restricted to internal/system roles.
-
-So browser frontend should not call `/api/v1/authorize` per button render.
-
-### 19.4 Recommended frontend flow
-1. Login and store JWT.
-2. Call `GET /api/authz/me/scopes`.
-3. Let user select active org/scope.
-4. Call `GET /api/authz/me/permissions?scopeId=<selected>`.
-5. Store permissions as `Set<string>`.
-6. Drive sidebar/routes/actions with `can(permission)`.
-
-### 19.5 Suggested state shape
 ```ts
 type AuthzState = {
   activeScopeId: string | null;
@@ -447,86 +197,72 @@ type AuthzState = {
   permissions: Set<string>;
   loadedAt: number | null;
 };
-```
 
-Helper:
-```ts
 const can = (perm: string) => authz.permissions.has(perm);
 ```
 
-### 19.6 Sidebar and action mapping pattern
-Keep UI config static; map visibility to permissions.
+### Do not call /authorize per button
 
-```ts
-const nav = [
-  { id: "orders", label: "Orders", path: "/orders", anyOf: ["order.order.read"] },
-  { id: "createOrder", label: "Create Order", path: "/orders/new", anyOf: ["order.order.create"] },
-  { id: "payments", label: "Payments", path: "/payments", anyOf: ["payment.transaction.read"] }
-];
-```
+The `/api/v1/authorize` endpoint is for backend service-to-service checks. Frontend should fetch permissions once per scope change and cache them locally.
 
-```ts
-function isVisible(item, perms) {
-  const anyOk = !item.anyOf || item.anyOf.some((p) => perms.has(p));
-  const allOk = !item.allOf || item.allOf.every((p) => perms.has(p));
-  return anyOk && allOk;
-}
-```
+### Cache and refresh guidance
 
-Example order action mapping:
-```ts
-const orderActions = {
-  create: "order.order.create",
-  update: "order.order.update",
-  approve: "order.order.approve",
-  cancel: "order.order.cancel",
-  export: "order.report.export"
-};
-```
-
-### 19.7 Should every tiny UI element be dynamic?
-Use two layers:
-
-1) Coarse UI gating (frontend, local, fast):
-- route guards
-- sidebar visibility
-- page-level action buttons
-
-2) Final enforcement (backend, mandatory):
-- every protected business API must enforce authz
-- hidden button is UX only, not security
-
-### 19.8 Row-level dynamic actions
-Some permissions depend on conditions/policies (ownership, time, MFA, etc.).
-
-Avoid calling IAM per row from frontend.
-Prefer business APIs returning `allowedActions` for each resource:
-
-```json
-{
-  "id": "order-123",
-  "status": "PENDING",
-  "allowedActions": ["view", "update", "approve"]
-}
-```
-
-### 19.9 Cache and refresh guidance
 - Cache permissions per `scopeId`.
-- Re-fetch when:
-  - scope changes
-  - token refresh/login
-  - explicit user refresh
-  - known role/assignment update event
+- Re-fetch when: scope changes, token refreshes, user triggers explicit refresh, or a known assignment update event occurs.
 
-### 19.10 Domain-to-module mapping
-Use `domain` to organize product areas:
-- `order.*.*` -> Orders
-- `payment.*.*` -> Payments
-- `insurance.*.*` -> Insurance
-- `rescue.*.*` -> Rescue
-- `document.*.*` -> Documents
-- `notification.*.*` -> Notifications
-- `organization.*.*` -> Organization
-- `platform.*.*` -> Platform Admin
+### Backend is final enforcement
 
-Use `resource.action` to map page features/buttons inside each module.
+Hidden buttons are UX only, not security. Every protected business API must call IAM's `/authorize` endpoint on the backend. A hidden button that a user bypasses via direct API call must still be blocked server-side.
+
+---
+
+## 8. Scope and Multi-Tenancy
+
+Scopes represent organizational hierarchy, enforced by database triggers:
+
+```
+GLOBAL (depth 0)
+  REGION (depth 1)
+    COUNTRY (depth 2)
+      ORG (depth 3)
+        DEPT (depth 4)
+          TEAM (depth 5)
+            PROJECT (depth 6)
+```
+
+### Key rules
+
+- An assignment at `ORG` scope grants access to that org and all its descendants (DEPT, TEAM, PROJECT).
+- IAM checks scope containment before granting permission: the resource's scope must be a descendant of (or equal to) the assignment's scope.
+- Sibling scopes are isolated. An admin at "Company A" cannot access "Company B" data -- both are ORG scopes under the same COUNTRY, but siblings do not contain each other.
+- For cross-org access (e.g., a regional auditor), assign the user at a higher scope level (COUNTRY or REGION).
+
+---
+
+## 9. Error Handling
+
+When calling IAM from your service, handle these responses:
+
+| Status | Meaning | Action |
+|--------|---------|--------|
+| `200` with `authorized: true` | Permission granted | Allow the action |
+| `200` with `authorized: false` | Permission denied | Return 403 to the end user |
+| `401` | Missing or invalid auth to IAM | Check API key or JWT configuration |
+| `403` | Authenticated but insufficient role to call this IAM endpoint | Check that your service uses the correct auth method |
+| `400` | Validation error in the request body | Fix the request payload |
+| `503` | IAM temporarily unavailable | Retry with backoff; optionally fail-closed (deny) |
+
+---
+
+## 10. Minimal Integration Checklist
+
+- [ ] Use a stable `subjectId` (UUID) across all systems
+- [ ] Map local membership roles to IAM roles
+- [ ] Provision assignments into IAM (with correct `scopeId`)
+- [ ] Create IAM scopes alongside org/company creation
+- [ ] Call `POST /api/v1/authorize` for permission checks from backend services
+- [ ] Enforce IAM decision in your service (allow or reject)
+- [ ] Frontend: fetch scopes and permissions via `/api/authz/me/*` endpoints
+- [ ] Frontend: render UI based on permission keys, not role strings
+- [ ] Monitor audit logs via `/api/v1/audit/*` endpoints
+- [ ] Configure per-service API keys with rotation strategy for production

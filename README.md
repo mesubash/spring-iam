@@ -1,325 +1,235 @@
-# spring-authZ
+# Spring IAM
 
-Production‑grade Authorization (AuthZ) service with scoped RBAC + ABAC policies, explicit deny rules, and full audit logging. Services authenticate users themselves (AuthN) and call this service for authorization decisions.
+Centralized Identity & Access Management (AuthN + AuthZ) service built as a **template repository**. Deploy it as your authentication and authorization backbone for any project.
 
----
+## What This Service Does
 
-## 1) What this service does (and doesn’t)
+**Authentication (AuthN):**
+- User registration with email verification
+- Login with password or OAuth2 (Google, Apple, Microsoft)
+- JWT access tokens (15 min) + rotating refresh tokens (7 days)
+- Account lockout after failed attempts
+- Password reset and change flows
+- Session management (logout, logout-all)
+- Security event audit trail
 
-**Does:**s
-- Centralized authorization decisions for many services
-- Scoped RBAC + ABAC policies
-- Explicit deny overrides
-- Audit logging and metrics
-- Low‑latency checks with caching
+**Authorization (AuthZ):**
+- Centralized permission checks for all services
+- Scoped RBAC + ABAC + DENY rules + optional policies
+- Hierarchical scope model (GLOBAL > REGION > COUNTRY > ORG > DEPT > TEAM > PROJECT)
+- Low-latency decisions with Redis caching
+- Immutable audit log of every authorization decision
 
-**Does NOT:**
-- Authenticate users
-- Store user profiles or passwords
-
-**Input to IAM:** stable `subjectId` from your AuthN system.
-
----
-
-## 2) Core approach (production model)
-
-- Each product/service keeps its own AuthN (user DB + login + tokens)
-- IAM is the **single source of truth for permissions/roles/scopes**
-- Services send `subjectId` and resource context to IAM
-- IAM returns ALLOW/DENY and audits the decision
-
-This is a standard **AuthZ-as-a-service** model.
+Every service asks one question: **"Can subject S perform permission P on resource R?"**
 
 ---
 
-## 3) Scope hierarchy (what “GLOBAL, REGION, COUNTRY, ORG” mean)
+## Quick Start
 
-Scopes represent a **hierarchical org tree**. Depth is enforced in the DB schema:
+```bash
+# 1. Configure environment
+cp .env.example .env    # Edit with your DB/Redis/JWT settings
 
-- `GLOBAL` = depth 0
-- `REGION` = depth 1
-- `COUNTRY` = depth 2
-- `ORG` = depth 3
-- `DEPT` = depth 4
-- `TEAM` = depth 5
-- `PROJECT` = depth 6
+# 2. Start PostgreSQL + Redis
+docker-compose up -d
 
-Example:
+# 3. Run the service
+./mvnw spring-boot:run
 
-```
-GLOBAL
-└── REGION (Asia)
-    └── COUNTRY (Nepal)
-        └── ORG (Everest Travels)
+# 4. Access
+# Swagger UI:  http://localhost:8080/api-docs
+# Health:      http://localhost:8080/actuator/health
 ```
 
-Path example: `GLOBAL.ASIA.NEPAL.EVEREST_TRAVELS`
-
-Only **GLOBAL** is seeded by migration. All other scopes are created at runtime.
+Default admin credentials (from example seed): `admin@example.com` / `Admin@123!`
 
 ---
 
-## 4) Core entities
+## Core Concepts
 
-- **Permission**: immutable key `domain.resource.action` (e.g. `booking.reservation.read`)
-- **Role**: bundle of permissions
-- **Assignment**: subject ↔ role ↔ scope (+ optional conditions)
-- **Deny Rule**: explicit deny (global or scoped)
-- **Policy**: ABAC rule (ALLOW/DENY + conditions)
-
----
-
-## 5) Runtime authorization flow
-
-1. **Deny rules** (cached) → immediate deny if matched
-2. **Assignments + scope containment** (RBAC)
-3. **Assignment conditions** (MFA, IP range, time window, ownership, etc.)
-4. **Policy evaluation** (ABAC)
-5. **Audit log** of the decision
+| Concept | Description |
+|---------|-------------|
+| **Permission** | Immutable key: `domain.resource.action` (e.g., `platform.role.create`) |
+| **Role** | Named bundle of permissions (e.g., SuperAdmin, OrgAdmin) |
+| **Scope** | Hierarchical org boundary (GLOBAL > REGION > COUNTRY > ORG > ...) |
+| **Assignment** | Subject + Role + Scope = access grant. Supports conditions (time, IP, MFA). |
+| **Deny Rule** | Explicit override. DENY always wins regardless of roles. |
+| **Policy** | Optional ABAC/ReBAC rules evaluated after RBAC. |
 
 ---
 
-## 6) Authorization request model
+## Authorization Decision Flow
 
-All ABAC fields are provided by the **caller** in the request (IAM does not fetch resource metadata).
-
-```json
-POST /api/v1/authorize
-{
-  "subject": "user-123",
-  "permission": "booking.reservation.read",
-  "resource": {
-    "type": "reservation",
-    "id": "res-999",
-    "scopeId": "2efb5de7-9b9b-4746-a7b0-3bda1cc1c6b1",
-    "metadata": {
-      "ownerId": "user-123"
-    }
-  },
-  "context": {
-    "timestamp": "2026-01-25T17:00:00Z",
-    "ipAddress": "10.1.2.3",
-    "userAgent": "PostmanRuntime/7.39",
-    "requestId": "req-123",
-    "additionalContext": {
-      "mfa": true
-    }
-  }
-}
+```
+Request -> 1. DENY rules (cached 1 min)
+        -> 2. Role assignments + scope containment (cached 5 min)
+        -> 3. Assignment conditions (time, IP, MFA, ownership)
+        -> 4. Policy evaluation (DENY first, then ALLOW)
+        -> 5. Audit log (async)
+        -> ALLOW / DENY
 ```
 
 ---
 
-## 7) ABAC policy syntax
+## API Surface
 
-Condition tree with `all` / `any` / `not`:
+### Authentication
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| POST | `/api/auth/register` | Public | Register |
+| POST | `/api/auth/login` | Public | Login |
+| POST | `/api/auth/refresh` | Cookie | Refresh tokens |
+| POST | `/api/auth/logout` | Bearer | Logout |
+| GET/PUT | `/api/auth/me` | Bearer | Profile |
 
-```json
-{
-  "all": [
-    {"field": "subject", "op": "eq", "value": "$resource.metadata.ownerId"}
-  ]
-}
-```
+### Authorization (Runtime)
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| POST | `/api/v1/authorize` | API Key | Check permission |
+| POST | `/api/v1/authorize/batch` | API Key | Batch check (max 50) |
+| POST | `/api/v1/effective-permissions` | API Key | Get all permissions at scope |
 
-Supported operators:
-- `eq`, `neq`, `in`, `not_in`, `contains`, `exists`
-- `gt`, `gte`, `lt`, `lte`
-- `regex`, `before`, `after`
+### Authorization (User-Facing)
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| GET | `/api/authz/me/scopes` | Bearer | My accessible scopes |
+| GET | `/api/authz/me/permissions` | Bearer | My permissions at scope |
 
-Supported fields:
-- `subject`, `permission`
-- `resource.type`, `resource.id`, `resource.scopeId`, `resource.metadata.*`
-- `context.timestamp`, `context.ipAddress`, `context.userAgent`, `context.sessionId`, `context.requestId`
-- `context.additional.*`
-
----
-
-## 8) Assignment condition keys
-
-Assignments can include a `conditions` JSON. Supported keys include:
-- `time_window` (e.g. `"09:00-18:00"`)
-- `ip_ranges` (CIDR list)
-- `require_mfa` (boolean)
-- `ownership_required` / `can_only_access_own_created`
-- `cannot_approve_own_created`
-- `subject_match_fields` (list of metadata/context field names)
+### Admin APIs
+Permissions, Roles, Scopes, Assignments, Deny Rules, Policies, Role Hierarchy, Permission Groups, Audit — all under `/api/v1/`. See [API Reference](docs/API_REFERENCE.md) for details.
 
 ---
 
-## 9) Effective permissions (bootstrap)
+## Technology Stack
 
-Use when a UI/service wants a full “capabilities” list for a subject/scope.
-
-```
-POST /api/v1/effective-permissions
-```
-
-Returns permissions after deny + conditions + policy evaluation.
-
----
-
-## 10) API surface
-
-### Admin APIs (Bearer JWT with `IAM_ADMIN`)
-- `/api/v1/scopes`
-- `/api/v1/permissions`
-- `/api/v1/roles`
-- `/api/v1/role-hierarchy`
-- `/api/v1/assignments`
-- `/api/v1/deny-rules`
-- `/api/v1/policies`
-- `/api/v1/audit`
-
-### Runtime APIs (internal)
-- `/api/v1/authorize`
-- `/api/v1/authorize/batch`
-- `/api/v1/effective-permissions`
-
-### Docs & health
-- Swagger UI: `/api-docs`
-- OpenAPI JSON: `/api-docs/openapi.json`
-- Health: `/api/v1/health` and `/actuator/**`
+| Component | Technology |
+|-----------|------------|
+| Framework | Spring Boot 4.0 / Java 21 |
+| Database | PostgreSQL 14+ (ltree, uuid-ossp) |
+| Cache | Redis (Lettuce) |
+| Auth | JWT (HMAC-SHA) + API Key + OAuth2 |
+| Migrations | Flyway |
+| API Docs | OpenAPI 3 / Swagger UI |
+| Metrics | Micrometer + Prometheus |
+| Build | Maven |
 
 ---
 
-## 11) IAM authentication
-
-- **Admin APIs**: Bearer JWT (`IAM_ADMIN`)
-- **Runtime APIs**: `X-Internal-Api-Key`
-
-Production hardening recommendations:
-- per‑service keys, rotation, and auditing
-- mTLS or OAuth client‑credentials in higher security environments
-- include `X-Service-Id` (audited) for caller attribution
-
----
-
-## 12) Audit logging
-
-Every decision is stored in `authorization_audit`:
-- subjectId, permissionKey, resourceType/id, scopeId
-- decision + reason
-- requestId, userAgent, ipAddress
-- context JSON
-
-Audit table is partitioned by month.
-
----
-
-## 13) Caching + invalidation
-
-Caches:
-- permissions (subject + scope)
-- deny rules
-- scope containment
-- role permissions
-- policy candidates
-
-Invalidation occurs on:
-- assignment create/revoke
-- role permission update
-- role hierarchy update
-- deny rule create/revoke
-- policy create/update/deactivate
-- scope create/update
-
----
-
-## 14) First‑time setup (minimal)
-
-1. Start DB + service (Docker Compose)
-2. Create required scopes (GLOBAL already exists)
-   - REGION → COUNTRY → ORG
-3. Register permissions
-4. Create roles and attach permissions
-5. Create assignments for subjects
-6. Run `/authorize` and verify audit logs
-
-For full step‑by‑step, use `docs/POSTMAN_TESTING_GUIDE.md`.
-
----
-
-## 15) Production checklist (ops)
-
-- Ensure DB migrations are applied (Flyway)
-- Ensure `ltree` extension is available
-- Set internal API key or service‑to‑service auth (mTLS/CC tokens)
-- Configure audit partition retention policy
-- Enable monitoring/metrics from `/actuator`
-- Configure log aggregation for audit failures
-- Define cache invalidation strategy for cross‑service changes
-- Backup/replication for audit tables
-- Add service caller identity in audit context
-
----
-
-## 16) File structure (high‑level)
+## Project Structure
 
 ```
-.
-├─ docs/
-│  ├─ INFO.md
-│  ├─ DESIGN.md
-│  ├─ CENTRAL_DOC.md
-│  ├─ PLATFORM_DOC.md
-│  ├─ INTEGRATION_GUIDE.md
-│  └─ POSTMAN_TESTING_GUIDE.md
-├─ src/
-│  ├─ main/java/com/hgn/iam/
-│  │  ├─ config/          # Cache, Flyway, OpenAPI, scheduler
-│  │  ├─ controller/      # REST endpoints
-│  │  ├─ dto/             # Request/response objects
-│  │  ├─ entity/          # JPA entities
-│  │  ├─ exception/       # API error handling
-│  │  ├─ repository/      # Spring Data repos
-│  │  ├─ security/        # API key + JWT security
-│  │  ├─ service/         # Business logic (authorization engine)
-│  │  └─ util/            # helpers (IP matching, etc.)
-│  └─ main/resources/
-│     ├─ application.yml
-│     └─ db/migration/    # Flyway migrations
-├─ docker-compose.yml
-├─ Dockerfile
-├─ pom.xml
-└─ README.md
+src/main/java/com/hgn/iam/
+  authn/              # Authentication module
+    controller/       #   Login, register, OAuth, profile
+    service/          #   Auth logic, token management
+    security/         #   JWT provider, OAuth2 handlers
+    entity/           #   Identity, Credential, RefreshToken
+    repository/       #   JPA repositories
+    dto/              #   Request/response objects
+
+  authz/              # Authorization module
+    controller/       #   Authorize, roles, scopes, assignments, etc.
+    service/          #   Authorization engine, policy evaluator, cache
+    entity/           #   Permission, Role, Scope, Assignment, DenyRule, Policy
+    repository/       #   JPA repositories
+    dto/              #   Authorization request/response
+
+  shared/             # Shared between modules
+    security/         #   SecurityConfig, ApiKeyAuthFilter, JwtAuthFilter
+    service/          #   AuthzQueryService, IdentityQueryService
+    entity/           #   IdentityProfile
+    dto/              #   ApiResponse, ErrorResponse
+    exception/        #   Custom exceptions
+
+src/main/resources/
+  application.yml     # All configuration
+  db/migration/       # Flyway migrations
+    V1__init.sql      #   Core schema (tables, triggers, functions)
+    V2__seed_data.sql  #  Platform permissions + system roles
+    V3__example_seed.sql # Example dev setup (replace for your project)
+  db/schama.sql       # Reference schema (documentation only)
 ```
 
 ---
 
-## 17) Code map (key classes)
+## Using as a Template
 
-- `AuthorizationService` — core authorization engine
-- `PolicyEvaluator` — ABAC condition evaluation
-- `ScopeService` — scope creation/validation
-- `AssignmentService` — create/revoke assignments
-- `DenyRuleService` — deny rule management
-- `RoleService` + `RoleHierarchyService` — role/permission logic
-- `AuditService` + `AuditPartitionService` — audit logging
-- `ApiKeyAuthFilter` / `JwtAuthFilter` — security filters
-- `GlobalExceptionHandler` — consistent error responses
-
----
-
-## 18) Docs
-
-- `docs/INFO.md` — DB schema and constraints
-- `docs/DESIGN.md` — architecture + flows
-- `docs/CENTRAL_DOC.md` — system summary
-- `docs/PLATFORM_DOC.md` — platform overview
-- `docs/INTEGRATION_GUIDE.md` — integration patterns
-- `docs/POSTMAN_TESTING_GUIDE.md` — end‑to‑end API testing
+1. **Keep V1 and V2** migrations as-is (core schema + system roles)
+2. **Replace V3** with your project's seed data:
+   - Your scope hierarchy (regions, countries, orgs)
+   - Your domain permissions (`myapp.resource.create`, etc.)
+   - Your org-specific roles
+   - Your bootstrap admin user
+3. **Configure** `.env` with your database, Redis, JWT secret, and OAuth credentials
+4. **Integrate** your services using the [Integration Guide](docs/INTEGRATION_GUIDE.md)
 
 ---
 
-## 19) Quick links
+## System Roles (Built-in)
 
-- Swagger UI: `/api-docs`
-- OpenAPI JSON: `/api-docs/openapi.json`
-- Health: `/api/v1/health`
+| Role | Scope | Purpose |
+|------|-------|---------|
+| SuperAdmin | GLOBAL | Full platform access |
+| CountryAdmin | COUNTRY | Country-level governance |
+| AccessAdmin | Any | Manage roles, assignments, policies |
+| SecurityAdmin | Any | Identity lifecycle, security controls |
+| AuditViewer | Any | Read-only audit + analytics |
+| OperationsAdmin | Any | Cross-domain operations |
+| GovernmentOversight | COUNTRY | Read-only oversight |
 
 ---
 
-## 20) License
+## Documentation
 
-Internal / private use.
+| Document | Description |
+|----------|-------------|
+| [Architecture](docs/ARCHITECTURE.md) | Authorization model, decision flow, schema, caching |
+| [API Reference](docs/API_REFERENCE.md) | Complete endpoint reference with request/response examples |
+| [Integration Guide](docs/INTEGRATION_GUIDE.md) | How to integrate services and frontend |
+| [Testing Guide](docs/TESTING_GUIDE.md) | Postman testing setup and scenarios |
+| [Migration Guide](docs/MIGRATION_GUIDE.md) | Migrating from legacy auth systems |
+
+---
+
+## Configuration
+
+Key settings in `application.yml`:
+
+```yaml
+iam:
+  authorization:
+    cache:
+      permissions-ttl: 300    # 5 minutes (seconds)
+      deny-rules-ttl: 60      # 1 minute
+      scope-ttl: 3600         # 1 hour
+      role-ttl: 1800          # 30 minutes
+      policy-ttl: 120         # 2 minutes
+  security:
+    internal-api-key: ${IAM_INTERNAL_API_KEY:}
+app:
+  jwt:
+    secret: ${APP_JWT_SECRET:}
+    expiration: 900000         # 15 min access token
+    refresh-expiration: 604800000  # 7 day refresh token
+```
+
+---
+
+## Production Checklist
+
+- [ ] Set strong JWT secret and API key
+- [ ] Configure PostgreSQL with `ltree` and `uuid-ossp` extensions
+- [ ] Configure Redis for caching
+- [ ] Set up Flyway migrations
+- [ ] Create your scope hierarchy
+- [ ] Seed your domain permissions and roles
+- [ ] Create initial SuperAdmin assignment
+- [ ] Configure audit partition retention
+- [ ] Enable monitoring via `/actuator/prometheus`
+- [ ] Set up log aggregation
+
+---
+
+## License
+
+Private / Internal use.
