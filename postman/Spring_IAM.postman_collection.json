@@ -1,0 +1,735 @@
+{
+	"info": {
+		"_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+		"name": "Spring IAM",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Health",
+			"item": [
+				{
+					"name": "Cache Stats",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/health/cache-stats",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "health", "cache-stats"]
+						}
+					}
+				},
+				{
+					"name": "Metrics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/health/metrics",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "health", "metrics"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Register",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"fullName\": \"Admin User\",\n  \"email\": \"admin@example.com\",\n  \"password\": \"Admin@123!\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var json = pm.response.json();",
+									"    if (json.data && json.data.accessToken) {",
+									"        pm.collectionVariables.set(\"access_token\", json.data.accessToken);",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"Admin@123!\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Refresh Token",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/auth/refresh",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "refresh"]
+						}
+					}
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/auth/logout",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "logout"]
+						}
+					}
+				},
+				{
+					"name": "Change Password",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"currentPassword\": \"Admin@123!\",\n  \"newPassword\": \"NewAdmin@456!\",\n  \"confirmPassword\": \"NewAdmin@456!\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/change-password",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "change-password"]
+						}
+					}
+				},
+				{
+					"name": "Get Current User",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/auth/me",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "me"]
+						}
+					}
+				},
+				{
+					"name": "Update Current User",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"displayName\": \"Admin User\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/me",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "me"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Scopes",
+			"item": [
+				{
+					"name": "List Scopes",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/scopes",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "scopes"]
+						}
+					}
+				},
+				{
+					"name": "Get Scope",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/scopes/{{scope_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "scopes", "{{scope_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Get Scope Descendants",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/scopes/{{scope_id}}/descendants",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "scopes", "{{scope_id}}", "descendants"]
+						}
+					}
+				},
+				{
+					"name": "Create Scope",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"type\": \"REGION\",\n  \"name\": \"Example Region\",\n  \"code\": \"EX_REGION\",\n  \"parentId\": \"00000000-0000-0000-0000-000000000001\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/scopes",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "scopes"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Permissions",
+			"item": [
+				{
+					"name": "List Permissions",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/permissions",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "permissions"]
+						}
+					}
+				},
+				{
+					"name": "List Permissions by Domain",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/permissions?domain=platform",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "permissions"],
+							"query": [{ "key": "domain", "value": "platform" }]
+						}
+					}
+				},
+				{
+					"name": "Create Permission",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"key\": \"example.resource.read\",\n  \"domain\": \"example\",\n  \"resource\": \"resource\",\n  \"action\": \"read\",\n  \"description\": \"Read example resource\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/permissions",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "permissions"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Roles",
+			"item": [
+				{
+					"name": "List Roles",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/roles",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "roles"]
+						}
+					}
+				},
+				{
+					"name": "Get Role",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/roles/{{role_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "roles", "{{role_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Get Role Permissions",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/roles/{{role_id}}/permissions",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "roles", "{{role_id}}", "permissions"]
+						}
+					}
+				},
+				{
+					"name": "Create Role",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"ExampleRole\",\n  \"displayName\": \"Example Role\",\n  \"description\": \"Example role for testing\",\n  \"permissionIds\": []\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/roles",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "roles"]
+						}
+					}
+				},
+				{
+					"name": "Update Role Permissions",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "[]",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/roles/{{role_id}}/permissions",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "roles", "{{role_id}}", "permissions"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Assignments",
+			"item": [
+				{
+					"name": "List Assignments",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/assignments?subjectId={{subject_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "assignments"],
+							"query": [{ "key": "subjectId", "value": "{{subject_id}}" }]
+						}
+					}
+				},
+				{
+					"name": "Create Assignment",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"subjectId\": \"00000000-1000-0000-0000-000000000001\",\n  \"subjectType\": \"USER\",\n  \"roleId\": \"{{role_id}}\",\n  \"scopeId\": \"{{scope_id}}\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/assignments",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "assignments"]
+						}
+					}
+				},
+				{
+					"name": "Delete Assignment",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/assignments/{{assignment_id}}?reason=testing",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "assignments", "{{assignment_id}}"],
+							"query": [{ "key": "reason", "value": "testing" }]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Deny Rules",
+			"item": [
+				{
+					"name": "List Deny Rules",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/deny-rules?subjectId={{subject_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "deny-rules"],
+							"query": [{ "key": "subjectId", "value": "{{subject_id}}" }]
+						}
+					}
+				},
+				{
+					"name": "Create Deny Rule",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"subjectId\": \"{{subject_id}}\",\n  \"permissionKey\": \"example.resource.read\",\n  \"reason\": \"Testing deny rule\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/deny-rules",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "deny-rules"]
+						}
+					}
+				},
+				{
+					"name": "Delete Deny Rule",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/deny-rules/{{deny_rule_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "deny-rules", "{{deny_rule_id}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Authorization",
+			"item": [
+				{
+					"name": "Authorize",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "X-Internal-Api-Key", "value": "{{api_key}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"subject\": \"00000000-1000-0000-0000-000000000001\",\n  \"permission\": \"platform.role.read\",\n  \"resource\": {\n    \"type\": \"role\",\n    \"scopeId\": \"00000000-0000-0000-0000-000000000001\"\n  }\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/authorize",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "authorize"]
+						}
+					}
+				},
+				{
+					"name": "Authorize Batch",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "X-Internal-Api-Key", "value": "{{api_key}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "[\n  {\n    \"subject\": \"00000000-1000-0000-0000-000000000001\",\n    \"permission\": \"platform.role.read\",\n    \"resource\": {\n      \"type\": \"role\",\n      \"scopeId\": \"00000000-0000-0000-0000-000000000001\"\n    }\n  },\n  {\n    \"subject\": \"00000000-1000-0000-0000-000000000001\",\n    \"permission\": \"platform.scope.read\",\n    \"resource\": {\n      \"type\": \"scope\",\n      \"scopeId\": \"00000000-0000-0000-0000-000000000001\"\n    }\n  }\n]",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/authorize/batch",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "authorize", "batch"]
+						}
+					}
+				},
+				{
+					"name": "Effective Permissions",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "X-Internal-Api-Key", "value": "{{api_key}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"subject\": \"00000000-1000-0000-0000-000000000001\",\n  \"scopeId\": \"00000000-0000-0000-0000-000000000001\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/effective-permissions",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "effective-permissions"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "User AuthZ",
+			"item": [
+				{
+					"name": "My Scopes",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/authz/me/scopes",
+							"host": ["{{base_url}}"],
+							"path": ["api", "authz", "me", "scopes"]
+						}
+					}
+				},
+				{
+					"name": "My Permissions",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/authz/me/permissions?scopeId=00000000-0000-0000-0000-000000000001",
+							"host": ["{{base_url}}"],
+							"path": ["api", "authz", "me", "permissions"],
+							"query": [{ "key": "scopeId", "value": "00000000-0000-0000-0000-000000000001" }]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Policies",
+			"item": [
+				{
+					"name": "List Policies",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/policies",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "policies"]
+						}
+					}
+				},
+				{
+					"name": "Create Policy",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"test-policy\",\n  \"effect\": \"DENY\",\n  \"conditions\": {\n    \"all\": [\n      {\n        \"field\": \"subject\",\n        \"op\": \"eq\",\n        \"value\": \"$resource.metadata.ownerId\"\n      }\n    ]\n  },\n  \"active\": true\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/policies",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "policies"]
+						}
+					}
+				},
+				{
+					"name": "Delete Policy",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/policies/{{policy_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "policies", "{{policy_id}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Role Hierarchy",
+			"item": [
+				{
+					"name": "Create Hierarchy",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"parentRoleId\": \"{{parent_role_id}}\",\n  \"childRoleId\": \"{{child_role_id}}\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/role-hierarchy",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "role-hierarchy"]
+						}
+					}
+				},
+				{
+					"name": "Get Parent Roles",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/role-hierarchy/parents/{{role_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "role-hierarchy", "parents", "{{role_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Get Child Roles",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/role-hierarchy/children/{{role_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "role-hierarchy", "children", "{{role_id}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Permission Groups",
+			"item": [
+				{
+					"name": "List Permission Groups",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/permission-groups",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "permission-groups"]
+						}
+					}
+				},
+				{
+					"name": "Create Permission Group",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Example Group\",\n  \"description\": \"Test group\"\n}",
+							"options": { "raw": { "language": "json" } }
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/permission-groups",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "permission-groups"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Audit",
+			"item": [
+				{
+					"name": "Audit by Subject",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/audit/subject/00000000-1000-0000-0000-000000000001?limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "audit", "subject", "00000000-1000-0000-0000-000000000001"],
+							"query": [{ "key": "limit", "value": "10" }]
+						}
+					}
+				},
+				{
+					"name": "Audit Statistics",
+					"request": {
+						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/audit/statistics/00000000-1000-0000-0000-000000000001?sinceDaysAgo=7",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "audit", "statistics", "00000000-1000-0000-0000-000000000001"],
+							"query": [{ "key": "sinceDaysAgo", "value": "7" }]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{ "key": "base_url", "value": "http://localhost:8080" },
+		{ "key": "access_token", "value": "" },
+		{ "key": "api_key", "value": "" },
+		{ "key": "scope_id", "value": "00000000-0000-0000-0000-000000000001" },
+		{ "key": "role_id", "value": "10000000-0000-0000-0000-000000000001" },
+		{ "key": "subject_id", "value": "00000000-1000-0000-0000-000000000001" },
+		{ "key": "assignment_id", "value": "" },
+		{ "key": "deny_rule_id", "value": "" },
+		{ "key": "policy_id", "value": "" },
+		{ "key": "parent_role_id", "value": "" },
+		{ "key": "child_role_id", "value": "" }
+	]
+}

@@ -96,7 +96,7 @@ Request -> 1. DENY rules (cached 1 min)
 | GET | `/api/authz/me/permissions` | Bearer | My permissions at scope |
 
 ### Admin APIs
-Permissions, Roles, Scopes, Assignments, Deny Rules, Policies, Role Hierarchy, Permission Groups, Audit — all under `/api/v1/`. See [API Reference](docs/API_REFERENCE.md) for details.
+Permissions, Roles, Scopes, Assignments, Deny Rules, Policies, Role Hierarchy, Permission Groups, Audit — all under `/api/v1/`. See [API Reference](docs/API_DOCUMENTATION.md) for details.
 
 ---
 
@@ -184,7 +184,7 @@ src/main/resources/
 | Document | Description |
 |----------|-------------|
 | [Architecture](docs/ARCHITECTURE.md) | Authorization model, decision flow, schema, caching |
-| [API Reference](docs/API_REFERENCE.md) | Complete endpoint reference with request/response examples |
+| [API Reference](docs/API_DOCUMENTATION.md) | Complete endpoint reference with request/response examples |
 | [Integration Guide](docs/INTEGRATION_GUIDE.md) | How to integrate services and frontend |
 | [Testing Guide](docs/TESTING_GUIDE.md) | Postman testing setup and scenarios |
 | [Migration Guide](docs/MIGRATION_GUIDE.md) | Migrating from legacy auth systems |
