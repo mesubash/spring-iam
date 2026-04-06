@@ -7,6 +7,7 @@ import com.hgn.iam.authz.dto.EffectivePermissionsRequest;
 import com.hgn.iam.authz.dto.EffectivePermissionsResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,7 +40,11 @@ public class AuthorizationController {
     @Operation(summary = "Check authorization",
             description = "Check if subject can perform action on resource")
     public ResponseEntity<AuthorizationResponse> authorize(
-            @Valid @RequestBody AuthorizationRequest request) {
+            @Valid @RequestBody AuthorizationRequest request,
+            HttpServletRequest httpRequest) {
+
+        // Enrich context with server-side IP and User-Agent if not provided by caller
+        enrichRequestContext(request, httpRequest);
 
         log.debug("Authorization request: subject={}, permission={}",
                 request.getSubject(), request.getPermission());
@@ -53,19 +58,32 @@ public class AuthorizationController {
         return ResponseEntity.ok(response);
     }
 
+    private static final int MAX_BATCH_SIZE = 50;
+
     /**
      * Batch authorization check (for efficiency)
-     * Check multiple permissions at once
+     * Check multiple permissions at once. Maximum 50 items per batch.
      */
     @PostMapping("/authorize/batch")
     @Operation(summary = "Batch authorization check")
     public ResponseEntity<Map<String, AuthorizationResponse>> authorizeBatch(
-            @RequestBody List<AuthorizationRequest> requests) {
+            @Valid @RequestBody List<AuthorizationRequest> requests) {
+
+        if (requests == null || requests.isEmpty()) {
+            return ResponseEntity.ok(Map.of());
+        }
+
+        if (requests.size() > MAX_BATCH_SIZE) {
+            throw new IllegalArgumentException(
+                    "Batch size exceeds maximum of " + MAX_BATCH_SIZE
+                    + ". Received: " + requests.size());
+        }
 
         Map<String, AuthorizationResponse> responses = new HashMap<>();
 
         for (AuthorizationRequest request : requests) {
-            String key = request.getPermission() + ":" + request.getResource().getId();
+            String key = request.getPermission() + ":"
+                    + (request.getResource() != null ? request.getResource().getId() : "null");
             responses.put(key, authorizationService.authorize(request));
         }
 
@@ -83,5 +101,33 @@ public class AuthorizationController {
 
         EffectivePermissionsResponse response = authorizationService.getEffectivePermissions(request);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Enrich the authorization request context with server-side values.
+     * If the caller did not provide IP address or User-Agent, extract them from the HTTP request.
+     * This ensures audit logs always have these fields regardless of caller cooperation.
+     */
+    private void enrichRequestContext(AuthorizationRequest request, HttpServletRequest httpRequest) {
+        if (request.getContext() == null) {
+            request.setContext(AuthorizationRequest.RequestContext.builder().build());
+        }
+
+        AuthorizationRequest.RequestContext ctx = request.getContext();
+
+        // Server-side IP extraction (prefer X-Forwarded-For for proxied requests)
+        if (ctx.getIpAddress() == null || ctx.getIpAddress().isBlank()) {
+            String forwarded = httpRequest.getHeader("X-Forwarded-For");
+            if (forwarded != null && !forwarded.isBlank()) {
+                ctx.setIpAddress(forwarded.split(",")[0].trim());
+            } else {
+                ctx.setIpAddress(httpRequest.getRemoteAddr());
+            }
+        }
+
+        // Server-side User-Agent extraction
+        if (ctx.getUserAgent() == null || ctx.getUserAgent().isBlank()) {
+            ctx.setUserAgent(httpRequest.getHeader("User-Agent"));
+        }
     }
 }

@@ -4,6 +4,7 @@ import com.hgn.iam.authn.security.UserPrincipal;
 import com.hgn.iam.authz.entity.Assignment;
 import com.hgn.iam.authz.entity.Permission;
 import com.hgn.iam.authz.repository.AssignmentRepository;
+import com.hgn.iam.authz.repository.RoleHierarchyRepository;
 import com.hgn.iam.authz.repository.RolePermissionRepository;
 import com.hgn.iam.authz.repository.ScopeClosureRepository;
 import com.hgn.iam.shared.exception.ForbiddenException;
@@ -12,9 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -38,6 +37,7 @@ public class DelegatedManagementGuard {
     private final AssignmentRepository assignmentRepository;
     private final ScopeClosureRepository scopeClosureRepository;
     private final RolePermissionRepository rolePermissionRepository;
+    private final RoleHierarchyRepository roleHierarchyRepository;
 
     /**
      * Returns true if the caller is a SuperAdmin (full bypass of all delegation checks).
@@ -107,11 +107,14 @@ public class DelegatedManagementGuard {
                     "You have no active assignments and cannot grant permissions.");
         }
 
+        // Resolve role hierarchy so inherited permissions are included in the ceiling
         Set<UUID> callerRoleIds = callerAssignments.stream()
                 .map(Assignment::getRoleId)
                 .collect(Collectors.toSet());
 
-        List<Permission> callerPermissions = rolePermissionRepository.findPermissionsByRoleIds(callerRoleIds);
+        Set<UUID> resolvedRoleIds = resolveAllRoleHierarchies(callerRoleIds);
+
+        List<Permission> callerPermissions = rolePermissionRepository.findPermissionsByRoleIds(resolvedRoleIds);
 
         Set<UUID> callerPermissionIds = callerPermissions.stream()
                 .map(Permission::getId)
@@ -128,5 +131,31 @@ public class DelegatedManagementGuard {
                     "You cannot grant permissions that you do not hold. " +
                     "Requested permission IDs exceed your ceiling: " + exceeded);
         }
+    }
+
+    /**
+     * Resolves full role hierarchy for a set of role IDs, including all inherited parent roles.
+     * Uses BFS to traverse the hierarchy and prevent cycles.
+     */
+    private Set<UUID> resolveAllRoleHierarchies(Set<UUID> roleIds) {
+        Set<UUID> resolved = new HashSet<>();
+        Deque<UUID> queue = new ArrayDeque<>(roleIds);
+
+        while (!queue.isEmpty()) {
+            UUID current = queue.removeFirst();
+            if (!resolved.add(current)) {
+                continue; // Already visited — prevents cycles
+            }
+            Set<UUID> parents = roleHierarchyRepository.findParentRoleIdsByChildId(current);
+            if (parents != null) {
+                for (UUID parent : parents) {
+                    if (!resolved.contains(parent)) {
+                        queue.add(parent);
+                    }
+                }
+            }
+        }
+
+        return resolved;
     }
 }

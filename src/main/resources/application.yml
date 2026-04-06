@@ -92,10 +92,11 @@ iam:
   authorization:
     # Cache TTL settings
     cache:
-      permissions-ttl: 300  # 5 minutes
+      permissions-ttl: 300  # 5 minutes (seconds)
       deny-rules-ttl: 60    # 1 minute (security-critical)
       scope-ttl: 3600       # 1 hour (changes rarely)
       role-ttl: 1800        # 30 minutes
+      policy-ttl: 120       # 2 minutes
 
     # Audit settings
     audit:

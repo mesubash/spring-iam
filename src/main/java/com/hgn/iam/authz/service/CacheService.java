@@ -1,7 +1,7 @@
 package com.hgn.iam.authz.service;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -11,17 +11,37 @@ import java.util.UUID;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class CacheService {
 
     private final RedisTemplate<String, Object> redisTemplate;
 
+    private final Duration permissionsTtl;
+    private final Duration denyRulesTtl;
+    private final Duration scopeTtl;
+    private final Duration roleTtl;
+    private final Duration policyTtl;
+
     private static final String PERMISSION_CACHE_PREFIX = "auth:perms:";
     private static final String DENY_CACHE_PREFIX = "auth:deny:";
     private static final String SCOPE_CACHE_PREFIX = "auth:scope:";
-    private static final String ROLE_CACHE_PREFIX = "auth:role:";  // ✅ NEW
+    private static final String ROLE_CACHE_PREFIX = "auth:role:";
     private static final String ASSIGNMENT_VERSION_PREFIX = "auth:version:";
     private static final String POLICY_CACHE_PREFIX = "auth:policy:";
+
+    public CacheService(
+            RedisTemplate<String, Object> redisTemplate,
+            @Value("${iam.authorization.cache.permissions-ttl:300}") int permissionsTtlSec,
+            @Value("${iam.authorization.cache.deny-rules-ttl:60}") int denyRulesTtlSec,
+            @Value("${iam.authorization.cache.scope-ttl:3600}") int scopeTtlSec,
+            @Value("${iam.authorization.cache.role-ttl:1800}") int roleTtlSec,
+            @Value("${iam.authorization.cache.policy-ttl:120}") int policyTtlSec) {
+        this.redisTemplate = redisTemplate;
+        this.permissionsTtl = Duration.ofSeconds(permissionsTtlSec);
+        this.denyRulesTtl = Duration.ofSeconds(denyRulesTtlSec);
+        this.scopeTtl = Duration.ofSeconds(scopeTtlSec);
+        this.roleTtl = Duration.ofSeconds(roleTtlSec);
+        this.policyTtl = Duration.ofSeconds(policyTtlSec);
+    }
 
     // ========================================================================
     // PERMISSION CACHING
@@ -34,7 +54,7 @@ public class CacheService {
     public void cacheUserPermissions(String cacheKey, Set<String> permissions) {
         String key = PERMISSION_CACHE_PREFIX + cacheKey;
         try {
-            redisTemplate.opsForValue().set(key, permissions, Duration.ofMinutes(5));
+            redisTemplate.opsForValue().set(key, permissions, permissionsTtl);
             log.debug("Cached permissions for key: {}", cacheKey);
         } catch (Exception e) {
             log.error("Failed to cache permissions for key: {}", cacheKey, e);
@@ -73,7 +93,7 @@ public class CacheService {
     public void cacheDenyRules(String subjectId, Set<CachedDenyRule> deniedPermissions) {
         String key = DENY_CACHE_PREFIX + subjectId;
         try {
-            redisTemplate.opsForValue().set(key, deniedPermissions, Duration.ofMinutes(1));
+            redisTemplate.opsForValue().set(key, deniedPermissions, denyRulesTtl);
             log.debug("Cached deny rules for subject: {}", subjectId);
         } catch (Exception e) {
             log.error("Failed to cache deny rules for subject: {}", subjectId, e);
@@ -108,7 +128,7 @@ public class CacheService {
     public void cacheRolePermissions(String cacheKey, Set<String> permissions) {
         String key = ROLE_CACHE_PREFIX + cacheKey;
         try {
-            redisTemplate.opsForValue().set(key, permissions, Duration.ofMinutes(30));
+            redisTemplate.opsForValue().set(key, permissions, roleTtl);
             log.debug("Cached role permissions for key: {}", cacheKey);
         } catch (Exception e) {
             log.error("Failed to cache role permissions for key: {}", cacheKey, e);
@@ -147,7 +167,7 @@ public class CacheService {
     public void cacheScopeContainment(UUID ancestorId, UUID descendantId, boolean contains) {
         String key = SCOPE_CACHE_PREFIX + ancestorId + ":" + descendantId;
         try {
-            redisTemplate.opsForValue().set(key, contains, Duration.ofHours(1));
+            redisTemplate.opsForValue().set(key, contains, scopeTtl);
         } catch (Exception e) {
             log.error("Failed to cache scope containment", e);
         }
@@ -178,6 +198,8 @@ public class CacheService {
     public void incrementAssignmentVersion(String subjectId) {
         String key = ASSIGNMENT_VERSION_PREFIX + subjectId;
         redisTemplate.opsForValue().increment(key);
+        // Set TTL so version keys don't accumulate forever
+        redisTemplate.expire(key, permissionsTtl.multipliedBy(2));
     }
 
     public Long getAssignmentVersion(String subjectId) {
@@ -311,7 +333,7 @@ public class CacheService {
     public void cachePolicies(String cacheKey, java.util.List<PolicySnapshot> policies) {
         String key = POLICY_CACHE_PREFIX + cacheKey;
         try {
-            redisTemplate.opsForValue().set(key, policies, Duration.ofMinutes(2));
+            redisTemplate.opsForValue().set(key, policies, policyTtl);
         } catch (Exception e) {
             log.error("Failed to cache policies for key: {}", cacheKey, e);
         }

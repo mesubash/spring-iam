@@ -180,19 +180,7 @@ CREATE TABLE roles (
     display_name   VARCHAR(200),
     description    TEXT,
     is_system_role BOOLEAN NOT NULL DEFAULT FALSE,
-    org_type       VARCHAR(50)
-        CHECK (org_type IN (
-            'OPERATIONS',
-            'TRAVEL_AGENCY',
-            'SALES_AGENCY',
-            'RESCUE_CENTRE',
-            'RESCUE_COMPANY',
-            'INSURANCE_COMPANY',
-            'HOSPITAL',
-            'SERVICE_PROVIDER',
-            'GOVERNMENT_BODY',
-            'GENERAL'
-        )),
+    org_type       VARCHAR(50),  -- Free-form: each deployment defines its own org types
     active         BOOLEAN NOT NULL DEFAULT TRUE,
     created_at     TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at     TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
@@ -397,6 +385,7 @@ CREATE INDEX idx_policies_permission ON policies(permission_key);
 CREATE INDEX idx_policies_resource ON policies(resource_type);
 CREATE INDEX idx_policies_active ON policies(active) WHERE active = TRUE;
 CREATE INDEX idx_policies_scope ON policies(scope_id);
+CREATE INDEX idx_policies_effect ON policies(effect) WHERE active = TRUE;
 
 COMMENT ON TABLE policies IS 'ABAC/ReBAC policies evaluated after role-based checks. Supports complex condition evaluation.';
 

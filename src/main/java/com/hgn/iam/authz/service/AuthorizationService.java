@@ -11,6 +11,7 @@ import com.hgn.iam.authz.dto.AuthorizationRequest;
 import com.hgn.iam.authz.dto.AuthorizationResponse;
 import com.hgn.iam.authz.dto.EffectivePermissionsRequest;
 import com.hgn.iam.authz.dto.EffectivePermissionsResponse;
+import com.hgn.iam.shared.exception.AuthorizationServiceException;
 import com.hgn.iam.util.IpRangeMatcher;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -298,14 +299,19 @@ public class AuthorizationService {
 
             return buildResponse(true, reason, startTime, userPermissions, auditId);
 
-        } catch (Exception e) {
-            log.error("Authorization check failed", e);
-            String reason = "DENY: Authorization service error - " + e.getMessage();
+        } catch (IllegalArgumentException e) {
+            // Input validation errors — deny with reason
+            log.warn("Authorization check failed due to bad input: {}", e.getMessage());
+            String reason = "DENY: Invalid request - " + e.getMessage();
             UUID auditId = UUID.randomUUID();
             logAuditAsync(auditId, request, false, reason);
             denyCounter.increment();
-
             return buildResponse(false, reason, startTime, Collections.emptySet(), auditId);
+        } catch (Exception e) {
+            // Infrastructure errors (DB/Redis down) — throw 503, NOT a security denial
+            log.error("Authorization service infrastructure error", e);
+            throw new AuthorizationServiceException(
+                    "Authorization service unavailable: " + e.getMessage(), e);
         }
     }
 
@@ -412,13 +418,26 @@ public class AuthorizationService {
         return false;
     }
 
+    /**
+     * Matches a permission rule pattern against a permission key.
+     * Supports wildcard (*) at each segment position and variable-length keys.
+     * Examples:
+     *   "order.order.approve" matches "order.order.approve" (exact)
+     *   "order.*.approve" matches "order.order.approve" (wildcard segment)
+     *   "*.*.*" matches any 3-segment permission
+     *   "order.*" matches "order.read" (2-segment keys)
+     */
     private boolean permissionMatches(String rulePermission, String permissionKey) {
-        if ("*.*.*".equals(rulePermission)) {
+        if (rulePermission.equals(permissionKey)) {
             return true;
         }
 
-        if (rulePermission.equals(permissionKey)) {
-            return true;
+        // Check for full wildcard pattern (all segments are *)
+        if (rulePermission.chars().allMatch(c -> c == '*' || c == '.')) {
+            // Ensure same number of segments
+            long ruleDots = rulePermission.chars().filter(c -> c == '.').count();
+            long permDots = permissionKey.chars().filter(c -> c == '.').count();
+            return ruleDots == permDots;
         }
 
         String[] ruleParts = rulePermission.split("\\.");
@@ -463,29 +482,40 @@ public class AuthorizationService {
             return PolicyDecision.allow();
         }
 
-        boolean hasAllowPolicies = false;
-        boolean allowMatched = false;
+        // Separate DENY and ALLOW policies — evaluate ALL DENY policies first
+        List<com.hgn.iam.authz.entity.Policy> denyPolicies = new ArrayList<>();
+        List<com.hgn.iam.authz.entity.Policy> allowPolicies = new ArrayList<>();
 
         for (com.hgn.iam.authz.entity.Policy policy : candidates) {
             if (!policyApplies(policy, permissionKey, resourceType, resourceScopeId)) {
                 continue;
             }
-
-            boolean match = policyEvaluator.evaluate(policy.getConditions(), request);
-            if ("DENY".equalsIgnoreCase(policy.getEffect()) && match) {
-                return PolicyDecision.deny("DENY: Policy " + policy.getName());
-            }
-
-            if ("ALLOW".equalsIgnoreCase(policy.getEffect())) {
-                hasAllowPolicies = true;
-                if (match) {
-                    allowMatched = true;
-                }
+            if ("DENY".equalsIgnoreCase(policy.getEffect())) {
+                denyPolicies.add(policy);
+            } else if ("ALLOW".equalsIgnoreCase(policy.getEffect())) {
+                allowPolicies.add(policy);
             }
         }
 
-        if (hasAllowPolicies && !allowMatched) {
-            return PolicyDecision.deny("DENY: No policy matched");
+        // DENY always takes precedence — check all DENY policies first
+        for (com.hgn.iam.authz.entity.Policy policy : denyPolicies) {
+            if (policyEvaluator.evaluate(policy.getConditions(), request)) {
+                return PolicyDecision.deny("DENY: Policy '" + policy.getName() + "'");
+            }
+        }
+
+        // If ALLOW policies exist, at least one must match
+        if (!allowPolicies.isEmpty()) {
+            boolean allowMatched = false;
+            for (com.hgn.iam.authz.entity.Policy policy : allowPolicies) {
+                if (policyEvaluator.evaluate(policy.getConditions(), request)) {
+                    allowMatched = true;
+                    break;
+                }
+            }
+            if (!allowMatched) {
+                return PolicyDecision.deny("DENY: No ALLOW policy matched");
+            }
         }
 
         return PolicyDecision.allow();
@@ -604,15 +634,19 @@ public class AuthorizationService {
             LocalTime now = ZonedDateTime.ofInstant(timestamp, zoneId).toLocalTime();
 
             if (start.equals(end)) {
-                return true;
+                return true; // 24-hour window
             }
 
             if (start.isBefore(end)) {
+                // Normal window: e.g. 09:00-17:00
                 return !now.isBefore(start) && !now.isAfter(end);
             }
 
+            // Wraparound window: e.g. 22:00-06:00
+            // User is within window if AFTER start OR BEFORE end
             return !now.isBefore(start) || !now.isAfter(end);
         } catch (DateTimeException e) {
+            log.warn("Invalid time window format: {}", window);
             return false;
         }
     }
@@ -789,23 +823,23 @@ public class AuthorizationService {
         return permissions;
     }
 
+    /**
+     * Resolves the full role hierarchy using batch queries to avoid N+1.
+     * Each iteration fetches all parent mappings for the current frontier in a single query.
+     */
     private Set<UUID> resolveRoleHierarchy(UUID roleId) {
         Set<UUID> resolved = new HashSet<>();
-        Deque<UUID> queue = new ArrayDeque<>();
-        queue.add(roleId);
+        resolved.add(roleId);
+        Set<UUID> frontier = new HashSet<>();
+        frontier.add(roleId);
 
-        while (!queue.isEmpty()) {
-            UUID current = queue.removeFirst();
-            if (!resolved.add(current)) {
-                continue;
-            }
-
-            Set<UUID> parents = roleHierarchyRepository.findParentRoleIdsByChildId(current);
-            if (parents != null) {
-                for (UUID parent : parents) {
-                    if (!resolved.contains(parent)) {
-                        queue.add(parent);
-                    }
+        while (!frontier.isEmpty()) {
+            // Batch fetch: single query for all parents of the current frontier
+            List<RoleHierarchy> hierarchies = roleHierarchyRepository.findAllByChildRoleIds(frontier);
+            frontier = new HashSet<>();
+            for (RoleHierarchy rh : hierarchies) {
+                if (resolved.add(rh.getParentRoleId())) {
+                    frontier.add(rh.getParentRoleId());
                 }
             }
         }

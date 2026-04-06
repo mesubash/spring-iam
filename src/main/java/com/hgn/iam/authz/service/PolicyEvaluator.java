@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Component
@@ -141,6 +142,17 @@ public class PolicyEvaluator {
         };
     }
 
+    /**
+     * Allowed context fields that policies can reference from additionalContext.
+     * This prevents callers from injecting arbitrary fields to bypass policy checks.
+     * Only explicitly whitelisted fields are resolvable.
+     */
+    private static final Set<String> ALLOWED_ADDITIONAL_CONTEXT_FIELDS = Set.of(
+            "mfa", "mfaVerified", "mfa_authenticated",
+            "department", "region", "environment",
+            "deviceType", "channel"
+    );
+
     private Object resolveContextField(String path, AuthorizationRequest request) {
         AuthorizationRequest.RequestContext context = request.getContext();
         if (context == null) {
@@ -153,12 +165,14 @@ public class PolicyEvaluator {
             case "sessionId" -> context.getSessionId();
             case "requestId" -> context.getRequestId();
             default -> {
-                if (path.startsWith("additional.") && context.getAdditionalContext() != null) {
-                    String key = path.substring("additional.".length());
-                    yield context.getAdditionalContext().get(key);
+                // Only resolve whitelisted fields from additionalContext
+                String key = path.startsWith("additional.") ? path.substring("additional.".length()) : path;
+                if (!ALLOWED_ADDITIONAL_CONTEXT_FIELDS.contains(key)) {
+                    log.warn("Policy references non-whitelisted context field: {}", key);
+                    yield null;
                 }
                 yield context.getAdditionalContext() != null
-                        ? context.getAdditionalContext().get(path)
+                        ? context.getAdditionalContext().get(key)
                         : null;
             }
         };

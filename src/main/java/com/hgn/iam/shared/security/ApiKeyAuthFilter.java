@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -13,8 +14,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.List;
 
+@Slf4j
 @Component
 public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
@@ -54,10 +58,12 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        // API key provided but invalid — reject
-        if (!internalApiKey.equals(providedKey)) {
+        // API key provided but invalid — reject (timing-safe comparison)
+        if (!timingSafeEquals(internalApiKey, providedKey)) {
+            log.warn("Invalid API key attempt from IP: {}", request.getRemoteAddr());
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.getWriter().write("Invalid API key");
+            response.setContentType("application/json");
+            response.getWriter().write("{\"error\":\"Invalid API key\"}");
             return;
         }
 
@@ -69,6 +75,15 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * Constant-time string comparison to prevent timing attacks on API key validation.
+     */
+    private boolean timingSafeEquals(String expected, String actual) {
+        byte[] expectedBytes = expected.getBytes(StandardCharsets.UTF_8);
+        byte[] actualBytes = actual.getBytes(StandardCharsets.UTF_8);
+        return MessageDigest.isEqual(expectedBytes, actualBytes);
     }
 
     private boolean isExcluded(HttpServletRequest request) {

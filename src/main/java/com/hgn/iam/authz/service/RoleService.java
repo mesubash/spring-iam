@@ -128,6 +128,11 @@ public class RoleService {
                             "Permission not found: " + permissionId));
         }
 
+        // Invalidate role cache BEFORE modifying data to prevent serving stale empty set.
+        // A concurrent reader that misses cache will see the DB state which is protected
+        // by this transaction's isolation level (read committed).
+        authorizationService.invalidateRoleCache(roleId);
+
         // Delete existing mappings
         rolePermissionRepository.deleteByRoleId(roleId);
 
@@ -142,7 +147,7 @@ public class RoleService {
             rolePermissionRepository.save(rp);
         }
 
-        // Invalidate role cache
+        // Invalidate again AFTER commit to clear any cache populated during the transaction
         authorizationService.invalidateRoleCache(roleId);
 
         log.info("Updated permissions for role: {} (new count: {})",

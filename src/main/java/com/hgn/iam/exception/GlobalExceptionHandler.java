@@ -283,6 +283,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
     }
 
+    @ExceptionHandler(AuthorizationServiceException.class)
+    public ResponseEntity<ErrorResponse> handleAuthorizationServiceError(
+            AuthorizationServiceException ex, WebRequest request) {
+        log.error("Authorization service unavailable: {}", ex.getMessage(), ex);
+        ErrorResponse response = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.SERVICE_UNAVAILABLE.value())
+                .error("Service Unavailable")
+                .message("Authorization service is temporarily unavailable. Please retry.")
+                .path(request.getDescription(false).replace("uri=", ""))
+                .build();
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
+    }
+
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException ex, WebRequest request) {
         ErrorResponse response = ErrorResponse.builder()

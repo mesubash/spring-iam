@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -18,4 +19,12 @@ public interface RoleHierarchyRepository extends JpaRepository<RoleHierarchy, Ro
 
     @Query("SELECT rh.childRoleId FROM RoleHierarchy rh WHERE rh.parentRoleId = :parentRoleId")
     Set<UUID> findChildRoleIdsByParentId(@Param("parentRoleId") UUID parentRoleId);
+
+    /**
+     * Batch fetch: get all parent mappings for a set of child role IDs in a single query.
+     * Returns all RoleHierarchy rows where childRoleId is in the given set.
+     * Use this to avoid N+1 queries when resolving hierarchy for multiple roles.
+     */
+    @Query("SELECT rh FROM RoleHierarchy rh WHERE rh.childRoleId IN :childRoleIds")
+    List<RoleHierarchy> findAllByChildRoleIds(@Param("childRoleIds") Set<UUID> childRoleIds);
 }
