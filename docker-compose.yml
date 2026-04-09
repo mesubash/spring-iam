@@ -38,6 +38,8 @@ services:
     environment:
       # Override localhost values from .env with Docker network service names
       DB_HOST: postgres
+      # The Postgres container still listens on 5432 inside the Docker network.
+      DB_PORT: 5432
       REDIS_HOST: redis
     ports:
       - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
