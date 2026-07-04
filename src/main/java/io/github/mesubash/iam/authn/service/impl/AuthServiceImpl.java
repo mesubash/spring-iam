@@ -226,12 +226,16 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void forgotPassword(String email) {
-        Identity identity = identityRepository.findByPrimaryEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-        String resetToken = PasswordUtil.generateSecureToken(32);
-        tokenService.store(identity.getId().toString(), resetToken, TokenType.PASSWORD_RESET);
-        notificationPort.sendPasswordReset(email, resetToken);
+        // Non-revealing: always succeed regardless of whether the account exists,
+        // so the response cannot be used to enumerate registered emails.
+        identityRepository.findByPrimaryEmail(email).ifPresentOrElse(
+                identity -> {
+                    String resetToken = PasswordUtil.generateSecureToken(32);
+                    tokenService.store(identity.getId().toString(), resetToken, TokenType.PASSWORD_RESET);
+                    notificationPort.sendPasswordReset(email, resetToken);
+                },
+                () -> log.info("Password reset requested for unknown email; returning generic response")
+        );
     }
 
     @Override
