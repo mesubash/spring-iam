@@ -1,0 +1,11 @@
+package io.github.mesubash.iam.shared.exception;
+
+public class TokenExpiredException extends RuntimeException {
+    public TokenExpiredException(String message) {
+        super(message);
+    }
+
+    public TokenExpiredException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}

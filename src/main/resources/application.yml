@@ -182,7 +182,7 @@ spring.security.oauth2.client:
 logging:
   level:
     root: INFO
-    com.hgn.iam: DEBUG
+    io.github.mesubash.iam: DEBUG
     org.springframework.security: WARN
     org.hibernate.SQL: WARN
     org.springframework.cache: DEBUG

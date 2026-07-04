@@ -1,0 +1,360 @@
+package io.github.mesubash.iam.authz.service;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.stereotype.Service;
+
+import java.time.Duration;
+import java.util.Set;
+import java.util.UUID;
+
+@Slf4j
+@Service
+public class CacheService {
+
+    private final RedisTemplate<String, Object> redisTemplate;
+
+    private final Duration permissionsTtl;
+    private final Duration denyRulesTtl;
+    private final Duration scopeTtl;
+    private final Duration roleTtl;
+    private final Duration policyTtl;
+
+    private static final String PERMISSION_CACHE_PREFIX = "auth:perms:";
+    private static final String DENY_CACHE_PREFIX = "auth:deny:";
+    private static final String SCOPE_CACHE_PREFIX = "auth:scope:";
+    private static final String ROLE_CACHE_PREFIX = "auth:role:";
+    private static final String ASSIGNMENT_VERSION_PREFIX = "auth:version:";
+    private static final String POLICY_CACHE_PREFIX = "auth:policy:";
+
+    public CacheService(
+            RedisTemplate<String, Object> redisTemplate,
+            @Value("${iam.authorization.cache.permissions-ttl:300}") int permissionsTtlSec,
+            @Value("${iam.authorization.cache.deny-rules-ttl:60}") int denyRulesTtlSec,
+            @Value("${iam.authorization.cache.scope-ttl:3600}") int scopeTtlSec,
+            @Value("${iam.authorization.cache.role-ttl:1800}") int roleTtlSec,
+            @Value("${iam.authorization.cache.policy-ttl:120}") int policyTtlSec) {
+        this.redisTemplate = redisTemplate;
+        this.permissionsTtl = Duration.ofSeconds(permissionsTtlSec);
+        this.denyRulesTtl = Duration.ofSeconds(denyRulesTtlSec);
+        this.scopeTtl = Duration.ofSeconds(scopeTtlSec);
+        this.roleTtl = Duration.ofSeconds(roleTtlSec);
+        this.policyTtl = Duration.ofSeconds(policyTtlSec);
+    }
+
+    // ========================================================================
+    // PERMISSION CACHING
+    // ========================================================================
+
+    /**
+     * Cache user's permission set
+     * ✅ FIXED: Now includes scope in cache key for accuracy
+     */
+    public void cacheUserPermissions(String cacheKey, Set<String> permissions) {
+        String key = PERMISSION_CACHE_PREFIX + cacheKey;
+        try {
+            redisTemplate.opsForValue().set(key, permissions, permissionsTtl);
+            log.debug("Cached permissions for key: {}", cacheKey);
+        } catch (Exception e) {
+            log.error("Failed to cache permissions for key: {}", cacheKey, e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public Set<String> getCachedUserPermissions(String cacheKey) {
+        String key = PERMISSION_CACHE_PREFIX + cacheKey;
+        try {
+            return (Set<String>) redisTemplate.opsForValue().get(key);
+        } catch (Exception e) {
+            log.error("Failed to get cached permissions for key: {}", cacheKey, e);
+            return null;
+        }
+    }
+
+    /**
+     * ✅ FIXED: Invalidate ALL permission caches for a user
+     * (across all scopes)
+     */
+    public void invalidateUserPermissions(String subjectId) {
+        String pattern = PERMISSION_CACHE_PREFIX + subjectId + "*";
+        Set<String> keys = redisTemplate.keys(pattern);
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
+            log.info("Invalidated {} permission cache entries for subject: {}",
+                    keys.size(), subjectId);
+        }
+    }
+
+    // ========================================================================
+    // DENY RULE CACHING
+    // ========================================================================
+
+    public void cacheDenyRules(String subjectId, Set<CachedDenyRule> deniedPermissions) {
+        String key = DENY_CACHE_PREFIX + subjectId;
+        try {
+            redisTemplate.opsForValue().set(key, deniedPermissions, denyRulesTtl);
+            log.debug("Cached deny rules for subject: {}", subjectId);
+        } catch (Exception e) {
+            log.error("Failed to cache deny rules for subject: {}", subjectId, e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public Set<CachedDenyRule> getCachedDenyRules(String subjectId) {
+        String key = DENY_CACHE_PREFIX + subjectId;
+        try {
+            return (Set<CachedDenyRule>) redisTemplate.opsForValue().get(key);
+        } catch (Exception e) {
+            log.error("Failed to get cached deny rules for subject: {}", subjectId, e);
+            return null;
+        }
+    }
+
+    public void invalidateDenyRules(String subjectId) {
+        String key = DENY_CACHE_PREFIX + subjectId;
+        redisTemplate.delete(key);
+        log.info("Invalidated deny rules cache for subject: {}", subjectId);
+    }
+
+    // ========================================================================
+    // ✅ NEW: ROLE PERMISSION CACHING
+    // ========================================================================
+
+    /**
+     * Cache role's permission set
+     * TTL: 30 minutes (roles change infrequently)
+     */
+    public void cacheRolePermissions(String cacheKey, Set<String> permissions) {
+        String key = ROLE_CACHE_PREFIX + cacheKey;
+        try {
+            redisTemplate.opsForValue().set(key, permissions, roleTtl);
+            log.debug("Cached role permissions for key: {}", cacheKey);
+        } catch (Exception e) {
+            log.error("Failed to cache role permissions for key: {}", cacheKey, e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public Set<String> getCachedRolePermissions(String cacheKey) {
+        String key = ROLE_CACHE_PREFIX + cacheKey;
+        try {
+            return (Set<String>) redisTemplate.opsForValue().get(key);
+        } catch (Exception e) {
+            log.error("Failed to get cached role permissions for key: {}", cacheKey, e);
+            return null;
+        }
+    }
+
+    public void invalidateRolePermissions(String cacheKey) {
+        String key = ROLE_CACHE_PREFIX + cacheKey;
+        redisTemplate.delete(key);
+        log.info("Invalidated role permissions cache for key: {}", cacheKey);
+    }
+
+    public void invalidateAllRolePermissions() {
+        Set<String> keys = redisTemplate.keys(ROLE_CACHE_PREFIX + "*");
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
+            log.warn("Invalidated all role permissions cache entries");
+        }
+    }
+
+    // ========================================================================
+    // SCOPE CONTAINMENT CACHING
+    // ========================================================================
+
+    public void cacheScopeContainment(UUID ancestorId, UUID descendantId, boolean contains) {
+        String key = SCOPE_CACHE_PREFIX + ancestorId + ":" + descendantId;
+        try {
+            redisTemplate.opsForValue().set(key, contains, scopeTtl);
+        } catch (Exception e) {
+            log.error("Failed to cache scope containment", e);
+        }
+    }
+
+    public Boolean getCachedScopeContainment(UUID ancestorId, UUID descendantId) {
+        String key = SCOPE_CACHE_PREFIX + ancestorId + ":" + descendantId;
+        try {
+            return (Boolean) redisTemplate.opsForValue().get(key);
+        } catch (Exception e) {
+            log.error("Failed to get cached scope containment", e);
+            return null;
+        }
+    }
+
+    public void invalidateScopeCache() {
+        Set<String> keys = redisTemplate.keys(SCOPE_CACHE_PREFIX + "*");
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
+            log.info("Invalidated all scope cache entries");
+        }
+    }
+
+    // ========================================================================
+    // CACHE VERSIONING
+    // ========================================================================
+
+    public void incrementAssignmentVersion(String subjectId) {
+        String key = ASSIGNMENT_VERSION_PREFIX + subjectId;
+        redisTemplate.opsForValue().increment(key);
+        // Set TTL so version keys don't accumulate forever
+        redisTemplate.expire(key, permissionsTtl.multipliedBy(2));
+    }
+
+    public Long getAssignmentVersion(String subjectId) {
+        String key = ASSIGNMENT_VERSION_PREFIX + subjectId;
+        Object value = redisTemplate.opsForValue().get(key);
+        return value != null ? Long.parseLong(value.toString()) : 0L;
+    }
+
+    // ========================================================================
+    // ✅ NEW: BULK CACHE OPERATIONS
+    // ========================================================================
+
+    /**
+     * Warm up cache with frequently accessed data
+     */
+    public void warmUpCache(String subjectId,
+                            Set<String> permissions,
+                            Set<CachedDenyRule> denyRules) {
+        cacheUserPermissions(subjectId, permissions);
+        cacheDenyRules(subjectId, denyRules);
+        log.info("Warmed up cache for subject: {}", subjectId);
+    }
+
+    /**
+     * Clear all authorization caches (use with caution!)
+     */
+    public void clearAllAuthCaches() {
+        Set<String> allKeys = redisTemplate.keys("auth:*");
+        if (allKeys != null && !allKeys.isEmpty()) {
+            redisTemplate.delete(allKeys);
+            log.warn("Cleared ALL authorization caches ({} keys)", allKeys.size());
+        }
+    }
+
+    /**
+     * Get cache statistics
+     */
+    public CacheStats getCacheStats() {
+        long permCount = countKeys(PERMISSION_CACHE_PREFIX + "*");
+        long denyCount = countKeys(DENY_CACHE_PREFIX + "*");
+        long scopeCount = countKeys(SCOPE_CACHE_PREFIX + "*");
+        long roleCount = countKeys(ROLE_CACHE_PREFIX + "*");
+        long policyCount = countKeys(POLICY_CACHE_PREFIX + "*");
+
+        return CacheStats.builder()
+                .permissionCacheSize(permCount)
+                .denyRuleCacheSize(denyCount)
+                .scopeCacheSize(scopeCount)
+                .roleCacheSize(roleCount)
+                .policyCacheSize(policyCount)
+                .totalCacheSize(permCount + denyCount + scopeCount + roleCount + policyCount)
+                .build();
+    }
+
+    private long countKeys(String pattern) {
+        Set<String> keys = redisTemplate.keys(pattern);
+        return keys != null ? keys.size() : 0;
+    }
+
+    @lombok.Data
+    @lombok.Builder
+    @lombok.NoArgsConstructor
+    @lombok.AllArgsConstructor
+    public static class CachedDenyRule {
+        private String permissionKey;
+        private UUID scopeId;
+    }
+
+    @lombok.Data
+    @lombok.Builder
+    @lombok.NoArgsConstructor
+    @lombok.AllArgsConstructor
+    public static class PolicySnapshot {
+        private UUID id;
+        private String name;
+        private String description;
+        private String permissionKey;
+        private String resourceType;
+        private UUID scopeId;
+        private String effect;
+        private Integer priority;
+        private java.util.Map<String, Object> conditions;
+        private Boolean active;
+
+        public static PolicySnapshot fromPolicy(io.github.mesubash.iam.authz.entity.Policy policy) {
+            return PolicySnapshot.builder()
+                    .id(policy.getId())
+                    .name(policy.getName())
+                    .description(policy.getDescription())
+                    .permissionKey(policy.getPermissionKey())
+                    .resourceType(policy.getResourceType())
+                    .scopeId(policy.getScopeId())
+                    .effect(policy.getEffect())
+                    .priority(policy.getPriority())
+                    .conditions(policy.getConditions())
+                    .active(policy.getActive())
+                    .build();
+        }
+
+        public io.github.mesubash.iam.authz.entity.Policy toPolicy() {
+            return io.github.mesubash.iam.authz.entity.Policy.builder()
+                    .id(id)
+                    .name(name)
+                    .description(description)
+                    .permissionKey(permissionKey)
+                    .resourceType(resourceType)
+                    .scopeId(scopeId)
+                    .effect(effect)
+                    .priority(priority)
+                    .conditions(conditions)
+                    .active(active != null ? active : true)
+                    .build();
+        }
+    }
+
+    @lombok.Data
+    @lombok.Builder
+    public static class CacheStats {
+        private long permissionCacheSize;
+        private long denyRuleCacheSize;
+        private long scopeCacheSize;
+        private long roleCacheSize;
+        private long policyCacheSize;
+        private long totalCacheSize;
+    }
+
+    // ========================================================================
+    // POLICY CACHING
+    // ========================================================================
+
+    public void cachePolicies(String cacheKey, java.util.List<PolicySnapshot> policies) {
+        String key = POLICY_CACHE_PREFIX + cacheKey;
+        try {
+            redisTemplate.opsForValue().set(key, policies, policyTtl);
+        } catch (Exception e) {
+            log.error("Failed to cache policies for key: {}", cacheKey, e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public java.util.List<PolicySnapshot> getCachedPolicies(String cacheKey) {
+        String key = POLICY_CACHE_PREFIX + cacheKey;
+        try {
+            return (java.util.List<PolicySnapshot>) redisTemplate.opsForValue().get(key);
+        } catch (Exception e) {
+            log.error("Failed to get cached policies for key: {}", cacheKey, e);
+            return null;
+        }
+    }
+
+    public void invalidatePolicyCache() {
+        Set<String> keys = redisTemplate.keys(POLICY_CACHE_PREFIX + "*");
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
+            log.info("Invalidated policy cache");
+        }
+    }
+}

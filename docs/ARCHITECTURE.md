@@ -367,15 +367,15 @@ AuthN and AuthZ are logically separated within the same deployable. Four rules e
 
 ### Rules
 
-1. **No cross-module imports.** Code in `com.hgn.iam.authn` never imports from `com.hgn.iam.authz` and vice versa.
+1. **No cross-module imports.** Code in `io.github.mesubash.iam.authn` never imports from `io.github.mesubash.iam.authz` and vice versa.
 2. **Separate table ownership.** AuthN owns `identities`, `credentials`, `refresh_tokens`, `identity_profiles`, `security_events`. AuthZ owns `permissions`, `roles`, `role_permissions`, `scopes`, `scope_closure`, `assignments`, `deny_rules`, `policies`, `permission_groups`, `permission_group_members`, `role_hierarchy`, `authorization_audit`.
-3. **Communication through shared DTOs only.** The `com.hgn.iam.shared` package contains DTOs, entities, exceptions, and utilities used by both modules.
+3. **Communication through shared DTOs only.** The `io.github.mesubash.iam.shared` package contains DTOs, entities, exceptions, and utilities used by both modules.
 4. **The `/authorize` contract is HTTP-shaped.** The authorization check accepts the same request/response shape whether called in-process or over the network, making extraction to a separate service a deployment change, not a code change.
 
 ### Package Structure
 
 ```
-com.hgn.iam
+io.github.mesubash.iam
   |-- authn/
   |     |-- config/
   |     |-- controller/

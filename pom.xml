@@ -8,7 +8,7 @@
         <version>4.0.2</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
-    <groupId>com.hgn</groupId>
+    <groupId>io.github.mesubash</groupId>
     <artifactId>spring-iam</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>spring-iam</name>

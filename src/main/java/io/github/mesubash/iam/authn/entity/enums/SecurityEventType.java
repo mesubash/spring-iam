@@ -1,0 +1,15 @@
+package io.github.mesubash.iam.authn.entity.enums;
+
+public enum SecurityEventType {
+    LOGIN_SUCCESS,
+    LOGIN_FAILED,
+    PASSWORD_CHANGED,
+    ACCOUNT_LOCKED,
+    ACCOUNT_UNLOCKED,
+    TOKEN_REVOKED,
+    PASSWORD_RESET,
+    MFA_ENABLED,
+    MFA_DISABLED,
+    ACCOUNT_SUSPENDED,
+    ACCOUNT_DEACTIVATED
+}
