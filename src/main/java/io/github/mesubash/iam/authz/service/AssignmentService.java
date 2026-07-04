@@ -72,7 +72,6 @@ public class AssignmentService {
                 .subjectType(subjectType != null ? subjectType : "USER")
                 .roleId(roleId)
                 .scopeId(scopeId)
-                .effect("ALLOW")
                 .grantedBy(grantedBy)
                 .expiresAt(expiresAt)
                 .conditions(conditions != null ? conditions : new HashMap<>())

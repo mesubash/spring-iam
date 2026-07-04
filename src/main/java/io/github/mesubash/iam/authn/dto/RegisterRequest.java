@@ -17,10 +17,6 @@ import lombok.NoArgsConstructor;
 @Schema(description = "User registration request with minimal required fields")
 public class RegisterRequest {
 
-    @NotBlank(message = "Name is required")
-    @Size(min = 2, max = 100, message = "Name must be between 2 and 100 characters")
-    @Schema(description = "Full name of the user", example = "John Doe", required = true, minLength = 2, maxLength = 100)
-    private String fullName;
 
     @NotBlank(message = "Email is required")
     @Email(message = "Please provide a valid email address")

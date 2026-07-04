@@ -23,7 +23,7 @@ public class Assignment {
     @GeneratedValue(strategy = jakarta.persistence.GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "subject_id", nullable = false, length = 100)
+    @Column(name = "subject_id", nullable = false, length = 255)
     private String subjectId;
 
     @Column(name = "subject_type", length = 20)
@@ -35,8 +35,9 @@ public class Assignment {
     @Column(name = "scope_id", nullable = false)
     private UUID scopeId;
 
-    @Column(length = 10)
-    private String effect = "ALLOW";
+    // STANDARD | BREAK_GLASS | MIGRATION
+    @Column(length = 20)
+    private String origin = "STANDARD";
 
     @Column(name = "granted_by", nullable = false)
     private String grantedBy;

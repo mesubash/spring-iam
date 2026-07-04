@@ -1,12 +1,7 @@
-package io.github.mesubash.iam.exception;
+package io.github.mesubash.iam.shared.exception;
 
 
 import io.github.mesubash.iam.shared.dto.ErrorResponse;
-import io.github.mesubash.iam.shared.exception.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

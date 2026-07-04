@@ -16,7 +16,6 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
     @Query("SELECT a FROM Assignment a " +
             "WHERE a.subjectId = :subjectId " +
             "AND a.active = true " +
-            "AND a.effect = 'ALLOW' " +
             "AND (a.expiresAt IS NULL OR a.expiresAt > :now)")
     List<Assignment> findActiveAssignments(@Param("subjectId") String subjectId,
                                            @Param("now") Instant now);
@@ -38,7 +37,6 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
             "SELECT 1 FROM assignments a " +
             "WHERE a.subject_id = :subjectId " +
             "AND a.active = true " +
-            "AND a.effect = 'ALLOW' " +
             "AND (a.expires_at IS NULL OR a.expires_at > :now) " +
             "AND a.conditions IS NOT NULL " +
             "AND a.conditions <> '{}'::jsonb" +

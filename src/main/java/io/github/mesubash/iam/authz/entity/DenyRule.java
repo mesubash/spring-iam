@@ -19,10 +19,13 @@ public class DenyRule {
     @GeneratedValue(strategy =  GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "subject_id", nullable = false, length = 100)
+    @Column(name = "subject_id", nullable = false, length = 255)
     private String subjectId;
 
-    @Column(name = "permission_key", nullable = false, length = 100)
+    @Column(name = "subject_type", length = 20)
+    private String subjectType = "USER";
+
+    @Column(name = "permission_key", nullable = false, length = 150)
     private String permissionKey;
 
     @Column(name = "scope_id")

@@ -9,8 +9,6 @@ import io.github.mesubash.iam.authn.repository.IdentityRepository;
 import io.github.mesubash.iam.authn.security.oauth2.OAuth2UserInfo;
 import io.github.mesubash.iam.authn.security.oauth2.OAuth2UserInfoFactory;
 import io.github.mesubash.iam.shared.dto.RoleClaimsDto;
-import io.github.mesubash.iam.shared.entity.IdentityProfile;
-import io.github.mesubash.iam.shared.repository.IdentityProfileRepository;
 import io.github.mesubash.iam.shared.service.AuthzQueryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,7 +30,6 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
     private final IdentityRepository identityRepository;
     private final CredentialRepository credentialRepository;
-    private final IdentityProfileRepository identityProfileRepository;
     private final AuthzQueryService authzQueryService;
 
     @Override
@@ -85,9 +82,6 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                 identity.setEmailVerified(true);
                 identityRepository.save(identity);
             }
-
-            // Update profile if needed
-            updateProfile(identity, oAuth2UserInfo);
         } else {
             identity = registerNewOAuthUser(credentialType, oAuth2UserInfo);
         }
@@ -113,32 +107,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                 .build();
         credentialRepository.save(credential);
 
-        IdentityProfile profile = IdentityProfile.builder()
-                .identityId(identity.getId())
-                .displayName(oAuth2UserInfo.getName() != null ? oAuth2UserInfo.getName() : oAuth2UserInfo.getEmail())
-                .email(oAuth2UserInfo.getEmail())
-                .avatarUrl(oAuth2UserInfo.getImageUrl())
-                .build();
-        identityProfileRepository.save(profile);
-
         return identity;
-    }
-
-    private void updateProfile(Identity identity, OAuth2UserInfo oAuth2UserInfo) {
-        identityProfileRepository.findById(identity.getId()).ifPresent(profile -> {
-            boolean changed = false;
-            if (!StringUtils.hasText(profile.getAvatarUrl()) && StringUtils.hasText(oAuth2UserInfo.getImageUrl())) {
-                profile.setAvatarUrl(oAuth2UserInfo.getImageUrl());
-                changed = true;
-            }
-            if (!StringUtils.hasText(profile.getDisplayName()) && StringUtils.hasText(oAuth2UserInfo.getName())) {
-                profile.setDisplayName(oAuth2UserInfo.getName());
-                changed = true;
-            }
-            if (changed) {
-                identityProfileRepository.save(profile);
-            }
-        });
     }
 
     private List<String> getRolesForIdentity(Identity identity) {

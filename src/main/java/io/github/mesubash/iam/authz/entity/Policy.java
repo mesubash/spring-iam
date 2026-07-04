@@ -59,6 +59,10 @@ public class Policy {
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> conditions = new HashMap<>();
 
+    // SHADOW: evaluated and audited, never affects the decision
+    @Column(name = "enforcement_mode", length = 10)
+    private String enforcementMode = "ENFORCE";
+
     @Column(nullable = false)
     private Boolean active = true;
 

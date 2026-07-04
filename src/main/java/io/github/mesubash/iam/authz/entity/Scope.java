@@ -23,13 +23,15 @@ public class Scope {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    // Free-form label; validated against scope_types when the registry has rows
     @Column(nullable = false, length = 50)
-    private String type;  // GLOBAL, COUNTRY, REGION, ORG, DEPT, TEAM
+    private String type;
 
     @Column(nullable = false, length = 200)
     private String name;
 
-    @Column(unique = true, length = 50)
+    // ltree path segment; unique among siblings (DB index)
+    @Column(nullable = false, length = 50)
     private String code;
 
     @Column(name = "parent_id")

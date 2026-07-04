@@ -18,13 +18,13 @@ public class Permission {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(unique = true, nullable = false, length = 100)
-    private String key;  // domain.resource.action
+    @Column(unique = true, nullable = false, length = 150)
+    private String key;  // domain.<resource-path>.action, 3-6 segments
 
     @Column(nullable = false, length = 50)
     private String domain;
 
-    @Column(nullable = false, length = 50)
+    @Column(nullable = false, length = 100)
     private String resource;
 
     @Column(nullable = false, length = 50)

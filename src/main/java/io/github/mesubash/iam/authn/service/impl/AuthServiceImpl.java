@@ -20,9 +20,7 @@ import io.github.mesubash.iam.authn.service.AuthService;
 import io.github.mesubash.iam.authn.service.RefreshTokenBlacklistService;
 import io.github.mesubash.iam.authn.service.SecurityEventService;
 import io.github.mesubash.iam.shared.dto.RoleClaimsDto;
-import io.github.mesubash.iam.shared.entity.IdentityProfile;
 import io.github.mesubash.iam.shared.exception.*;
-import io.github.mesubash.iam.shared.repository.IdentityProfileRepository;
 import io.github.mesubash.iam.shared.service.AuthzQueryService;
 import io.github.mesubash.iam.shared.util.PasswordUtil;
 import lombok.RequiredArgsConstructor;
@@ -50,7 +48,6 @@ public class AuthServiceImpl implements AuthService {
 
     private final IdentityRepository identityRepository;
     private final CredentialRepository credentialRepository;
-    private final IdentityProfileRepository identityProfileRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
@@ -91,14 +88,6 @@ public class AuthServiceImpl implements AuthService {
                 .secretHash(passwordEncoder.encode(request.getPassword()))
                 .build();
         credentialRepository.save(credential);
-
-        // Create identity profile
-        IdentityProfile profile = IdentityProfile.builder()
-                .identityId(identity.getId())
-                .displayName(request.getFullName())
-                .email(request.getEmail())
-                .build();
-        identityProfileRepository.save(profile);
 
         // Generate verification token
         String verificationToken = PasswordUtil.generateSecureToken(32);
@@ -497,9 +486,6 @@ public class AuthServiceImpl implements AuthService {
                 .email(identity.getPrimaryEmail())
                 .emailVerified(identity.getEmailVerified())
                 .build();
-
-        identityProfileRepository.findById(identity.getId())
-                .ifPresent(profile -> info.setDisplayName(profile.getDisplayName()));
 
         return info;
     }

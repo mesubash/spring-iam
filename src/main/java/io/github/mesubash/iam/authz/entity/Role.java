@@ -19,7 +19,8 @@ public class Role {
     @GeneratedValue(strategy = jakarta.persistence.GenerationType.UUID)
     private UUID id;
 
-    @Column(unique = true, nullable = false, length = 100)
+    // Unique per owner scope (DB index) — tenant roles may share names
+    @Column(nullable = false, length = 100)
     private String name;
 
     @Column(name = "display_name", length = 200)
@@ -33,6 +34,10 @@ public class Role {
 
     @Column(name = "org_type", length = 50)
     private String orgType;
+
+    // NULL = global role; set = usable only within this scope's subtree
+    @Column(name = "owner_scope_id")
+    private UUID ownerScopeId;
 
     @Column(nullable = false)
     private Boolean active = true;
