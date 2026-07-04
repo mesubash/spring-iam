@@ -11,6 +11,7 @@ start. This folder holds the reference and design docs.
 | [API_REFERENCE.md](API_REFERENCE.md) | Every endpoint: method, path, auth, shapes |
 | [CONFIGURATION.md](CONFIGURATION.md) | All env vars and `iam.features.*` flags |
 | [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md) | Consuming IAM — claims / PDP / hybrid |
+| [FRONTEND_INTEGRATION.md](FRONTEND_INTEGRATION.md) | Browser SPA contract — envelopes, token refresh, permission-driven UI |
 
 ## Design (the authoritative specs)
 

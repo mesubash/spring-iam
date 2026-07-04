@@ -4,6 +4,10 @@ How a consuming service or frontend integrates with Spring IAM. Pick the
 consumption mode that fits your latency and freshness needs, then wire the
 minimal pieces below.
 
+> Building a **browser SPA / admin UI**? See
+> [FRONTEND_INTEGRATION.md](FRONTEND_INTEGRATION.md) for the response envelopes,
+> the token-refresh rules, and permission-driven dynamic rendering.
+
 ---
 
 ## 1. Concepts you must hold
