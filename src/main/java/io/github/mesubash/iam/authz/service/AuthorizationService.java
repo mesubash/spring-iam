@@ -7,6 +7,7 @@ import io.github.mesubash.iam.authz.repository.DenyRuleRepository;
 import io.github.mesubash.iam.authz.repository.RoleHierarchyRepository;
 import io.github.mesubash.iam.authz.repository.RolePermissionRepository;
 import io.github.mesubash.iam.authz.repository.ScopeClosureRepository;
+import io.github.mesubash.iam.authz.repository.ScopeRepository;
 import io.github.mesubash.iam.authz.dto.AuthorizationRequest;
 import io.github.mesubash.iam.authz.dto.AuthorizationResponse;
 import io.github.mesubash.iam.authz.dto.EffectivePermissionsRequest;
@@ -17,6 +18,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +39,7 @@ public class AuthorizationService {
     private final AssignmentRepository assignmentRepository;
     private final DenyRuleRepository denyRuleRepository;
     private final ScopeClosureRepository scopeClosureRepository;
+    private final ScopeRepository scopeRepository;
     private final RolePermissionRepository rolePermissionRepository;
     private final RoleHierarchyRepository roleHierarchyRepository;
     private final AuthorizationAuditRepository auditRepository;
@@ -44,6 +47,13 @@ public class AuthorizationService {
     private final MeterRegistry meterRegistry;
     private final PolicyService policyService;
     private final PolicyEvaluator policyEvaluator;
+
+    // deny-only: ALLOW policies ignored (policies can only restrict).
+    // required-allow: if ALLOW candidates exist, at least one must match.
+    private final String policyMode;
+
+    // L5 hook — repository wiring lands with the feature-flag phase.
+    private final boolean resourceGrantsEnabled;
 
     // Metrics
     private final Counter allowCounter;
@@ -56,24 +66,30 @@ public class AuthorizationService {
             AssignmentRepository assignmentRepository,
             DenyRuleRepository denyRuleRepository,
             ScopeClosureRepository scopeClosureRepository,
-            RolePermissionRepository rolePermissionRepository, // ✅ ADD THIS
+            ScopeRepository scopeRepository,
+            RolePermissionRepository rolePermissionRepository,
             RoleHierarchyRepository roleHierarchyRepository,
             AuthorizationAuditRepository auditRepository,
             CacheService cacheService,
             MeterRegistry meterRegistry,
             PolicyService policyService,
-            PolicyEvaluator policyEvaluator) {
+            PolicyEvaluator policyEvaluator,
+            @Value("${iam.authorization.policy-mode:deny-only}") String policyMode,
+            @Value("${iam.features.resource-grants:false}") boolean resourceGrantsEnabled) {
 
         this.assignmentRepository = assignmentRepository;
         this.denyRuleRepository = denyRuleRepository;
         this.scopeClosureRepository = scopeClosureRepository;
-        this.rolePermissionRepository = rolePermissionRepository; // ✅ ADD THIS
+        this.scopeRepository = scopeRepository;
+        this.rolePermissionRepository = rolePermissionRepository;
         this.roleHierarchyRepository = roleHierarchyRepository;
         this.auditRepository = auditRepository;
         this.cacheService = cacheService;
         this.meterRegistry = meterRegistry;
         this.policyService = policyService;
         this.policyEvaluator = policyEvaluator;
+        this.policyMode = policyMode;
+        this.resourceGrantsEnabled = resourceGrantsEnabled;
 
         // Initialize metrics
         this.allowCounter = Counter.builder("authorization.decision.allow")
@@ -196,6 +212,18 @@ public class AuthorizationService {
                     subject, permissionKey, resourceScopeId);
 
             // ================================================================
+            // STEP 0: SCOPE VALIDITY
+            // ================================================================
+
+            if (!isScopeActive(resourceScopeId)) {
+                String reason = "DENY: Scope inactive or not found";
+                UUID auditId = UUID.randomUUID();
+                logAuditAsync(auditId, request, false, reason, null);
+                denyCounter.increment();
+                return buildResponse(false, reason, startTime, Collections.emptySet(), auditId);
+            }
+
+            // ================================================================
             // STEP 1: CHECK DENY RULES (Highest Priority)
             // ================================================================
 
@@ -216,7 +244,7 @@ public class AuthorizationService {
             if (matchesDenyRule(deniedPermissions, permissionKey, resourceScopeId)) {
                 String reason = "DENY: Explicit deny rule exists";
                 UUID auditId = UUID.randomUUID();
-                logAuditAsync(auditId, request, false, reason);
+                logAuditAsync(auditId, request, false, reason, null);
                 denyCounter.increment();
 
                 return buildResponse(false, reason, startTime, Collections.emptySet(), auditId);
@@ -254,7 +282,20 @@ public class AuthorizationService {
                 log.debug("Permission cache MISS for subject: {}", subject);
             }
 
-            if (!userPermissions.contains(permissionKey)) {
+            // ================================================================
+            // STEP 3: RESOURCE GRANT FALLBACK
+            // The grant path is independent of the role path: a failed role
+            // condition must not block a valid per-instance grant.
+            // ================================================================
+
+            boolean permitted = userPermissions.contains(permissionKey);
+            boolean viaGrant = false;
+            if (!permitted && resourceGrantsEnabled && resourceGrantAllows(request)) {
+                permitted = true;
+                viaGrant = true;
+            }
+
+            if (!permitted) {
                 String reason;
                 if (permissionsResult != null && permissionsResult.permissionBlockedByConditions) {
                     reason = permissionsResult.conditionFailureReason != null
@@ -266,14 +307,14 @@ public class AuthorizationService {
                     reason = "DENY: Permission not granted by any role";
                 }
                 UUID auditId = UUID.randomUUID();
-                logAuditAsync(auditId, request, false, reason);
+                logAuditAsync(auditId, request, false, reason, null);
                 denyCounter.increment();
 
                 return buildResponse(false, reason, startTime, Collections.emptySet(), auditId);
             }
 
             // ================================================================
-            // STEP 3: POLICY ENGINE (ABAC/ReBAC)
+            // STEP 4: POLICY ENGINE (ABAC)
             // ================================================================
 
             PolicyDecision policyDecision = evaluatePolicies(request);
@@ -282,7 +323,7 @@ public class AuthorizationService {
                 String reason = policyDecision.reason != null
                         ? policyDecision.reason
                         : "DENY: Policy evaluation failed";
-                logAuditAsync(auditId, request, false, reason);
+                logAuditAsync(auditId, request, false, reason, policyDecision.shadowResults);
                 denyCounter.increment();
 
                 return buildResponse(false, reason, startTime, Collections.emptySet(), auditId);
@@ -292,9 +333,11 @@ public class AuthorizationService {
             // ALL CHECKS PASSED - ALLOW
             // ================================================================
 
-            String reason = "ALLOW: Permission granted via role assignment";
+            String reason = viaGrant
+                    ? "ALLOW: Permission granted via resource grant"
+                    : "ALLOW: Permission granted via role assignment";
             UUID auditId = UUID.randomUUID();
-            logAuditAsync(auditId, request, true, reason);
+            logAuditAsync(auditId, request, true, reason, policyDecision.shadowResults);
             allowCounter.increment();
 
             return buildResponse(true, reason, startTime, userPermissions, auditId);
@@ -304,7 +347,7 @@ public class AuthorizationService {
             log.warn("Authorization check failed due to bad input: {}", e.getMessage());
             String reason = "DENY: Invalid request - " + e.getMessage();
             UUID auditId = UUID.randomUUID();
-            logAuditAsync(auditId, request, false, reason);
+            logAuditAsync(auditId, request, false, reason, null);
             denyCounter.increment();
             return buildResponse(false, reason, startTime, Collections.emptySet(), auditId);
         } catch (Exception e) {
@@ -313,6 +356,24 @@ public class AuthorizationService {
             throw new AuthorizationServiceException(
                     "Authorization service unavailable: " + e.getMessage(), e);
         }
+    }
+
+    private boolean isScopeActive(UUID scopeId) {
+        if (scopeId == null) {
+            return false;
+        }
+        Boolean cached = cacheService.getCachedScopeActive(scopeId);
+        if (cached != null) {
+            return cached;
+        }
+        boolean active = scopeRepository.findActiveFlag(scopeId).orElse(false);
+        cacheService.cacheScopeActive(scopeId, active);
+        return active;
+    }
+
+    // L5 seam: per-instance grants land with the feature-flag phase.
+    private boolean resourceGrantAllows(AuthorizationRequest request) {
+        return false;
     }
 
     /**
@@ -331,7 +392,7 @@ public class AuthorizationService {
     }
 
     /**
-     * ✅ FIXED: Fetch and compute user's permissions
+     * Fetch and compute user's permissions
      */
     private PermissionsResult fetchUserPermissions(String subjectId,
                                                    String permissionKey,
@@ -419,39 +480,31 @@ public class AuthorizationService {
     }
 
     /**
-     * Matches a permission rule pattern against a permission key.
-     * Supports wildcard (*) at each segment position and variable-length keys.
-     * Examples:
-     *   "order.order.approve" matches "order.order.approve" (exact)
-     *   "order.*.approve" matches "order.order.approve" (wildcard segment)
-     *   "*.*.*" matches any 3-segment permission
-     *   "order.*" matches "order.read" (2-segment keys)
+     * Matches a rule pattern against a permission key.
+     * '*' matches exactly one segment; a trailing '**' matches one or more
+     * remaining segments; '**' alone matches everything.
+     * Without '**' the segment counts must be equal.
      */
     private boolean permissionMatches(String rulePermission, String permissionKey) {
         if (rulePermission.equals(permissionKey)) {
             return true;
         }
-
-        // Check for full wildcard pattern (all segments are *)
-        if (rulePermission.chars().allMatch(c -> c == '*' || c == '.')) {
-            // Ensure same number of segments
-            long ruleDots = rulePermission.chars().filter(c -> c == '.').count();
-            long permDots = permissionKey.chars().filter(c -> c == '.').count();
-            return ruleDots == permDots;
+        if ("**".equals(rulePermission)) {
+            return true;
         }
 
         String[] ruleParts = rulePermission.split("\\.");
         String[] permParts = permissionKey.split("\\.");
 
-        if (ruleParts.length != permParts.length) {
+        boolean anyDepth = ruleParts.length > 0 && "**".equals(ruleParts[ruleParts.length - 1]);
+        int fixed = anyDepth ? ruleParts.length - 1 : ruleParts.length;
+
+        if (anyDepth ? permParts.length <= fixed : permParts.length != fixed) {
             return false;
         }
 
-        for (int i = 0; i < ruleParts.length; i++) {
-            if ("*".equals(ruleParts[i])) {
-                continue;
-            }
-            if (!ruleParts[i].equals(permParts[i])) {
+        for (int i = 0; i < fixed; i++) {
+            if (!"*".equals(ruleParts[i]) && !ruleParts[i].equals(permParts[i])) {
                 return false;
             }
         }
@@ -475,19 +528,28 @@ public class AuthorizationService {
         String resourceType = request.getResource() != null ? request.getResource().getType() : null;
         UUID resourceScopeId = request.getResource() != null ? request.getResource().getScopeId() : null;
 
-        List<io.github.mesubash.iam.authz.entity.Policy> candidates =
+        List<Policy> candidates =
                 policyService.getApplicablePolicies(permissionKey, resourceType);
 
         if (candidates.isEmpty()) {
-            return PolicyDecision.allow();
+            return PolicyDecision.allow(null);
         }
 
-        // Separate DENY and ALLOW policies — evaluate ALL DENY policies first
-        List<io.github.mesubash.iam.authz.entity.Policy> denyPolicies = new ArrayList<>();
-        List<io.github.mesubash.iam.authz.entity.Policy> allowPolicies = new ArrayList<>();
+        List<Policy> denyPolicies = new ArrayList<>();
+        List<Policy> allowPolicies = new ArrayList<>();
+        List<Map<String, Object>> shadowResults = new ArrayList<>();
 
-        for (io.github.mesubash.iam.authz.entity.Policy policy : candidates) {
+        for (Policy policy : candidates) {
             if (!policyApplies(policy, permissionKey, resourceType, resourceScopeId)) {
+                continue;
+            }
+            // SHADOW: evaluate and record the would-be verdict, never decide
+            if ("SHADOW".equalsIgnoreCase(policy.getEnforcementMode())) {
+                boolean matched = policyEvaluator.evaluate(policy.getConditions(), request);
+                shadowResults.add(Map.of(
+                        "policy", policy.getName(),
+                        "effect", policy.getEffect(),
+                        "matched", matched));
                 continue;
             }
             if ("DENY".equalsIgnoreCase(policy.getEffect())) {
@@ -497,31 +559,35 @@ public class AuthorizationService {
             }
         }
 
-        // DENY always takes precedence — check all DENY policies first
-        for (io.github.mesubash.iam.authz.entity.Policy policy : denyPolicies) {
+        List<Map<String, Object>> shadow = shadowResults.isEmpty() ? null : shadowResults;
+
+        // DENY always takes precedence
+        for (Policy policy : denyPolicies) {
             if (policyEvaluator.evaluate(policy.getConditions(), request)) {
-                return PolicyDecision.deny("DENY: Policy '" + policy.getName() + "'");
+                return PolicyDecision.deny("DENY: Policy '" + policy.getName() + "'", shadow);
             }
         }
 
-        // If ALLOW policies exist, at least one must match
-        if (!allowPolicies.isEmpty()) {
+        // required-allow mode only: ALLOW candidates gate the request.
+        // In deny-only mode (default) ALLOW policies are inert — adding a
+        // policy can only ever restrict, never flip a target to default-deny.
+        if ("required-allow".equalsIgnoreCase(policyMode) && !allowPolicies.isEmpty()) {
             boolean allowMatched = false;
-            for (io.github.mesubash.iam.authz.entity.Policy policy : allowPolicies) {
+            for (Policy policy : allowPolicies) {
                 if (policyEvaluator.evaluate(policy.getConditions(), request)) {
                     allowMatched = true;
                     break;
                 }
             }
             if (!allowMatched) {
-                return PolicyDecision.deny("DENY: No ALLOW policy matched");
+                return PolicyDecision.deny("DENY: No ALLOW policy matched", shadow);
             }
         }
 
-        return PolicyDecision.allow();
+        return PolicyDecision.allow(shadow);
     }
 
-    private boolean policyApplies(io.github.mesubash.iam.authz.entity.Policy policy,
+    private boolean policyApplies(Policy policy,
                                   String permissionKey,
                                   String resourceType,
                                   UUID resourceScopeId) {
@@ -798,7 +864,7 @@ public class AuthorizationService {
     }
 
     /**
-     * ✅ FIXED: Get permissions for a role
+     * Get permissions for a role
      * Uses role-level caching for performance
      */
     private Set<String> getRolePermissions(UUID roleId) {
@@ -855,10 +921,18 @@ public class AuthorizationService {
     protected void logAuditAsync(UUID auditId,
                                  AuthorizationRequest request,
                                  boolean decision,
-                                 String reason) {
+                                 String reason,
+                                 List<Map<String, Object>> shadowResults) {
 
         try {
             Instant now = Instant.now();
+            Map<String, Object> context = new HashMap<>();
+            if (request.getContext() != null && request.getContext().getAdditionalContext() != null) {
+                context.putAll(request.getContext().getAdditionalContext());
+            }
+            if (shadowResults != null) {
+                context.put("shadowResults", shadowResults);
+            }
             AuthorizationAudit audit = AuthorizationAudit.builder()
                     .id(auditId)
                     .subjectId(request.getSubject())
@@ -868,9 +942,7 @@ public class AuthorizationService {
                     .scopeId(request.getResource().getScopeId())
                     .decision(decision)
                     .reason(reason)
-                    .context(request.getContext() != null && request.getContext().getAdditionalContext() != null
-                            ? request.getContext().getAdditionalContext()
-                            : new HashMap<>())
+                    .context(context)
                     .requestId(request.getContext() != null ?
                             request.getContext().getRequestId() : null)
                     .ipAddress(request.getContext() != null ?
@@ -945,18 +1017,21 @@ public class AuthorizationService {
     private static final class PolicyDecision {
         private final boolean allowed;
         private final String reason;
+        private final List<Map<String, Object>> shadowResults;
 
-        private PolicyDecision(boolean allowed, String reason) {
+        private PolicyDecision(boolean allowed, String reason,
+                               List<Map<String, Object>> shadowResults) {
             this.allowed = allowed;
             this.reason = reason;
+            this.shadowResults = shadowResults;
         }
 
-        private static PolicyDecision allow() {
-            return new PolicyDecision(true, null);
+        private static PolicyDecision allow(List<Map<String, Object>> shadowResults) {
+            return new PolicyDecision(true, null, shadowResults);
         }
 
-        private static PolicyDecision deny(String reason) {
-            return new PolicyDecision(false, reason);
+        private static PolicyDecision deny(String reason, List<Map<String, Object>> shadowResults) {
+            return new PolicyDecision(false, reason, shadowResults);
         }
     }
 
@@ -973,7 +1048,7 @@ public class AuthorizationService {
     }
 
     /**
-     * ✅ NEW: Invalidate role cache when role permissions change
+     * Invalidate role cache when role permissions change
      */
     public void invalidateRoleCache(UUID roleId) {
         String cacheKey = "role:" + roleId;

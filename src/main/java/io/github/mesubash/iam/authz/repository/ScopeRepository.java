@@ -11,8 +11,6 @@ import java.util.UUID;
 @Repository
 public interface ScopeRepository extends JpaRepository<Scope, UUID> {
 
-    Optional<Scope> findByCode(String code);
-
     List<Scope> findByType(String type);
 
     @Query(value = "SELECT * FROM scopes s WHERE s.path::text LIKE CONCAT(:path, '%') AND s.active = true",
@@ -25,5 +23,9 @@ public interface ScopeRepository extends JpaRepository<Scope, UUID> {
     @Query("SELECT s FROM Scope s WHERE s.parentId = :parentId AND s.active = true")
     List<Scope> findByParentId(@Param("parentId") UUID parentId);
 
-    boolean existsByCode(String code);
+    @Query("SELECT s FROM Scope s WHERE s.parentId IS NULL")
+    Optional<Scope> findRoot();
+
+    @Query("SELECT s.active FROM Scope s WHERE s.id = :id")
+    Optional<Boolean> findActiveFlag(@Param("id") UUID id);
 }

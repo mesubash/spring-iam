@@ -11,6 +11,7 @@ import io.github.mesubash.iam.authz.repository.DenyRuleRepository;
 import io.github.mesubash.iam.authz.repository.RoleHierarchyRepository;
 import io.github.mesubash.iam.authz.repository.RolePermissionRepository;
 import io.github.mesubash.iam.authz.repository.ScopeClosureRepository;
+import io.github.mesubash.iam.authz.repository.ScopeRepository;
 import io.github.mesubash.iam.shared.exception.AuthorizationServiceException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +25,7 @@ import org.mockito.quality.Strictness;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -48,6 +50,7 @@ class AuthorizationServiceDecisionTest {
     @Mock private AssignmentRepository assignmentRepository;
     @Mock private DenyRuleRepository denyRuleRepository;
     @Mock private ScopeClosureRepository scopeClosureRepository;
+    @Mock private ScopeRepository scopeRepository;
     @Mock private RolePermissionRepository rolePermissionRepository;
     @Mock private RoleHierarchyRepository roleHierarchyRepository;
     @Mock private AuthorizationAuditRepository auditRepository;
@@ -64,22 +67,28 @@ class AuthorizationServiceDecisionTest {
 
     @BeforeEach
     void setUp() {
-        service = new AuthorizationService(
-                assignmentRepository, denyRuleRepository, scopeClosureRepository,
-                rolePermissionRepository, roleHierarchyRepository, auditRepository,
-                cacheService, new SimpleMeterRegistry(),
-                policyService, new PolicyEvaluator());
+        service = buildService("deny-only");
 
-        // cache always misses; policies neutral by default
+        // cache always misses; scopes active; policies neutral by default
         when(cacheService.getCachedDenyRules(anyString())).thenReturn(null);
         when(cacheService.getCachedUserPermissions(anyString())).thenReturn(null);
         when(cacheService.getCachedRolePermissions(anyString())).thenReturn(null);
         when(cacheService.getCachedScopeContainment(any(), any())).thenReturn(null);
+        when(cacheService.getCachedScopeActive(any())).thenReturn(null);
+        when(scopeRepository.findActiveFlag(any())).thenReturn(Optional.of(true));
         when(policyService.getApplicablePolicies(anyString(), any())).thenReturn(List.of());
         when(denyRuleRepository.findAllActiveDenyRulesForSubject(anyString(), any())).thenReturn(List.of());
         when(assignmentRepository.findActiveAssignments(anyString(), any())).thenReturn(List.of());
         when(assignmentRepository.existsActiveConditionalAssignments(anyString(), any())).thenReturn(false);
         when(roleHierarchyRepository.findAllByChildRoleIds(any())).thenReturn(List.of());
+    }
+
+    private AuthorizationService buildService(String policyMode) {
+        return new AuthorizationService(
+                assignmentRepository, denyRuleRepository, scopeClosureRepository,
+                scopeRepository, rolePermissionRepository, roleHierarchyRepository,
+                auditRepository, cacheService, new SimpleMeterRegistry(),
+                policyService, new PolicyEvaluator(), policyMode, false);
     }
 
     // ── helpers ─────────────────────────────────────────────────────────
@@ -201,6 +210,34 @@ class AuthorizationServiceDecisionTest {
     }
 
     @Test
+    void trailingDoubleStarDenyMatchesAnyDepth() {
+        String deepPerm = "hgn.order.insurance.create";
+        grantRole(null, deepPerm);
+        denyRule("hgn.order.**", null);
+        AuthorizationResponse r = service.authorize(request(deepPerm, PROJECT_SCOPE));
+        assertFalse(r.getAuthorized());
+    }
+
+    @Test
+    void doubleStarAloneDeniesEverything() {
+        grantRole(null, PERM);
+        denyRule("**", null);
+        AuthorizationResponse r = service.authorize(request(PERM, PROJECT_SCOPE));
+        assertFalse(r.getAuthorized());
+    }
+
+    // ── L1: scope validity ──────────────────────────────────────────────
+
+    @Test
+    void inactiveScopeDeniesBeforeAnyOtherCheck() {
+        grantRole(null, PERM);
+        when(scopeRepository.findActiveFlag(PROJECT_SCOPE)).thenReturn(Optional.of(false));
+        AuthorizationResponse r = service.authorize(request(PERM, PROJECT_SCOPE));
+        assertFalse(r.getAuthorized());
+        assertEquals("DENY: Scope inactive or not found", r.getReason());
+    }
+
+    @Test
     void scopedDenyAppliesOnlyWithinItsSubtree() {
         grantRole(null, PERM);
         UUID otherScope = UUID.randomUUID();
@@ -280,7 +317,16 @@ class AuthorizationServiceDecisionTest {
     }
 
     @Test
-    void allowPolicyPresentButUnmatchedDenies() {
+    void denyOnlyModeIgnoresAllowPolicies() {
+        grantRole(null, PERM);
+        policy("ALLOW", PERM, Map.of("field", "subject", "op", "eq", "value", "someone-else"));
+        AuthorizationResponse r = service.authorize(request(PERM, PROJECT_SCOPE));
+        assertTrue(r.getAuthorized()); // ALLOW policies are inert in deny-only mode
+    }
+
+    @Test
+    void requiredAllowModeDeniesWhenNoAllowPolicyMatches() {
+        service = buildService("required-allow");
         grantRole(null, PERM);
         policy("ALLOW", PERM, Map.of("field", "subject", "op", "eq", "value", "someone-else"));
         AuthorizationResponse r = service.authorize(request(PERM, PROJECT_SCOPE));
@@ -289,11 +335,26 @@ class AuthorizationServiceDecisionTest {
     }
 
     @Test
-    void matchingAllowPolicyAllows() {
+    void requiredAllowModeAllowsWhenAllowPolicyMatches() {
+        service = buildService("required-allow");
         grantRole(null, PERM);
         policy("ALLOW", PERM, Map.of("field", "subject", "op", "eq", "value", SUBJECT));
         AuthorizationResponse r = service.authorize(request(PERM, PROJECT_SCOPE));
         assertTrue(r.getAuthorized());
+    }
+
+    @Test
+    void shadowPolicyNeverAffectsDecision() {
+        grantRole(null, PERM);
+        Policy p = Policy.builder()
+                .id(UUID.randomUUID()).name("shadow-deny")
+                .permissionKey(PERM).effect("DENY").priority(0)
+                .enforcementMode("SHADOW")
+                .conditions(Map.of("field", "subject", "op", "eq", "value", SUBJECT))
+                .active(true).build();
+        when(policyService.getApplicablePolicies(anyString(), any())).thenReturn(List.of(p));
+        AuthorizationResponse r = service.authorize(request(PERM, PROJECT_SCOPE));
+        assertTrue(r.getAuthorized()); // would-deny recorded in audit, decision unaffected
     }
 
     // ── failure modes ───────────────────────────────────────────────────

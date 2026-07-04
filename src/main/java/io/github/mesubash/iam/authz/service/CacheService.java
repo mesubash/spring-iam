@@ -49,7 +49,7 @@ public class CacheService {
 
     /**
      * Cache user's permission set
-     * ✅ FIXED: Now includes scope in cache key for accuracy
+     * Now includes scope in cache key for accuracy
      */
     public void cacheUserPermissions(String cacheKey, Set<String> permissions) {
         String key = PERMISSION_CACHE_PREFIX + cacheKey;
@@ -73,7 +73,7 @@ public class CacheService {
     }
 
     /**
-     * ✅ FIXED: Invalidate ALL permission caches for a user
+     * Invalidate ALL permission caches for a user
      * (across all scopes)
      */
     public void invalidateUserPermissions(String subjectId) {
@@ -118,7 +118,7 @@ public class CacheService {
     }
 
     // ========================================================================
-    // ✅ NEW: ROLE PERMISSION CACHING
+    // ROLE PERMISSION CACHING
     // ========================================================================
 
     /**
@@ -183,6 +183,23 @@ public class CacheService {
         }
     }
 
+    public void cacheScopeActive(UUID scopeId, boolean active) {
+        try {
+            redisTemplate.opsForValue().set(SCOPE_CACHE_PREFIX + "active:" + scopeId, active, scopeTtl);
+        } catch (Exception e) {
+            log.error("Failed to cache scope active flag", e);
+        }
+    }
+
+    public Boolean getCachedScopeActive(UUID scopeId) {
+        try {
+            return (Boolean) redisTemplate.opsForValue().get(SCOPE_CACHE_PREFIX + "active:" + scopeId);
+        } catch (Exception e) {
+            log.error("Failed to get cached scope active flag", e);
+            return null;
+        }
+    }
+
     public void invalidateScopeCache() {
         Set<String> keys = redisTemplate.keys(SCOPE_CACHE_PREFIX + "*");
         if (keys != null && !keys.isEmpty()) {
@@ -209,7 +226,7 @@ public class CacheService {
     }
 
     // ========================================================================
-    // ✅ NEW: BULK CACHE OPERATIONS
+    // BULK CACHE OPERATIONS
     // ========================================================================
 
     /**

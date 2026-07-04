@@ -1,6 +1,7 @@
 package io.github.mesubash.iam.authz.controller;
 
 import io.github.mesubash.iam.authz.dto.CreateScopeRequest;
+import io.github.mesubash.iam.authz.dto.MoveScopeRequest;
 import io.github.mesubash.iam.authz.entity.Scope;
 import io.github.mesubash.iam.authz.service.ScopeService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -32,6 +33,11 @@ public class ScopeController {
         return ResponseEntity.ok(scopes);
     }
 
+    @GetMapping("/root")
+    public ResponseEntity<Scope> getRoot() {
+        return ResponseEntity.ok(scopeService.getRoot());
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<Scope> getScope(@PathVariable UUID id) {
         return scopeService.getById(id)
@@ -58,5 +64,11 @@ public class ScopeController {
         );
 
         return ResponseEntity.status(HttpStatus.CREATED).body(scope);
+    }
+
+    @PostMapping("/{id}/move")
+    public ResponseEntity<Scope> moveScope(@PathVariable UUID id,
+                                           @Valid @RequestBody MoveScopeRequest request) {
+        return ResponseEntity.ok(scopeService.move(id, request.getNewParentId()));
     }
 }

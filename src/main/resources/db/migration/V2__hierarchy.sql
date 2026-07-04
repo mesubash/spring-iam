@@ -82,12 +82,14 @@ CREATE TRIGGER trg_scope_closure_insert
     AFTER INSERT ON scopes
     FOR EACH ROW EXECUTE FUNCTION maintain_scope_closure();
 
--- Direct parent changes are blocked; re-parenting goes through the managed
--- move operation (POST /scopes/{id}/move) which rebuilds closure + paths.
+-- Direct parent changes are blocked; the managed move operation
+-- (POST /scopes/{id}/move) sets the transaction-local GUC while it
+-- rebuilds closure rows and paths consistently.
 CREATE OR REPLACE FUNCTION prevent_scope_parent_change()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF OLD.parent_id IS DISTINCT FROM NEW.parent_id THEN
+    IF OLD.parent_id IS DISTINCT FROM NEW.parent_id
+       AND COALESCE(current_setting('iam.scope_move', true), '') <> 'on' THEN
         RAISE EXCEPTION 'Direct parent change is not allowed. Use the scope move operation.';
     END IF;
     RETURN NEW;
