@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { denyRulesApi } from "@/api/resources";
+import { denyRulesApi, scopesApi } from "@/api/resources";
 import type { DenyRule } from "@/api/types";
 import { PageHeader } from "@/components/iam/PageHeader";
 import { PermissionGuardedPage } from "@/components/iam/PermissionGuardedPage";
@@ -16,11 +16,12 @@ import { ConfirmDialog } from "@/components/iam/ConfirmDialog";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { formatDate } from "@/lib/format";
+import { formatDate, isExpiring } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/admin/deny-rules")({
   component: () => (
@@ -31,8 +32,19 @@ export const Route = createFileRoute("/_authenticated/admin/deny-rules")({
 });
 
 function DenyRulesPage() {
-  const q = useQuery({ queryKey: ["denyRules"], queryFn: denyRulesApi.list });
   const qc = useQueryClient();
+  const [subjectId, setSubjectId] = useState("");
+  const trimmedSubject = subjectId.trim();
+  const q = useQuery({
+    queryKey: ["denyRules", trimmedSubject],
+    queryFn: () => denyRulesApi.list(trimmedSubject),
+    enabled: !!trimmedSubject,
+  });
+  const scopesQ = useQuery({ queryKey: ["scopes"], queryFn: () => scopesApi.list() });
+  const scopePathById = useMemo(
+    () => new Map((scopesQ.data ?? []).map((s) => [s.id, s.path])),
+    [scopesQ.data],
+  );
   const [createOpen, setCreateOpen] = useState(false);
   const [toDelete, setToDelete] = useState<DenyRule | null>(null);
 
@@ -47,19 +59,58 @@ function DenyRulesPage() {
   });
 
   const columns: Column<DenyRule>[] = [
-    { key: "d", header: "", width: "70px", render: () => <Tag tone="destructive">DENY</Tag> },
-    { key: "sub", header: "Subject", render: (r) => <span className="font-mono text-xs">{r.subjectId}</span> },
-    { key: "perm", header: "Permission", render: (r) => <span className="font-mono text-xs">{r.permissionKey}</span> },
-    { key: "scope", header: "Scope", render: (r) => (r.scopeId ? <span className="font-mono text-xs">{r.scopeId}</span> : <Tag>Global</Tag>) },
-    { key: "reason", header: "Reason", render: (r) => r.reason },
-    { key: "exp", header: "Expires", render: (r) => formatDate(r.expiresAt) },
+    {
+      key: "perm",
+      header: "Permission",
+      render: (r) => (
+        <span className="font-mono text-xs font-medium text-[var(--destructive)]">{r.permissionKey}</span>
+      ),
+    },
+    {
+      key: "scope",
+      header: "Scope",
+      render: (r) =>
+        r.scopeId ? (
+          <span className="font-mono text-xs">{scopePathById.get(r.scopeId) ?? r.scopeId}</span>
+        ) : (
+          <Tag tone="neutral">Global</Tag>
+        ),
+    },
+    { key: "reason", header: "Reason", render: (r) => <span className="text-sm">{r.reason}</span> },
+    {
+      key: "ref",
+      header: "Reference",
+      render: (r) =>
+        r.referenceId ? (
+          <span className="font-mono text-xs">{r.referenceId}</span>
+        ) : (
+          <span className="text-[var(--muted-foreground)]">—</span>
+        ),
+    },
+    {
+      key: "exp",
+      header: "Expires",
+      render: (r) =>
+        r.expiresAt ? (
+          <span className={isExpiring(r.expiresAt) ? "text-xs text-[var(--destructive)]" : "text-xs"}>
+            {formatDate(r.expiresAt)}
+          </span>
+        ) : (
+          <span className="text-xs text-[var(--muted-foreground)]">Never</span>
+        ),
+    },
     {
       key: "act",
       header: "",
       width: "100px",
       render: (r) => (
         <Can permission="platform.deny_rule.delete">
-          <Button variant="ghost" size="sm" style={{ color: "var(--destructive)" }} onClick={() => setToDelete(r)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            style={{ color: "var(--destructive)" }}
+            onClick={() => setToDelete(r)}
+          >
             Remove
           </Button>
         </Can>
@@ -71,23 +122,40 @@ function DenyRulesPage() {
     <div>
       <PageHeader
         title="Deny Rules"
-        description="Explicit denies that override any allow. Use sparingly."
+        description="Explicit denies that override every allow — assignments, grants and policies included. Use sparingly."
         actions={
           <Can permission="platform.deny_rule.create">
-            <Button style={{ backgroundColor: "var(--destructive)", color: "#fff" }} onClick={() => setCreateOpen(true)}>
+            <Button
+              style={{ backgroundColor: "var(--destructive)", color: "#fff" }}
+              onClick={() => setCreateOpen(true)}
+            >
               New deny rule
             </Button>
           </Can>
         }
       />
+      <div className="mb-3 max-w-md">
+        <Input
+          placeholder="Filter by subject id (required)…"
+          value={subjectId}
+          onChange={(e) => setSubjectId(e.target.value)}
+          className="font-mono"
+        />
+      </div>
       <DataTable
         columns={columns}
-        rows={q.data}
-        loading={q.isLoading}
-        empty="No deny rules."
+        rows={trimmedSubject ? q.data : []}
+        loading={!!trimmedSubject && q.isLoading}
+        empty={
+          trimmedSubject
+            ? "No deny rules for this subject."
+            : "Enter a subject id to view its deny rules."
+        }
         rowKey={(r) => r.id}
       />
-      {createOpen ? <CreateDialog open onOpenChange={setCreateOpen} /> : null}
+      {createOpen ? (
+        <CreateDialog open onOpenChange={setCreateOpen} initialSubjectId={trimmedSubject} />
+      ) : null}
       <ConfirmDialog
         open={!!toDelete}
         onOpenChange={(v) => !v && setToDelete(null)}
@@ -103,25 +171,35 @@ function DenyRulesPage() {
   );
 }
 
-function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+function CreateDialog({
+  open,
+  onOpenChange,
+  initialSubjectId,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  initialSubjectId?: string;
+}) {
   const qc = useQueryClient();
-  const [subjectId, setSubjectId] = useState("");
+  const scopesQ = useQuery({ queryKey: ["scopes"], queryFn: () => scopesApi.list() });
+  const [subjectId, setSubjectId] = useState(initialSubjectId ?? "");
   const [subjectType, setSubjectType] = useState("USER");
   const [permissionKey, setPermissionKey] = useState("");
   const [scopeId, setScopeId] = useState("");
   const [reason, setReason] = useState("");
   const [referenceId, setReferenceId] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
+
   const m = useMutation({
     mutationFn: () =>
       denyRulesApi.create({
-        subjectId,
+        subjectId: subjectId.trim(),
         subjectType,
-        permissionKey,
+        permissionKey: permissionKey.trim(),
         scopeId: scopeId || null,
-        reason,
-        referenceId: referenceId || null,
-        expiresAt: expiresAt || null,
+        reason: reason.trim(),
+        referenceId: referenceId.trim() || null,
+        expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
       }),
     onSuccess: () => {
       toast.success("Deny rule created");
@@ -130,13 +208,26 @@ function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const valid = !!subjectId.trim() && !!permissionKey.trim() && !!reason.trim();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader><DialogTitle>New deny rule</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>New deny rule</DialogTitle>
+          <DialogDescription>
+            An explicit deny beats every allow. It applies immediately and is audited.
+          </DialogDescription>
+        </DialogHeader>
         <div className="space-y-2">
           <Label htmlFor="d-sub">Subject ID</Label>
-          <Input id="d-sub" value={subjectId} onChange={(e) => setSubjectId(e.target.value)} />
+          <Input
+            id="d-sub"
+            className="font-mono"
+            value={subjectId}
+            onChange={(e) => setSubjectId(e.target.value)}
+          />
           <Label htmlFor="d-st">Subject type</Label>
           <select
             id="d-st"
@@ -148,25 +239,65 @@ function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
             <option value="GROUP">GROUP</option>
             <option value="SERVICE">SERVICE</option>
           </select>
-          <Label htmlFor="d-perm">Permission key (supports * and **)</Label>
-          <Input id="d-perm" value={permissionKey} onChange={(e) => setPermissionKey(e.target.value)} />
-          <Label htmlFor="d-scope">Scope ID (optional)</Label>
-          <Input id="d-scope" value={scopeId} onChange={(e) => setScopeId(e.target.value)} />
+          <Label htmlFor="d-perm">Permission key</Label>
+          <Input
+            id="d-perm"
+            className="font-mono"
+            placeholder="invoice.payment.write"
+            value={permissionKey}
+            onChange={(e) => setPermissionKey(e.target.value)}
+          />
+          <p className="text-xs text-[var(--muted-foreground)]">
+            Wildcards supported: <span className="font-mono">invoice.*.*</span> denies a whole domain,{" "}
+            <span className="font-mono">**</span> denies everything.
+          </p>
+          <Label htmlFor="d-scope">Scope (optional)</Label>
+          <select
+            id="d-scope"
+            value={scopeId}
+            onChange={(e) => setScopeId(e.target.value)}
+            className="h-9 w-full rounded border border-[var(--border)] bg-[var(--card)] px-2 text-sm"
+          >
+            <option value="">Global (all scopes)</option>
+            {(scopesQ.data ?? []).map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.path}
+              </option>
+            ))}
+          </select>
           <Label htmlFor="d-reason">Reason (required)</Label>
-          <Input id="d-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+          <Input
+            id="d-reason"
+            placeholder="e.g. Security incident SEC-142"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
           <Label htmlFor="d-ref">Reference ID (optional)</Label>
-          <Input id="d-ref" value={referenceId} onChange={(e) => setReferenceId(e.target.value)} />
-          <Label htmlFor="d-exp">Expires at ISO (optional)</Label>
-          <Input id="d-exp" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
+          <Input
+            id="d-ref"
+            className="font-mono"
+            placeholder="Ticket / incident id"
+            value={referenceId}
+            onChange={(e) => setReferenceId(e.target.value)}
+          />
+          <Label htmlFor="d-exp">Expires at (optional)</Label>
+          <Input
+            id="d-exp"
+            type="datetime-local"
+            value={expiresAt}
+            onChange={(e) => setExpiresAt(e.target.value)}
+          />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
           <Button
             style={{ backgroundColor: "var(--destructive)", color: "#fff" }}
             onClick={() => m.mutate()}
-            disabled={m.isPending || !subjectId || !permissionKey || !reason}
+            disabled={m.isPending || !valid}
           >
-            {m.isPending ? "Creating..." : "Create deny rule"}
+            {m.isPending ? "Creating…" : "Create deny rule"}
           </Button>
         </DialogFooter>
       </DialogContent>

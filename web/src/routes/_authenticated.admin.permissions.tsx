@@ -18,7 +18,7 @@ export const Route = createFileRoute("/_authenticated/admin/permissions")({
 });
 
 function PermissionsPage() {
-  const q = useQuery({ queryKey: ["permissions"], queryFn: permissionsApi.list });
+  const q = useQuery({ queryKey: ["permissions"], queryFn: () => permissionsApi.list() });
   const [filter, setFilter] = useState("");
   const rows = useMemo(() => {
     const arr = q.data ?? [];
@@ -31,7 +31,7 @@ function PermissionsPage() {
     { key: "d", header: "Domain", render: (p) => p.domain ?? p.key.split(".")[0] },
     { key: "r", header: "Resource", render: (p) => p.resource ?? "—" },
     { key: "a", header: "Action", render: (p) => p.action ?? "—" },
-    { key: "dep", header: "", width: "100px", render: (p) => (p.deprecated ? <Tag tone="warning">Deprecated</Tag> : null) },
+    { key: "dep", header: "", width: "100px", render: (p) => (p.isDeprecated ? <Tag tone="warning">Deprecated</Tag> : null) },
   ];
 
   return (

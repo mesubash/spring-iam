@@ -20,12 +20,13 @@ const adminItems: NavItem[] = [
   { to: "/admin/assignments", label: "Assignments", permission: "platform.assignment.read" },
   { to: "/admin/deny-rules", label: "Deny Rules", permission: "platform.deny_rule.read" },
   { to: "/admin/policies", label: "Policies", permission: "platform.policy.read" },
+  { to: "/admin/context-attributes", label: "Context Attributes", permission: "platform.policy.read" },
   { to: "/admin/resource-grants", label: "Resource Grants", featureFlag: "resource-grants" },
   { to: "/admin/groups", label: "Groups", featureFlag: "groups" },
   { to: "/admin/services", label: "Services", featureFlag: "service-registry" },
   { to: "/admin/permissions", label: "Permissions", permission: "platform.permission.read" },
   { to: "/admin/audit", label: "Audit", permission: "platform.audit.read" },
-  { to: "/admin/explain", label: "Explain" },
+  { to: "/admin/explain", label: "Explain", permission: "platform.audit.read" },
 ];
 
 export function AppLayout() {

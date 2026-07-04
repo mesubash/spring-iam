@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { assignmentsApi, auditApi, denyRulesApi, policiesApi, rolesApi } from "@/api/resources";
+import { assignmentsApi, auditApi, policiesApi, rolesApi, scopesApi } from "@/api/resources";
 import { PageHeader } from "@/components/iam/PageHeader";
 import { DataTable, type Column } from "@/components/iam/DataTable";
 import { DecisionBadge } from "@/components/iam/badges";
 import { formatDate } from "@/lib/format";
 import type { AuditEntry } from "@/api/types";
 import { useAuthz } from "@/context/AuthzContext";
+import { useAuth } from "@/context/AuthContext";
 
 export const Route = createFileRoute("/_authenticated/admin/dashboard")({
   component: DashboardPage,
@@ -14,10 +15,10 @@ export const Route = createFileRoute("/_authenticated/admin/dashboard")({
 
 function Stat({ label, value, loading }: { label: string; value: number | string; loading?: boolean }) {
   return (
-    <div className="rounded border border-[var(--border)] bg-[var(--card)] px-4 py-3">
-      <div className="text-xs text-[var(--muted-foreground)]">{label}</div>
-      <div className="mt-1 text-[22px] font-semibold">
-        {loading ? <span className="inline-block h-5 w-10 animate-pulse rounded bg-[var(--muted)]" /> : value}
+    <div className="rounded border border-border bg-card px-4 py-3">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="mt-1 text-[22px] font-semibold tabular-nums">
+        {loading ? <span className="inline-block h-5 w-10 animate-pulse rounded bg-muted" /> : value}
       </div>
     </div>
   );
@@ -25,35 +26,55 @@ function Stat({ label, value, loading }: { label: string; value: number | string
 
 function DashboardPage() {
   const { can } = useAuthz();
+  const { identity } = useAuth();
+  const subjectId = identity?.id;
 
-  const roles = useQuery({ queryKey: ["roles"], queryFn: rolesApi.list, enabled: can("platform.role.read") });
+  const roles = useQuery({
+    queryKey: ["roles"],
+    queryFn: () => rolesApi.list(),
+    enabled: can("platform.role.read"),
+  });
   const assignments = useQuery({
     queryKey: ["assignments"],
     queryFn: () => assignmentsApi.list(),
     enabled: can("platform.assignment.read"),
   });
-  const denyRules = useQuery({
-    queryKey: ["denyRules"],
-    queryFn: denyRulesApi.list,
-    enabled: can("platform.deny_rule.read"),
+  const scopes = useQuery({
+    queryKey: ["scopes"],
+    queryFn: () => scopesApi.list(),
+    enabled: can("platform.scope.read"),
   });
   const policies = useQuery({
     queryKey: ["policies"],
-    queryFn: policiesApi.list,
+    queryFn: () => policiesApi.list(),
     enabled: can("platform.policy.read"),
   });
   const audit = useQuery({
-    queryKey: ["audit", "recent"],
-    queryFn: auditApi.recent,
-    enabled: can("platform.audit.read"),
+    queryKey: ["audit", "subject", subjectId],
+    queryFn: () => auditApi.bySubject(subjectId!, 20),
+    enabled: !!subjectId && can("platform.audit.read"),
   });
 
+  const activeAssignments = assignments.data?.filter((a) => a.active).length;
+
   const columns: Column<AuditEntry>[] = [
-    { key: "ts", header: "Time", width: "160px", render: (e) => formatDate(e.timestamp) },
-    { key: "subject", header: "Subject", render: (e) => <span className="font-mono text-xs">{e.subjectId}</span> },
-    { key: "perm", header: "Permission", render: (e) => <span className="font-mono text-xs">{e.permissionKey}</span> },
-    { key: "dec", header: "Decision", width: "90px", render: (e) => <DecisionBadge decision={e.decision} /> },
-    { key: "reason", header: "Reason", render: (e) => e.reason ?? "—" },
+    { key: "ts", header: "Time", width: "170px", render: (e) => formatDate(e.timestamp) },
+    {
+      key: "perm",
+      header: "Permission",
+      render: (e) => <span className="font-mono text-xs">{e.permissionKey}</span>,
+    },
+    {
+      key: "dec",
+      header: "Decision",
+      width: "90px",
+      render: (e) => <DecisionBadge decision={e.decision ? "ALLOW" : "DENY"} />,
+    },
+    {
+      key: "reason",
+      header: "Reason",
+      render: (e) => <span className="text-muted-foreground">{e.reason ?? "—"}</span>,
+    },
   ];
 
   return (
@@ -61,16 +82,21 @@ function DashboardPage() {
       <PageHeader title="Dashboard" description="Snapshot of your authorization system." />
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Roles" value={roles.data?.length ?? "—"} loading={roles.isLoading} />
-        <Stat label="Active assignments" value={assignments.data?.length ?? "—"} loading={assignments.isLoading} />
-        <Stat label="Deny rules" value={denyRules.data?.length ?? "—"} loading={denyRules.isLoading} />
+        <Stat label="Active assignments" value={activeAssignments ?? "—"} loading={assignments.isLoading} />
+        <Stat label="Scopes" value={scopes.data?.length ?? "—"} loading={scopes.isLoading} />
         <Stat label="Policies" value={policies.data?.length ?? "—"} loading={policies.isLoading} />
       </div>
-      <h2 className="mb-2 text-sm font-semibold">Recent audit entries</h2>
+      <div className="mb-2">
+        <h2 className="text-sm font-semibold">Recent decisions (you)</h2>
+        <p className="text-xs text-muted-foreground">
+          Authorization decisions recorded for your own account{identity?.email ? ` (${identity.email})` : ""}.
+        </p>
+      </div>
       <DataTable
         columns={columns}
-        rows={(audit.data ?? []).slice(0, 20)}
+        rows={audit.data}
         loading={audit.isLoading}
-        empty="No recent activity."
+        empty="No recent decisions recorded for your account."
         rowKey={(e) => e.id}
       />
     </div>

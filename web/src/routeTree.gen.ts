@@ -25,6 +25,7 @@ import { Route as AuthenticatedAdminGroupsRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAdminExplainRouteImport } from './routes/_authenticated.admin.explain'
 import { Route as AuthenticatedAdminDenyRulesRouteImport } from './routes/_authenticated.admin.deny-rules'
 import { Route as AuthenticatedAdminDashboardRouteImport } from './routes/_authenticated.admin.dashboard'
+import { Route as AuthenticatedAdminContextAttributesRouteImport } from './routes/_authenticated.admin.context-attributes'
 import { Route as AuthenticatedAdminAuditRouteImport } from './routes/_authenticated.admin.audit'
 import { Route as AuthenticatedAdminAssignmentsRouteImport } from './routes/_authenticated.admin.assignments'
 
@@ -116,6 +117,12 @@ const AuthenticatedAdminDashboardRoute =
     path: '/admin/dashboard',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedAdminContextAttributesRoute =
+  AuthenticatedAdminContextAttributesRouteImport.update({
+    id: '/admin/context-attributes',
+    path: '/admin/context-attributes',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedAdminAuditRoute = AuthenticatedAdminAuditRouteImport.update({
   id: '/admin/audit',
   path: '/admin/audit',
@@ -133,6 +140,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/admin/assignments': typeof AuthenticatedAdminAssignmentsRoute
   '/admin/audit': typeof AuthenticatedAdminAuditRoute
+  '/admin/context-attributes': typeof AuthenticatedAdminContextAttributesRoute
   '/admin/dashboard': typeof AuthenticatedAdminDashboardRoute
   '/admin/deny-rules': typeof AuthenticatedAdminDenyRulesRoute
   '/admin/explain': typeof AuthenticatedAdminExplainRoute
@@ -152,6 +160,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/admin/assignments': typeof AuthenticatedAdminAssignmentsRoute
   '/admin/audit': typeof AuthenticatedAdminAuditRoute
+  '/admin/context-attributes': typeof AuthenticatedAdminContextAttributesRoute
   '/admin/dashboard': typeof AuthenticatedAdminDashboardRoute
   '/admin/deny-rules': typeof AuthenticatedAdminDenyRulesRoute
   '/admin/explain': typeof AuthenticatedAdminExplainRoute
@@ -173,6 +182,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_authenticated/admin/assignments': typeof AuthenticatedAdminAssignmentsRoute
   '/_authenticated/admin/audit': typeof AuthenticatedAdminAuditRoute
+  '/_authenticated/admin/context-attributes': typeof AuthenticatedAdminContextAttributesRoute
   '/_authenticated/admin/dashboard': typeof AuthenticatedAdminDashboardRoute
   '/_authenticated/admin/deny-rules': typeof AuthenticatedAdminDenyRulesRoute
   '/_authenticated/admin/explain': typeof AuthenticatedAdminExplainRoute
@@ -194,6 +204,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin/assignments'
     | '/admin/audit'
+    | '/admin/context-attributes'
     | '/admin/dashboard'
     | '/admin/deny-rules'
     | '/admin/explain'
@@ -213,6 +224,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin/assignments'
     | '/admin/audit'
+    | '/admin/context-attributes'
     | '/admin/dashboard'
     | '/admin/deny-rules'
     | '/admin/explain'
@@ -233,6 +245,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/_authenticated/admin/assignments'
     | '/_authenticated/admin/audit'
+    | '/_authenticated/admin/context-attributes'
     | '/_authenticated/admin/dashboard'
     | '/_authenticated/admin/deny-rules'
     | '/_authenticated/admin/explain'
@@ -368,6 +381,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminDashboardRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/admin/context-attributes': {
+      id: '/_authenticated/admin/context-attributes'
+      path: '/admin/context-attributes'
+      fullPath: '/admin/context-attributes'
+      preLoaderRoute: typeof AuthenticatedAdminContextAttributesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/admin/audit': {
       id: '/_authenticated/admin/audit'
       path: '/admin/audit'
@@ -388,6 +408,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteChildren {
   AuthenticatedAdminAssignmentsRoute: typeof AuthenticatedAdminAssignmentsRoute
   AuthenticatedAdminAuditRoute: typeof AuthenticatedAdminAuditRoute
+  AuthenticatedAdminContextAttributesRoute: typeof AuthenticatedAdminContextAttributesRoute
   AuthenticatedAdminDashboardRoute: typeof AuthenticatedAdminDashboardRoute
   AuthenticatedAdminDenyRulesRoute: typeof AuthenticatedAdminDenyRulesRoute
   AuthenticatedAdminExplainRoute: typeof AuthenticatedAdminExplainRoute
@@ -406,6 +427,8 @@ interface AuthenticatedRouteChildren {
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAdminAssignmentsRoute: AuthenticatedAdminAssignmentsRoute,
   AuthenticatedAdminAuditRoute: AuthenticatedAdminAuditRoute,
+  AuthenticatedAdminContextAttributesRoute:
+    AuthenticatedAdminContextAttributesRoute,
   AuthenticatedAdminDashboardRoute: AuthenticatedAdminDashboardRoute,
   AuthenticatedAdminDenyRulesRoute: AuthenticatedAdminDenyRulesRoute,
   AuthenticatedAdminExplainRoute: AuthenticatedAdminExplainRoute,

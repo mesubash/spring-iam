@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { assignmentsApi, rolesApi } from "@/api/resources";
+import { assignmentsApi, rolesApi, scopesApi } from "@/api/resources";
 import type { Assignment } from "@/api/types";
 import { PageHeader } from "@/components/iam/PageHeader";
 import { PermissionGuardedPage } from "@/components/iam/PermissionGuardedPage";
@@ -30,19 +30,42 @@ export const Route = createFileRoute("/_authenticated/admin/assignments")({
   ),
 });
 
+function statusOf(a: Assignment): { label: string; tone: "success" | "destructive" | "warning" } {
+  if (a.revokedAt) return { label: "Revoked", tone: "destructive" };
+  if (a.expiresAt && new Date(a.expiresAt).getTime() < Date.now())
+    return { label: "Expired", tone: "warning" };
+  if (!a.active) return { label: "Inactive", tone: "warning" };
+  return { label: "Active", tone: "success" };
+}
+
 function AssignmentsPage() {
-  const [subjectId, setSubjectId] = useState("");
+  const [subjectFilter, setSubjectFilter] = useState("");
+  const subjectId = subjectFilter.trim();
   const q = useQuery({
-    queryKey: ["assignments", subjectId || null],
+    queryKey: ["assignments", subjectId || "all"],
     queryFn: () => assignmentsApi.list(subjectId ? { subjectId } : undefined),
   });
+  const rolesQ = useQuery({ queryKey: ["roles"], queryFn: () => rolesApi.list() });
+  const scopesQ = useQuery({ queryKey: ["scopes"], queryFn: () => scopesApi.list() });
+
+  const roleName = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of rolesQ.data ?? []) m.set(r.id, r.displayName || r.name);
+    return m;
+  }, [rolesQ.data]);
+  const scopePath = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of scopesQ.data ?? []) m.set(s.id, s.path);
+    return m;
+  }, [scopesQ.data]);
+
   const [createOpen, setCreateOpen] = useState(false);
   const [revoking, setRevoking] = useState<Assignment | null>(null);
   const [reason, setReason] = useState("");
   const qc = useQueryClient();
 
   const revoke = useMutation({
-    mutationFn: () => assignmentsApi.revoke(revoking!.id, reason),
+    mutationFn: () => assignmentsApi.revoke(revoking!.id, reason.trim()),
     onSuccess: () => {
       toast.success("Assignment revoked");
       qc.invalidateQueries({ queryKey: ["assignments"] });
@@ -53,37 +76,76 @@ function AssignmentsPage() {
   });
 
   const columns: Column<Assignment>[] = [
-    { key: "subject", header: "Subject", render: (a) => <span className="font-mono text-xs">{a.subjectId}</span> },
-    { key: "role", header: "Role", render: (a) => a.roleName ?? <span className="font-mono text-xs">{a.roleId}</span> },
+    {
+      key: "subject",
+      header: "Subject",
+      render: (a) => (
+        <span className="font-mono text-xs" title={a.subjectType}>
+          {a.subjectId}
+        </span>
+      ),
+    },
+    {
+      key: "role",
+      header: "Role",
+      render: (a) => roleName.get(a.roleId) ?? <span className="font-mono text-xs">{a.roleId}</span>,
+    },
     {
       key: "scope",
       header: "Scope",
-      render: (a) => (a.scopePath ? <span className="font-mono text-xs">{a.scopePath}</span> : <Tag>Global</Tag>),
+      render: (a) => (
+        <span className="font-mono text-xs">
+          {scopePath.get(a.scopeId) ?? a.scopeId}
+        </span>
+      ),
+    },
+    {
+      key: "origin",
+      header: "Origin",
+      width: "110px",
+      render: (a) => <Tag tone="neutral">{a.origin ?? "STANDARD"}</Tag>,
     },
     {
       key: "expires",
       header: "Expires",
+      width: "160px",
       render: (a) =>
         a.expiresAt ? (
-          <span className={isExpiring(a.expiresAt) ? "text-[var(--warning)]" : undefined}>
-            {formatDate(a.expiresAt)}
-          </span>
+          isExpiring(a.expiresAt) ? (
+            <Tag tone="warning">{formatDate(a.expiresAt)}</Tag>
+          ) : (
+            <span>{formatDate(a.expiresAt)}</span>
+          )
         ) : (
-          "—"
+          <span className="text-[var(--muted-foreground)]">—</span>
         ),
     },
-    { key: "origin", header: "Origin", width: "110px", render: (a) => <Tag>{a.origin ?? "direct"}</Tag> },
+    {
+      key: "status",
+      header: "Status",
+      width: "100px",
+      render: (a) => {
+        const s = statusOf(a);
+        return <Tag tone={s.tone}>{s.label}</Tag>;
+      },
+    },
     {
       key: "actions",
       header: "",
-      width: "100px",
-      render: (a) => (
-        <Can permission="platform.assignment.revoke">
-          <Button variant="ghost" size="sm" style={{ color: "var(--destructive)" }} onClick={() => setRevoking(a)}>
-            Revoke
-          </Button>
-        </Can>
-      ),
+      width: "90px",
+      render: (a) =>
+        a.active && !a.revokedAt ? (
+          <Can permission="platform.assignment.revoke">
+            <Button
+              variant="ghost"
+              size="sm"
+              style={{ color: "var(--destructive)" }}
+              onClick={() => setRevoking(a)}
+            >
+              Revoke
+            </Button>
+          </Can>
+        ) : null,
     },
   ];
 
@@ -100,34 +162,55 @@ function AssignmentsPage() {
       />
       <div className="mb-3">
         <Input
-          placeholder="Filter by subjectId..."
-          value={subjectId}
-          onChange={(e) => setSubjectId(e.target.value)}
-          className="max-w-xs"
+          placeholder="Filter by subject id..."
+          value={subjectFilter}
+          onChange={(e) => setSubjectFilter(e.target.value)}
+          className="max-w-xs font-mono text-xs"
         />
       </div>
       <DataTable
         columns={columns}
         rows={q.data}
         loading={q.isLoading}
-        empty="No assignments."
+        empty={subjectId ? "No assignments for this subject." : "No assignments."}
         rowKey={(a) => a.id}
       />
       {createOpen ? <GrantDialog open onOpenChange={setCreateOpen} /> : null}
       <ConfirmDialog
         open={!!revoking}
-        onOpenChange={(v) => !v && setRevoking(null)}
+        onOpenChange={(v) => {
+          if (!v) {
+            setRevoking(null);
+            setReason("");
+          }
+        }}
         title="Revoke assignment"
-        description="A reason is required for the audit trail."
-        target={revoking ? `${revoking.roleName ?? revoking.roleId} → ${revoking.subjectId}` : undefined}
+        description="The subject immediately loses this role. A reason is required for the audit trail."
+        target={
+          revoking
+            ? `${roleName.get(revoking.roleId) ?? revoking.roleId} → ${revoking.subjectId}`
+            : undefined
+        }
         confirmLabel="Revoke"
         destructive
         pending={revoke.isPending}
-        onConfirm={() => reason.trim() && revoke.mutate()}
+        onConfirm={() => {
+          if (!reason.trim()) {
+            toast.error("A reason is required.");
+            return;
+          }
+          revoke.mutate();
+        }}
       >
         <div className="mt-2 space-y-1.5">
-          <Label htmlFor="reason">Reason</Label>
-          <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} required />
+          <Label htmlFor="revoke-reason">Reason</Label>
+          <Input
+            id="revoke-reason"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Why is this being revoked?"
+            required
+          />
         </div>
       </ConfirmDialog>
     </div>
@@ -136,41 +219,51 @@ function AssignmentsPage() {
 
 function GrantDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const qc = useQueryClient();
-  const rolesQ = useQuery({ queryKey: ["roles"], queryFn: rolesApi.list });
+  const rolesQ = useQuery({ queryKey: ["roles"], queryFn: () => rolesApi.list() });
+  const scopesQ = useQuery({ queryKey: ["scopes"], queryFn: () => scopesApi.list() });
   const [subjectId, setSubjectId] = useState("");
   const [subjectType, setSubjectType] = useState("USER");
   const [roleId, setRoleId] = useState("");
   const [scopeId, setScopeId] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [conditions, setConditions] = useState("");
-  const [err, setErr] = useState<string | null>(null);
+
+  const conditionsInvalid = useMemo(() => {
+    if (!conditions.trim()) return false;
+    try {
+      JSON.parse(conditions);
+      return false;
+    } catch {
+      return true;
+    }
+  }, [conditions]);
+
+  const canSubmit = !!subjectId.trim() && !!roleId && !!scopeId && !conditionsInvalid;
 
   const m = useMutation({
-    mutationFn: () => {
-      let parsedConditions: unknown = undefined;
-      if (conditions.trim()) {
-        try {
-          parsedConditions = JSON.parse(conditions);
-        } catch {
-          throw new Error("Conditions must be valid JSON.");
-        }
-      }
-      return assignmentsApi.create({
-        subjectId,
+    mutationFn: () =>
+      assignmentsApi.create({
+        subjectId: subjectId.trim(),
         subjectType,
         roleId,
-        scopeId: scopeId || null,
-        expiresAt: expiresAt || null,
-        conditions: parsedConditions,
-      });
-    },
+        scopeId,
+        expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
+        conditions: conditions.trim()
+          ? (JSON.parse(conditions) as Record<string, unknown>)
+          : undefined,
+      }),
     onSuccess: () => {
       toast.success("Assignment granted");
       qc.invalidateQueries({ queryKey: ["assignments"] });
       onOpenChange(false);
     },
-    onError: (e: Error) => setErr(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
+
+  const scopes = useMemo(
+    () => [...(scopesQ.data ?? [])].sort((a, b) => a.path.localeCompare(b.path)),
+    [scopesQ.data],
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -178,51 +271,90 @@ function GrantDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
         <DialogHeader>
           <DialogTitle>Grant assignment</DialogTitle>
         </DialogHeader>
-        <div className="space-y-2">
-          <Label htmlFor="a-sub">Subject ID</Label>
-          <Input id="a-sub" value={subjectId} onChange={(e) => setSubjectId(e.target.value)} />
-          <Label htmlFor="a-st">Subject type</Label>
-          <select
-            id="a-st"
-            value={subjectType}
-            onChange={(e) => setSubjectType(e.target.value)}
-            className="h-9 w-full rounded border border-[var(--border)] bg-[var(--card)] px-2 text-sm"
-          >
-            <option value="USER">USER</option>
-            <option value="GROUP">GROUP</option>
-            <option value="SERVICE">SERVICE</option>
-          </select>
-          <Label htmlFor="a-role">Role</Label>
-          <select
-            id="a-role"
-            value={roleId}
-            onChange={(e) => setRoleId(e.target.value)}
-            className="h-9 w-full rounded border border-[var(--border)] bg-[var(--card)] px-2 text-sm"
-          >
-            <option value="">Select…</option>
-            {(rolesQ.data ?? []).map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-          <Label htmlFor="a-scope">Scope ID (optional)</Label>
-          <Input id="a-scope" value={scopeId} onChange={(e) => setScopeId(e.target.value)} />
-          <Label htmlFor="a-exp">Expires at (ISO, optional)</Label>
-          <Input id="a-exp" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} placeholder="2026-12-31T00:00:00Z" />
-          <Label htmlFor="a-cond">Conditions JSON (optional)</Label>
-          <textarea
-            id="a-cond"
-            value={conditions}
-            onChange={(e) => setConditions(e.target.value)}
-            rows={4}
-            className="w-full rounded border border-[var(--border)] bg-[var(--card)] p-2 font-mono text-xs"
-          />
-          {err ? <p className="text-sm text-[var(--destructive)]">{err}</p> : null}
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="a-sub">Subject ID</Label>
+            <Input
+              id="a-sub"
+              value={subjectId}
+              onChange={(e) => setSubjectId(e.target.value)}
+              className="font-mono text-xs"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="a-st">Subject type</Label>
+            <select
+              id="a-st"
+              value={subjectType}
+              onChange={(e) => setSubjectType(e.target.value)}
+              className="h-9 w-full rounded border border-[var(--border)] bg-[var(--card)] px-2 text-sm"
+            >
+              <option value="USER">USER</option>
+              <option value="SERVICE">SERVICE</option>
+              <option value="GROUP">GROUP</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="a-role">Role</Label>
+            <select
+              id="a-role"
+              value={roleId}
+              onChange={(e) => setRoleId(e.target.value)}
+              className="h-9 w-full rounded border border-[var(--border)] bg-[var(--card)] px-2 text-sm"
+            >
+              <option value="">Select a role…</option>
+              {(rolesQ.data ?? []).map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.displayName || r.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="a-scope">Scope</Label>
+            <select
+              id="a-scope"
+              value={scopeId}
+              onChange={(e) => setScopeId(e.target.value)}
+              className="h-9 w-full rounded border border-[var(--border)] bg-[var(--card)] px-2 text-sm"
+            >
+              <option value="">Select a scope…</option>
+              {scopes.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.path}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="a-exp">Expires at (optional)</Label>
+            <Input
+              id="a-exp"
+              type="datetime-local"
+              value={expiresAt}
+              onChange={(e) => setExpiresAt(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="a-cond">Conditions JSON (optional)</Label>
+            <textarea
+              id="a-cond"
+              value={conditions}
+              onChange={(e) => setConditions(e.target.value)}
+              rows={3}
+              placeholder='{"ipRange": "10.0.0.0/8"}'
+              className="w-full rounded border border-[var(--border)] bg-[var(--card)] p-2 font-mono text-xs"
+            />
+            {conditionsInvalid ? (
+              <p className="text-xs text-[var(--destructive)]">Conditions must be valid JSON.</p>
+            ) : null}
+          </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={() => m.mutate()} disabled={m.isPending || !subjectId || !roleId}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={m.isPending}>
+            Cancel
+          </Button>
+          <Button onClick={() => m.mutate()} disabled={m.isPending || !canSubmit}>
             {m.isPending ? "Granting..." : "Grant"}
           </Button>
         </DialogFooter>

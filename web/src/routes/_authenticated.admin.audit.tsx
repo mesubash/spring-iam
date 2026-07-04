@@ -8,6 +8,7 @@ import { PermissionGuardedPage } from "@/components/iam/PermissionGuardedPage";
 import { DataTable, type Column } from "@/components/iam/DataTable";
 import { DecisionBadge } from "@/components/iam/badges";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDate } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/admin/audit")({
@@ -19,37 +20,102 @@ export const Route = createFileRoute("/_authenticated/admin/audit")({
 });
 
 function AuditPage() {
+  return (
+    <div>
+      <PageHeader
+        title="Audit"
+        description="Authorization decisions recorded by the PDP. Look up entries by subject, or view a subject's decision statistics."
+      />
+      <Tabs defaultValue="subject">
+        <TabsList>
+          <TabsTrigger value="subject">By subject</TabsTrigger>
+          <TabsTrigger value="stats">Statistics</TabsTrigger>
+        </TabsList>
+        <TabsContent value="subject" className="mt-4">
+          <BySubjectTab />
+        </TabsContent>
+        <TabsContent value="stats" className="mt-4">
+          <StatisticsTab />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+/* ------------------------------- By subject ------------------------------ */
+
+function BySubjectTab() {
   const [subjectId, setSubjectId] = useState("");
   const [decision, setDecision] = useState<"" | "ALLOW" | "DENY">("");
-  const q = useQuery({
-    queryKey: ["audit", subjectId],
-    queryFn: () => (subjectId ? auditApi.bySubject(subjectId) : auditApi.recent()),
-  });
+  const [filter, setFilter] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  const subject = subjectId.trim();
+  const q = useQuery({
+    queryKey: ["audit", "subject", subject],
+    queryFn: () => auditApi.bySubject(subject, 100),
+    enabled: !!subject,
+  });
+
   const rows = useMemo(() => {
-    const arr = q.data ?? [];
-    return decision ? arr.filter((e) => e.decision === decision) : arr;
-  }, [q.data, decision]);
+    let arr = q.data ?? [];
+    if (decision) arr = arr.filter((e) => (e.decision ? "ALLOW" : "DENY") === decision);
+    if (filter.trim()) {
+      const f = filter.trim().toLowerCase();
+      arr = arr.filter(
+        (e) =>
+          e.permissionKey.toLowerCase().includes(f) ||
+          (e.reason ?? "").toLowerCase().includes(f) ||
+          (e.scopeId ?? "").toLowerCase().includes(f),
+      );
+    }
+    return arr;
+  }, [q.data, decision, filter]);
+
+  const expandedEntry = expanded ? rows.find((r) => r.id === expanded) : undefined;
 
   const columns: Column<AuditEntry>[] = [
     { key: "ts", header: "Time", width: "160px", render: (e) => formatDate(e.timestamp) },
-    { key: "sub", header: "Subject", render: (e) => <span className="font-mono text-xs">{e.subjectId}</span> },
-    { key: "perm", header: "Permission", render: (e) => <span className="font-mono text-xs">{e.permissionKey}</span> },
-    { key: "d", header: "Decision", width: "90px", render: (e) => <DecisionBadge decision={e.decision} /> },
-    { key: "reason", header: "Reason", render: (e) => e.reason ?? "—" },
-    { key: "scope", header: "Scope", render: (e) => e.scopeId ?? "—" },
+    {
+      key: "perm",
+      header: "Permission",
+      render: (e) => <span className="font-mono text-xs">{e.permissionKey}</span>,
+    },
+    {
+      key: "d",
+      header: "Decision",
+      width: "90px",
+      render: (e) => <DecisionBadge decision={e.decision ? "ALLOW" : "DENY"} />,
+    },
+    {
+      key: "reason",
+      header: "Reason",
+      render: (e) => <span className="font-mono text-xs">{e.reason || "—"}</span>,
+    },
+    {
+      key: "scope",
+      header: "Scope",
+      render: (e) => <span className="font-mono text-xs">{e.scopeId ?? "—"}</span>,
+    },
   ];
 
   return (
     <div>
-      <PageHeader title="Audit" description="Authorization decisions recorded by the server." />
-      <div className="mb-3 flex gap-2">
+      <div className="mb-3 flex flex-wrap gap-2">
+        <Input
+          className="max-w-xs font-mono text-xs"
+          placeholder="Subject ID (required)"
+          value={subjectId}
+          onChange={(e) => {
+            setSubjectId(e.target.value);
+            setExpanded(null);
+          }}
+        />
         <Input
           className="max-w-xs"
-          placeholder="Filter by subjectId..."
-          value={subjectId}
-          onChange={(e) => setSubjectId(e.target.value)}
+          placeholder="Filter permission / reason / scope…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
         />
         <select
           value={decision}
@@ -63,20 +129,158 @@ function AuditPage() {
       </div>
       <DataTable
         columns={columns}
-        rows={rows}
-        loading={q.isLoading}
-        empty="No audit entries."
+        rows={subject ? rows : []}
+        loading={q.isLoading && !!subject}
+        empty={
+          subject
+            ? "No audit entries for this subject."
+            : "Enter a subject ID to load its audit trail — there is no global feed."
+        }
         rowKey={(e) => e.id}
         onRowClick={(e) => setExpanded(expanded === e.id ? null : e.id)}
       />
-      {expanded ? (
+      {expandedEntry ? (
         <div className="mt-3 rounded border border-[var(--border)] bg-[var(--card)] p-3">
-          <div className="mb-2 text-xs font-medium text-[var(--muted-foreground)]">Context</div>
-          <pre className="max-h-64 overflow-auto text-xs">
-            {JSON.stringify(rows.find((r) => r.id === expanded)?.context ?? {}, null, 2)}
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-medium text-[var(--muted-foreground)]">
+              Entry <span className="font-mono">{expandedEntry.id}</span>
+              {expandedEntry.ipAddress ? (
+                <>
+                  {" "}
+                  · from <span className="font-mono">{expandedEntry.ipAddress}</span>
+                </>
+              ) : null}
+              {expandedEntry.resourceType ? (
+                <>
+                  {" "}
+                  · resource{" "}
+                  <span className="font-mono">
+                    {expandedEntry.resourceType}:{expandedEntry.resourceId ?? "?"}
+                  </span>
+                </>
+              ) : null}
+            </span>
+            <button
+              className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              onClick={() => setExpanded(null)}
+            >
+              Close
+            </button>
+          </div>
+          <div className="mb-1 text-xs font-medium text-[var(--muted-foreground)]">Context</div>
+          <pre className="max-h-64 overflow-auto rounded bg-[var(--background)] p-2 font-mono text-xs">
+            {JSON.stringify(expandedEntry.context ?? {}, null, 2)}
           </pre>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/* ------------------------------- Statistics ------------------------------ */
+
+function StatisticsTab() {
+  const [subjectId, setSubjectId] = useState("");
+  const [days, setDays] = useState("7");
+
+  const subject = subjectId.trim();
+  const sinceDaysAgo = Math.max(1, Number.parseInt(days, 10) || 7);
+  const q = useQuery({
+    queryKey: ["audit", "stats", subject, sinceDaysAgo],
+    queryFn: () => auditApi.statistics(subject, sinceDaysAgo),
+    enabled: !!subject,
+  });
+
+  const byPermission = useMemo(
+    () => Object.entries(q.data?.byPermission ?? {}).sort((a, b) => b[1] - a[1]),
+    [q.data],
+  );
+
+  const permColumns: Column<[string, number]>[] = [
+    {
+      key: "perm",
+      header: "Permission",
+      render: ([k]) => <span className="font-mono text-xs">{k}</span>,
+    },
+    { key: "count", header: "Decisions", width: "120px", render: ([, v]) => v },
+  ];
+
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap gap-2">
+        <Input
+          className="max-w-xs font-mono text-xs"
+          placeholder="Subject ID (required)"
+          value={subjectId}
+          onChange={(e) => setSubjectId(e.target.value)}
+        />
+        <Input
+          className="w-28"
+          type="number"
+          min={1}
+          placeholder="Days"
+          value={days}
+          onChange={(e) => setDays(e.target.value)}
+        />
+        <span className="self-center text-xs text-[var(--muted-foreground)]">
+          Window: last {sinceDaysAgo} day{sinceDaysAgo === 1 ? "" : "s"}
+        </span>
+      </div>
+      {!subject ? (
+        <div className="rounded border border-[var(--border)] bg-[var(--card)] px-4 py-8 text-center text-sm text-[var(--muted-foreground)]">
+          Enter a subject ID to compute its decision statistics.
+        </div>
+      ) : q.isLoading ? (
+        <div className="rounded border border-[var(--border)] bg-[var(--card)] px-4 py-8 text-center text-sm text-[var(--muted-foreground)]">
+          Loading statistics…
+        </div>
+      ) : q.data ? (
+        <div>
+          <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatTile label="Total decisions" value={String(q.data.total)} />
+            <StatTile label="Allowed" value={String(q.data.allowed)} tone="success" />
+            <StatTile label="Denied" value={String(q.data.denied)} tone="destructive" />
+            <StatTile label="Allow rate" value={`${Math.round(q.data.allowRate * 100)}%`} />
+          </div>
+          <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+            By permission
+          </div>
+          <DataTable
+            columns={permColumns}
+            rows={byPermission}
+            empty="No decisions in this window."
+            rowKey={([k]) => k}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function StatTile({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "success" | "destructive";
+}) {
+  return (
+    <div className="rounded border border-[var(--border)] bg-[var(--card)] px-3 py-2.5">
+      <div className="text-xs text-[var(--muted-foreground)]">{label}</div>
+      <div
+        className="mt-0.5 text-lg font-semibold tabular-nums"
+        style={
+          tone === "success"
+            ? { color: "var(--success)" }
+            : tone === "destructive"
+              ? { color: "var(--destructive)" }
+              : undefined
+        }
+      >
+        {value}
+      </div>
     </div>
   );
 }

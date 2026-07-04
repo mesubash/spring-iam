@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { permissionsApi, rolesApi } from "@/api/resources";
 import type { Permission, Role } from "@/api/types";
@@ -29,7 +29,7 @@ export const Route = createFileRoute("/_authenticated/admin/roles")({
 });
 
 function RolesPage() {
-  const q = useQuery({ queryKey: ["roles"], queryFn: rolesApi.list });
+  const q = useQuery({ queryKey: ["roles"], queryFn: () => rolesApi.list() });
   const [filter, setFilter] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Role | null>(null);
@@ -48,7 +48,7 @@ function RolesPage() {
       header: "Scope",
       render: (r) => (r.ownerScopeId ? <span className="font-mono text-xs">{r.ownerScopeId}</span> : <Tag>Global</Tag>),
     },
-    { key: "system", header: "", width: "80px", render: (r) => (r.systemRole ? <Tag>System</Tag> : null) },
+    { key: "system", header: "", width: "80px", render: (r) => (r.isSystemRole ? <Tag>System</Tag> : null) },
   ];
 
   return (
@@ -96,13 +96,22 @@ function RoleDialog({
   role?: Role;
 }) {
   const qc = useQueryClient();
-  const permsQ = useQuery({ queryKey: ["permissions"], queryFn: permissionsApi.list });
+  const permsQ = useQuery({ queryKey: ["permissions"], queryFn: () => permissionsApi.list() });
+  const rolePermsQ = useQuery({
+    queryKey: ["role-permissions", role?.id],
+    queryFn: () => rolesApi.permissions(role!.id),
+    enabled: !!role,
+  });
   const [name, setName] = useState(role?.name ?? "");
   const [displayName, setDisplayName] = useState(role?.displayName ?? "");
   const [description, setDescription] = useState(role?.description ?? "");
-  const [selected, setSelected] = useState<Set<string>>(new Set(role?.permissionIds ?? []));
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
-  const readOnly = role?.systemRole;
+  const readOnly = role?.isSystemRole;
+
+  useEffect(() => {
+    if (rolePermsQ.data) setSelected(new Set(rolePermsQ.data.map((p) => p.id)));
+  }, [rolePermsQ.data]);
 
   const create = useMutation({
     mutationFn: () =>

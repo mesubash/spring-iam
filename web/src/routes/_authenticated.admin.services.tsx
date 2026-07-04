@@ -1,16 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { servicesApi } from "@/api/resources";
-import type { ServiceRegistryEntry } from "@/api/types";
+import type { ServiceClient } from "@/api/types";
 import { PageHeader } from "@/components/iam/PageHeader";
 import { DataTable, type Column } from "@/components/iam/DataTable";
+import { Tag } from "@/components/iam/badges";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatDate } from "@/lib/format";
-import { useAuthz } from "@/context/AuthzContext";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +17,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useAuthz } from "@/context/AuthzContext";
+import { formatDate } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/admin/services")({
   component: ServicesPage,
@@ -26,30 +27,84 @@ export const Route = createFileRoute("/_authenticated/admin/services")({
 function ServicesPage() {
   const { features } = useAuthz();
   const q = useQuery({ queryKey: ["services"], queryFn: servicesApi.list });
+  const [filter, setFilter] = useState("");
   const [creating, setCreating] = useState(false);
   const [issuedKey, setIssuedKey] = useState<{ name: string; apiKey: string } | null>(null);
 
+  const rows = useMemo(() => {
+    const arr = q.data ?? [];
+    const f = filter.trim().toLowerCase();
+    return f
+      ? arr.filter(
+          (s) =>
+            s.name.toLowerCase().includes(f) ||
+            (s.displayName ?? "").toLowerCase().includes(f) ||
+            (s.ownedDomains ?? []).some((d) => d.toLowerCase().includes(f)),
+        )
+      : arr;
+  }, [q.data, filter]);
+
   if (features && !features["service-registry"]) {
-    return <p className="text-sm text-[var(--muted-foreground)]">Service registry disabled.</p>;
+    return (
+      <p className="text-sm text-[var(--muted-foreground)]">
+        The service-registry feature is disabled on this deployment.
+      </p>
+    );
   }
 
-  const columns: Column<ServiceRegistryEntry>[] = [
-    { key: "name", header: "Name", render: (s) => <span className="font-mono text-[13px]">{s.name}</span> },
-    { key: "dn", header: "Display name", render: (s) => s.displayName ?? "—" },
-    { key: "dom", header: "Owned domains", render: (s) => s.ownedDomains?.join(", ") ?? "—" },
-    { key: "seen", header: "Last seen", render: (s) => formatDate(s.lastSeenAt) },
+  const columns: Column<ServiceClient>[] = [
+    {
+      key: "name",
+      header: "Name",
+      render: (s) => <span className="font-mono text-[13px]">{s.name}</span>,
+    },
+    { key: "dn", header: "Display name", render: (s) => s.displayName || "—" },
+    {
+      key: "dom",
+      header: "Owned domains",
+      render: (s) =>
+        (s.ownedDomains ?? []).length ? (
+          <span className="flex flex-wrap gap-1">
+            {s.ownedDomains.map((d) => (
+              <Tag key={d} mono>
+                {d}
+              </Tag>
+            ))}
+          </span>
+        ) : (
+          "—"
+        ),
+    },
+    { key: "seen", header: "Last seen", width: "170px", render: (s) => formatDate(s.lastSeenAt) },
   ];
 
   return (
     <div>
       <PageHeader
         title="Services"
-        description="Registered non-human clients of the IAM API."
+        description="Registered service clients that call the IAM API with an API key and own permission domains."
         actions={<Button onClick={() => setCreating(true)}>Register service</Button>}
       />
-      <DataTable columns={columns} rows={q.data} loading={q.isLoading} empty="No services." rowKey={(s) => s.id} />
+      <Input
+        className="mb-3 max-w-xs"
+        placeholder="Filter services…"
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+      />
+      <DataTable
+        columns={columns}
+        rows={rows}
+        loading={q.isLoading}
+        empty="No services registered."
+        rowKey={(s) => s.id}
+      />
+      <p className="mt-3 text-xs text-[var(--muted-foreground)]">
+        Permission manifests are synced by each service itself via{" "}
+        <span className="font-mono">PUT /api/v1/services/&#123;name&#125;/permissions</span> using
+        its API key — there is no manual sync here.
+      </p>
       {creating ? (
-        <RegisterDialog
+        <RegisterServiceDialog
           open
           onOpenChange={setCreating}
           onIssued={(k) => {
@@ -59,37 +114,13 @@ function ServicesPage() {
         />
       ) : null}
       {issuedKey ? (
-        <Dialog open onOpenChange={(v) => !v && setIssuedKey(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>API key for {issuedKey.name}</DialogTitle>
-            </DialogHeader>
-            <p className="text-sm text-[var(--destructive)]">
-              Copy this key now — you won't see it again after closing this dialog.
-            </p>
-            <div className="rounded border border-[var(--border)] bg-[var(--background)] p-2 font-mono text-xs break-all">
-              {issuedKey.apiKey}
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  navigator.clipboard.writeText(issuedKey.apiKey);
-                  toast.success("Copied");
-                }}
-              >
-                Copy
-              </Button>
-              <Button onClick={() => setIssuedKey(null)}>Done</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <ApiKeyDialog issued={issuedKey} onClose={() => setIssuedKey(null)} />
       ) : null}
     </div>
   );
 }
 
-function RegisterDialog({
+function RegisterServiceDialog({
   open,
   onOpenChange,
   onIssued,
@@ -102,12 +133,18 @@ function RegisterDialog({
   const [name, setName] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [domains, setDomains] = useState("");
+
+  const parsedDomains = domains
+    .split(",")
+    .map((d) => d.trim())
+    .filter(Boolean);
+
   const m = useMutation({
     mutationFn: () =>
       servicesApi.create({
-        name,
-        displayName,
-        ownedDomains: domains.split(",").map((d) => d.trim()).filter(Boolean),
+        name: name.trim(),
+        displayName: displayName.trim() || undefined,
+        ownedDomains: parsedDomains,
       }),
     onSuccess: (res) => {
       toast.success("Service registered");
@@ -116,23 +153,93 @@ function RegisterDialog({
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Register service</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Register service</DialogTitle>
+        </DialogHeader>
         <div className="space-y-2">
-          <Label>Name</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} />
-          <Label>Display name</Label>
-          <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-          <Label>Owned domains (comma separated)</Label>
-          <Input value={domains} onChange={(e) => setDomains(e.target.value)} />
+          <div>
+            <Label>Name</Label>
+            <Input
+              className="mt-1 font-mono text-xs"
+              placeholder="billing-service"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label>Display name (optional)</Label>
+            <Input
+              className="mt-1"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label>Owned domains (comma-separated)</Label>
+            <Input
+              className="mt-1 font-mono text-xs"
+              placeholder="billing, invoices"
+              value={domains}
+              onChange={(e) => setDomains(e.target.value)}
+            />
+            <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+              The service may only sync permissions inside the domains it owns.
+            </p>
+          </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={() => m.mutate()} disabled={m.isPending || !name}>
-            {m.isPending ? "Registering..." : "Register"}
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={m.isPending}>
+            Cancel
           </Button>
+          <Button
+            onClick={() => m.mutate()}
+            disabled={m.isPending || !name.trim() || parsedDomains.length === 0}
+          >
+            {m.isPending ? "Registering…" : "Register"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ApiKeyDialog({
+  issued,
+  onClose,
+}: {
+  issued: { name: string; apiKey: string };
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>API key for {issued.name}</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-[var(--destructive)]">
+          Copy this key now. It is shown exactly once — after you close this dialog it cannot be
+          retrieved again.
+        </p>
+        <div className="break-all rounded border border-[var(--border)] bg-[var(--background)] p-2 font-mono text-xs">
+          {issued.apiKey}
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={async () => {
+              await navigator.clipboard.writeText(issued.apiKey);
+              setCopied(true);
+              toast.success("API key copied");
+            }}
+          >
+            {copied ? "Copied" : "Copy key"}
+          </Button>
+          <Button onClick={onClose}>Done</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

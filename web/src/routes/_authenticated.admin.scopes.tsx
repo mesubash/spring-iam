@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -30,42 +31,44 @@ export const Route = createFileRoute("/_authenticated/admin/scopes")({
   ),
 });
 
-type TreeNode = Scope & { children: TreeNode[] };
-
-function buildTree(scopes: Scope[]): TreeNode[] {
-  const map = new Map<string, TreeNode>();
-  scopes.forEach((s) => map.set(s.id, { ...s, children: [] }));
-  const roots: TreeNode[] = [];
-  map.forEach((n) => {
-    if (n.parentId && map.has(n.parentId)) map.get(n.parentId)!.children.push(n);
-    else roots.push(n);
-  });
-  return roots;
-}
+const CODE_RE = /^[A-Za-z0-9_]{1,50}$/;
 
 function ScopesPage() {
-  const q = useQuery({ queryKey: ["scopes"], queryFn: scopesApi.list });
-  const [selected, setSelected] = useState<Scope | null>(null);
+  const q = useQuery({ queryKey: ["scopes"], queryFn: () => scopesApi.list() });
+  const [filter, setFilter] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const { can } = useAuthz();
 
-  const tree = useMemo(() => buildTree(q.data ?? []), [q.data]);
-  const descendants = useMemo(() => {
-    if (!selected || !q.data) return 0;
-    let count = 0;
-    const stack = [selected.id];
-    while (stack.length) {
-      const id = stack.pop()!;
-      for (const s of q.data) {
-        if (s.parentId === id) {
-          count++;
-          stack.push(s.id);
-        }
-      }
-    }
-    return count;
-  }, [selected, q.data]);
+  const sorted = useMemo(
+    () => [...(q.data ?? [])].sort((a, b) => a.path.localeCompare(b.path)),
+    [q.data],
+  );
+  const visible = useMemo(() => {
+    const f = filter.trim().toLowerCase();
+    if (!f) return sorted;
+    return sorted.filter(
+      (s) =>
+        s.name.toLowerCase().includes(f) ||
+        s.code.toLowerCase().includes(f) ||
+        s.path.toLowerCase().includes(f) ||
+        s.type.toLowerCase().includes(f),
+    );
+  }, [sorted, filter]);
+
+  const selected = useMemo(
+    () => sorted.find((s) => s.id === selectedId) ?? null,
+    [sorted, selectedId],
+  );
+
+  const descQ = useQuery({
+    queryKey: ["scopes", "descendants", selected?.id],
+    queryFn: () => scopesApi.descendants(selected!.id),
+    enabled: !!selected,
+  });
+  // The descendants endpoint includes the scope itself.
+  const descendantCount = descQ.data ? Math.max(0, descQ.data.length - 1) : undefined;
 
   return (
     <div>
@@ -78,16 +81,32 @@ function ScopesPage() {
           </Can>
         }
       />
-      <div className="grid grid-cols-[1fr_320px] gap-4">
-        <div className="rounded border border-[var(--border)] bg-[var(--card)]">
+      <div className="mb-3">
+        <Input
+          placeholder="Filter by name, code, path or type..."
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="max-w-xs"
+        />
+      </div>
+      <div className="grid grid-cols-[1fr_320px] items-start gap-4">
+        <div className="overflow-x-auto rounded border border-[var(--border)] bg-[var(--card)]">
           {q.isLoading ? (
             <div className="p-3 text-sm text-[var(--muted-foreground)]">Loading…</div>
-          ) : tree.length === 0 ? (
-            <div className="p-6 text-center text-sm text-[var(--muted-foreground)]">No scopes yet.</div>
+          ) : visible.length === 0 ? (
+            <div className="p-6 text-center text-sm text-[var(--muted-foreground)]">
+              {filter ? "No scopes match the filter." : "No scopes yet."}
+            </div>
           ) : (
-            <ul className="py-2">
-              {tree.map((n) => (
-                <TreeRow key={n.id} node={n} depth={0} selected={selected} onSelect={setSelected} />
+            <ul className="py-1">
+              {visible.map((s) => (
+                <ScopeRow
+                  key={s.id}
+                  scope={s}
+                  indent={filter ? 0 : s.depth}
+                  active={selectedId === s.id}
+                  onSelect={() => setSelectedId(s.id)}
+                />
               ))}
             </ul>
           )}
@@ -97,17 +116,35 @@ function ScopesPage() {
             <p className="text-[var(--muted-foreground)]">Select a scope to see details.</p>
           ) : (
             <div className="space-y-3">
-              <div>
-                <div className="text-xs text-[var(--muted-foreground)]">Name</div>
+              <div className="flex items-center justify-between gap-2">
                 <div className="font-medium">{selected.name}</div>
+                <Tag tone="accent">{selected.type}</Tag>
               </div>
               <MetaRow label="Code" mono value={selected.code} />
-              <MetaRow label="Type" value={selected.type} />
               <MetaRow label="Path" mono value={selected.path} />
               <MetaRow label="Depth" value={String(selected.depth)} />
               <MetaRow label="Active" value={selected.active ? "Yes" : "No"} />
-              <MetaRow label="Descendants" value={String(descendants)} />
-              {can("platform.scope.move") ? (
+              <MetaRow
+                label="Descendants"
+                value={
+                  descQ.isLoading
+                    ? "…"
+                    : descQ.isError
+                      ? "unavailable"
+                      : String(descendantCount ?? 0)
+                }
+              />
+              <div>
+                <div className="text-xs text-[var(--muted-foreground)]">Metadata</div>
+                {selected.metadata && Object.keys(selected.metadata).length > 0 ? (
+                  <pre className="mt-1 overflow-x-auto rounded border border-[var(--border)] bg-[var(--background)] p-2 font-mono text-xs">
+                    {JSON.stringify(selected.metadata, null, 2)}
+                  </pre>
+                ) : (
+                  <div className="text-sm text-[var(--muted-foreground)]">None</div>
+                )}
+              </div>
+              {can("platform.scope.move") && selected.parentId ? (
                 <Button variant="outline" size="sm" onClick={() => setMoveOpen(true)}>
                   Move scope
                 </Button>
@@ -116,16 +153,59 @@ function ScopesPage() {
           )}
         </aside>
       </div>
-      <CreateScopeDialog open={createOpen} onOpenChange={setCreateOpen} parent={selected} />
+      <CreateScopeDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        scopes={sorted}
+        defaultParentId={selected?.id}
+      />
       {selected ? (
         <MoveScopeDialog
           open={moveOpen}
           onOpenChange={setMoveOpen}
           scope={selected}
-          all={q.data ?? []}
+          all={sorted}
         />
       ) : null}
     </div>
+  );
+}
+
+function ScopeRow({
+  scope,
+  indent,
+  active,
+  onSelect,
+}: {
+  scope: Scope;
+  indent: number;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onSelect}
+        className={cn(
+          "flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm hover:bg-[var(--background)] focus:outline-none focus:ring-1 focus:ring-[var(--ring)]",
+          active && "bg-[var(--primary-subtle)]",
+        )}
+        style={{ paddingLeft: 10 + indent * 18 }}
+      >
+        <span className={cn("font-medium", active && "text-[var(--primary)]")}>
+          {scope.name}
+        </span>
+        <span className="font-mono text-xs text-[var(--muted-foreground)]">{scope.code}</span>
+        <span className="hidden truncate font-mono text-xs text-[var(--muted-foreground)] md:inline">
+          {scope.path}
+        </span>
+        <span className="ml-auto flex items-center gap-2">
+          <span className="text-xs text-[var(--muted-foreground)]">d{scope.depth}</span>
+          <Tag tone="neutral">{scope.type}</Tag>
+        </span>
+      </button>
+    </li>
   );
 }
 
@@ -133,95 +213,108 @@ function MetaRow({ label, value, mono }: { label: string; value: string; mono?: 
   return (
     <div>
       <div className="text-xs text-[var(--muted-foreground)]">{label}</div>
-      <div className={cn("text-sm", mono && "font-mono text-[13px]")}>{value}</div>
+      <div className={cn("break-all text-sm", mono && "font-mono text-[13px]")}>{value}</div>
     </div>
-  );
-}
-
-function TreeRow({
-  node,
-  depth,
-  selected,
-  onSelect,
-}: {
-  node: TreeNode;
-  depth: number;
-  selected: Scope | null;
-  onSelect: (s: Scope) => void;
-}) {
-  const isActive = selected?.id === node.id;
-  return (
-    <>
-      <li>
-        <button
-          type="button"
-          onClick={() => onSelect(node)}
-          className={cn(
-            "flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm hover:bg-[var(--background)] focus:outline-none focus:ring-1 focus:ring-[var(--ring)]",
-            isActive && "bg-[var(--primary-subtle)] text-[var(--primary)]",
-          )}
-          style={{ paddingLeft: 8 + depth * 16 }}
-        >
-          <span className="font-medium">{node.name}</span>
-          <span className="font-mono text-xs text-[var(--muted-foreground)]">{node.code}</span>
-          <Tag className="ml-auto">{node.type}</Tag>
-        </button>
-      </li>
-      {node.children.map((c) => (
-        <TreeRow key={c.id} node={c} depth={depth + 1} selected={selected} onSelect={onSelect} />
-      ))}
-    </>
   );
 }
 
 function CreateScopeDialog({
   open,
   onOpenChange,
-  parent,
+  scopes,
+  defaultParentId,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  parent: Scope | null;
+  scopes: Scope[];
+  defaultParentId?: string;
 }) {
   const qc = useQueryClient();
-  const [type, setType] = useState("ORG");
+  const [type, setType] = useState("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
-  const [parentId, setParentId] = useState<string>(parent?.id ?? "");
+  const [parentId, setParentId] = useState<string>(defaultParentId ?? "");
+
+  const codeInvalid = code.length > 0 && !CODE_RE.test(code);
+  const canSubmit = !!type.trim() && !!name.trim() && CODE_RE.test(code) && !!parentId;
+
+  const reset = () => {
+    setType("");
+    setName("");
+    setCode("");
+    setParentId(defaultParentId ?? "");
+  };
+
   const m = useMutation({
-    mutationFn: () =>
-      scopesApi.create({ type, name, code, parentId: parentId || null }),
+    mutationFn: () => scopesApi.create({ type: type.trim(), name: name.trim(), code, parentId }),
     onSuccess: () => {
       toast.success("Scope created");
       qc.invalidateQueries({ queryKey: ["scopes"] });
       onOpenChange(false);
-      setName("");
-      setCode("");
+      reset();
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>New scope</DialogTitle>
+          <DialogDescription>
+            The scope is created under the selected parent and inherits its position in the tree.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <Label htmlFor="s-type">Type</Label>
-          <Input id="s-type" value={type} onChange={(e) => setType(e.target.value)} />
-          <Label htmlFor="s-name">Name</Label>
-          <Input id="s-name" value={name} onChange={(e) => setName(e.target.value)} />
-          <Label htmlFor="s-code">Code</Label>
-          <Input id="s-code" value={code} onChange={(e) => setCode(e.target.value)} />
-          <Label htmlFor="s-parent">Parent ID (optional)</Label>
-          <Input id="s-parent" value={parentId} onChange={(e) => setParentId(e.target.value)} />
+          <div className="space-y-1.5">
+            <Label htmlFor="s-type">Type</Label>
+            <Input
+              id="s-type"
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              placeholder="e.g. REGION, COUNTRY, ORG"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="s-name">Name</Label>
+            <Input id="s-name" value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="s-code">Code</Label>
+            <Input
+              id="s-code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="ALNUM_AND_UNDERSCORE"
+            />
+            {codeInvalid ? (
+              <p className="text-xs text-[var(--destructive)]">
+                Code must be 1-50 letters, digits or underscores.
+              </p>
+            ) : null}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="s-parent">Parent</Label>
+            <select
+              id="s-parent"
+              value={parentId}
+              onChange={(e) => setParentId(e.target.value)}
+              className="h-9 w-full rounded border border-[var(--border)] bg-[var(--card)] px-2 text-sm"
+            >
+              <option value="">Select a parent scope…</option>
+              {scopes.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.path}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button
-            onClick={() => m.mutate()}
-            disabled={m.isPending || !name || !code || !type}
-          >
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={m.isPending}>
+            Cancel
+          </Button>
+          <Button onClick={() => m.mutate()} disabled={m.isPending || !canSubmit}>
             {m.isPending ? "Creating..." : "Create"}
           </Button>
         </DialogFooter>
@@ -249,21 +342,36 @@ function MoveScopeDialog({
       toast.success("Scope moved");
       qc.invalidateQueries({ queryKey: ["scopes"] });
       onOpenChange(false);
+      setTarget("");
     },
     onError: (e: Error) => toast.error(e.message),
   });
+  // A scope cannot be moved under itself or one of its own descendants.
+  const candidates = all.filter(
+    (s) => s.id !== scope.id && s.id !== scope.parentId && !s.path.startsWith(`${scope.path}.`),
+  );
   return (
     <ConfirmDialog
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={(v) => {
+        onOpenChange(v);
+        if (!v) setTarget("");
+      }}
       title={`Move ${scope.name}`}
-      description="Moving a scope re-parents its whole subtree."
-      confirmLabel="Move"
+      description="Moving a scope re-parents its entire subtree: every descendant path, and everything resolved through them, changes."
+      target={scope.path}
+      confirmLabel="Move subtree"
       destructive
       pending={m.isPending}
-      onConfirm={() => target && m.mutate()}
+      onConfirm={() => {
+        if (!target) {
+          toast.error("Select a new parent scope.");
+          return;
+        }
+        m.mutate();
+      }}
     >
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <Label htmlFor="m-parent">New parent</Label>
         <select
           id="m-parent"
@@ -272,13 +380,11 @@ function MoveScopeDialog({
           className="h-9 w-full rounded border border-[var(--border)] bg-[var(--card)] px-2 text-sm"
         >
           <option value="">Select…</option>
-          {all
-            .filter((s) => s.id !== scope.id)
-            .map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.path}
-              </option>
-            ))}
+          {candidates.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.path}
+            </option>
+          ))}
         </select>
       </div>
     </ConfirmDialog>
