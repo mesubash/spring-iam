@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { authzApi, metaApi, type ScopeSummary } from "@/api/resources";
+import { authzApi, metaApi } from "@/api/resources";
+import type { ScopeSummary } from "@/api/types";
 import type { FeatureFlags } from "@/api/types";
 import { useAuth } from "./AuthContext";
 import { setForbiddenHandler } from "@/api/client";
