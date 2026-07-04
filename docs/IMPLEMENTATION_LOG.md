@@ -5,6 +5,12 @@
 
 ---
 
+## Phase 3 — Feature flags & fleet
+
+| Date | Block | What was done | Commit |
+|------|-------|---------------|--------|
+| 2026-07-04 | all | `iam.features.*` flags (`FeatureFlags` + `GET /api/v1/meta/features`; disabled feature endpoints 404). Resource grants live: entity/repo, pipeline lookup (action-wildcard matching, optional scope fence, independent of role-condition failures), CRUD w/ ceiling guard (wildcard grants = SuperAdmin only, revoke = grantor or SuperAdmin). Subject groups live: entities/repos, pipeline resolves subject ∪ groups for deny rules + assignments (perm cache bypassed when groups on — invalidation counters don't cover groups yet), SuperAdmin CRUD. Service registry live: `services` entity, per-service API keys (SHA-256 lookup in ApiKeyAuthFilter → principal `service:<name>`, last_seen stamped), registration returns key once, manifest sync (`PUT /api/v1/services/{name}/permissions` — owned-domain enforcement, idempotent upsert, deprecate-missing). Decision suite → 29 tests (grants/groups paths). Suite 42/42. Carried: grants/groups Redis caching, group-aware invalidation counters | Phase 3 commit |
+
 ## Phase 2 — AuthN token core
 
 | Date | Block | What was done | Commit |

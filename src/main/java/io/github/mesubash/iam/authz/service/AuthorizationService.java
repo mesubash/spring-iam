@@ -4,10 +4,12 @@ import io.github.mesubash.iam.authz.entity.*;
 import io.github.mesubash.iam.authz.repository.AssignmentRepository;
 import io.github.mesubash.iam.authz.repository.AuthorizationAuditRepository;
 import io.github.mesubash.iam.authz.repository.DenyRuleRepository;
+import io.github.mesubash.iam.authz.repository.ResourceGrantRepository;
 import io.github.mesubash.iam.authz.repository.RoleHierarchyRepository;
 import io.github.mesubash.iam.authz.repository.RolePermissionRepository;
 import io.github.mesubash.iam.authz.repository.ScopeClosureRepository;
 import io.github.mesubash.iam.authz.repository.ScopeRepository;
+import io.github.mesubash.iam.authz.repository.SubjectGroupMemberRepository;
 import io.github.mesubash.iam.authz.dto.AuthorizationRequest;
 import io.github.mesubash.iam.authz.dto.AuthorizationResponse;
 import io.github.mesubash.iam.authz.dto.EffectivePermissionsRequest;
@@ -48,12 +50,15 @@ public class AuthorizationService {
     private final PolicyService policyService;
     private final PolicyEvaluator policyEvaluator;
 
+    private final ResourceGrantRepository resourceGrantRepository;
+    private final SubjectGroupMemberRepository subjectGroupMemberRepository;
+
     // deny-only: ALLOW policies ignored (policies can only restrict).
     // required-allow: if ALLOW candidates exist, at least one must match.
     private final String policyMode;
 
-    // Per-instance resource grants — wired when the feature flag ships.
     private final boolean resourceGrantsEnabled;
+    private final boolean groupsEnabled;
 
     // Metrics
     private final Counter allowCounter;
@@ -74,8 +79,11 @@ public class AuthorizationService {
             MeterRegistry meterRegistry,
             PolicyService policyService,
             PolicyEvaluator policyEvaluator,
+            ResourceGrantRepository resourceGrantRepository,
+            SubjectGroupMemberRepository subjectGroupMemberRepository,
             @Value("${iam.authorization.policy-mode:deny-only}") String policyMode,
-            @Value("${iam.features.resource-grants:false}") boolean resourceGrantsEnabled) {
+            @Value("${iam.features.resource-grants:false}") boolean resourceGrantsEnabled,
+            @Value("${iam.features.groups:false}") boolean groupsEnabled) {
 
         this.assignmentRepository = assignmentRepository;
         this.denyRuleRepository = denyRuleRepository;
@@ -88,8 +96,11 @@ public class AuthorizationService {
         this.meterRegistry = meterRegistry;
         this.policyService = policyService;
         this.policyEvaluator = policyEvaluator;
+        this.resourceGrantRepository = resourceGrantRepository;
+        this.subjectGroupMemberRepository = subjectGroupMemberRepository;
         this.policyMode = policyMode;
         this.resourceGrantsEnabled = resourceGrantsEnabled;
+        this.groupsEnabled = groupsEnabled;
 
         // Initialize metrics
         this.allowCounter = Counter.builder("authorization.decision.allow")
@@ -260,7 +271,9 @@ public class AuthorizationService {
             Set<String> userPermissions;
             PermissionsResult permissionsResult = null;
 
-            boolean hasConditionalAssignments = assignmentRepository
+            // Groups bypass the permission cache: group assignments aren't covered
+            // by the per-subject conditional check or invalidation counters yet.
+            boolean hasConditionalAssignments = groupsEnabled || assignmentRepository
                     .existsActiveConditionalAssignments(subject, Instant.now());
 
             if (!hasConditionalAssignments) {
@@ -371,8 +384,51 @@ public class AuthorizationService {
         return active;
     }
 
-    // Per-instance grants lookup — implemented when the feature flag ships.
+    /** Subject plus its active group ids — the identities a rule can match. */
+    private List<String> subjectKeys(String subjectId) {
+        if (!groupsEnabled) {
+            return List.of(subjectId);
+        }
+        List<String> keys = new ArrayList<>();
+        keys.add(subjectId);
+        subjectGroupMemberRepository.findActiveGroupIds(subjectId)
+                .forEach(id -> keys.add(id.toString()));
+        return keys;
+    }
+
     private boolean resourceGrantAllows(AuthorizationRequest request) {
+        AuthorizationRequest.ResourceContext resource = request.getResource();
+        if (resource == null || resource.getType() == null || resource.getId() == null) {
+            return false;
+        }
+
+        List<ResourceGrant> grants = resourceGrantRepository.findActiveForResource(
+                subjectKeys(request.getSubject()), resource.getType(), resource.getId(), Instant.now());
+
+        for (ResourceGrant grant : grants) {
+            if (!grantPermissionMatches(grant.getPermissionKey(), request.getPermission())) {
+                continue;
+            }
+            if (grant.getScopeId() != null
+                    && !scopeContainsCached(grant.getScopeId(), resource.getScopeId())) {
+                continue;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    // Exact key, or wildcard on the action segment only: doc.file.* matches
+    // doc.file.read but never doc.other.read or doc.file.sub.read.
+    private boolean grantPermissionMatches(String grantKey, String permissionKey) {
+        if (grantKey.equals(permissionKey)) {
+            return true;
+        }
+        if (grantKey.endsWith(".*")) {
+            String prefix = grantKey.substring(0, grantKey.length() - 1);
+            return permissionKey.startsWith(prefix)
+                    && permissionKey.indexOf('.', prefix.length()) == -1;
+        }
         return false;
     }
 
@@ -380,8 +436,8 @@ public class AuthorizationService {
      * Fetch deny rules from database
      */
     private Set<CacheService.CachedDenyRule> fetchDenyRules(String subjectId) {
-        List<DenyRule> rules = denyRuleRepository.findAllActiveDenyRulesForSubject(
-                subjectId, Instant.now());
+        List<DenyRule> rules = denyRuleRepository.findAllActiveDenyRulesForSubjects(
+                subjectKeys(subjectId), Instant.now());
 
         return rules.stream()
                 .map(rule -> CacheService.CachedDenyRule.builder()
@@ -399,8 +455,8 @@ public class AuthorizationService {
                                                    UUID resourceScopeId,
                                                    AuthorizationRequest request) {
 
-        List<Assignment> assignments = assignmentRepository.findActiveAssignments(
-                subjectId, Instant.now());
+        List<Assignment> assignments = assignmentRepository.findActiveAssignmentsForSubjects(
+                subjectKeys(subjectId), Instant.now());
 
         if (assignments.isEmpty()) {
             return PermissionsResult.empty();

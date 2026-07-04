@@ -5,13 +5,16 @@ import io.github.mesubash.iam.authz.dto.AuthorizationResponse;
 import io.github.mesubash.iam.authz.entity.Assignment;
 import io.github.mesubash.iam.authz.entity.DenyRule;
 import io.github.mesubash.iam.authz.entity.Policy;
+import io.github.mesubash.iam.authz.entity.ResourceGrant;
 import io.github.mesubash.iam.authz.repository.AssignmentRepository;
 import io.github.mesubash.iam.authz.repository.AuthorizationAuditRepository;
 import io.github.mesubash.iam.authz.repository.DenyRuleRepository;
+import io.github.mesubash.iam.authz.repository.ResourceGrantRepository;
 import io.github.mesubash.iam.authz.repository.RoleHierarchyRepository;
 import io.github.mesubash.iam.authz.repository.RolePermissionRepository;
 import io.github.mesubash.iam.authz.repository.ScopeClosureRepository;
 import io.github.mesubash.iam.authz.repository.ScopeRepository;
+import io.github.mesubash.iam.authz.repository.SubjectGroupMemberRepository;
 import io.github.mesubash.iam.shared.exception.AuthorizationServiceException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,6 +59,8 @@ class AuthorizationServiceDecisionTest {
     @Mock private AuthorizationAuditRepository auditRepository;
     @Mock private CacheService cacheService;
     @Mock private PolicyService policyService;
+    @Mock private ResourceGrantRepository resourceGrantRepository;
+    @Mock private SubjectGroupMemberRepository subjectGroupMemberRepository;
 
     private AuthorizationService service;
 
@@ -67,7 +72,7 @@ class AuthorizationServiceDecisionTest {
 
     @BeforeEach
     void setUp() {
-        service = buildService("deny-only");
+        service = buildService("deny-only", false, false);
 
         // cache always misses; scopes active; policies neutral by default
         when(cacheService.getCachedDenyRules(anyString())).thenReturn(null);
@@ -77,18 +82,22 @@ class AuthorizationServiceDecisionTest {
         when(cacheService.getCachedScopeActive(any())).thenReturn(null);
         when(scopeRepository.findActiveFlag(any())).thenReturn(Optional.of(true));
         when(policyService.getApplicablePolicies(anyString(), any())).thenReturn(List.of());
-        when(denyRuleRepository.findAllActiveDenyRulesForSubject(anyString(), any())).thenReturn(List.of());
-        when(assignmentRepository.findActiveAssignments(anyString(), any())).thenReturn(List.of());
+        when(denyRuleRepository.findAllActiveDenyRulesForSubjects(any(), any())).thenReturn(List.of());
+        when(assignmentRepository.findActiveAssignmentsForSubjects(any(), any())).thenReturn(List.of());
         when(assignmentRepository.existsActiveConditionalAssignments(anyString(), any())).thenReturn(false);
         when(roleHierarchyRepository.findAllByChildRoleIds(any())).thenReturn(List.of());
+        when(resourceGrantRepository.findActiveForResource(any(), any(), any(), any())).thenReturn(List.of());
+        when(subjectGroupMemberRepository.findActiveGroupIds(anyString())).thenReturn(List.of());
     }
 
-    private AuthorizationService buildService(String policyMode) {
+    private AuthorizationService buildService(String policyMode, boolean grants, boolean groups) {
         return new AuthorizationService(
                 assignmentRepository, denyRuleRepository, scopeClosureRepository,
                 scopeRepository, rolePermissionRepository, roleHierarchyRepository,
                 auditRepository, cacheService, new SimpleMeterRegistry(),
-                policyService, new PolicyEvaluator(), policyMode, false);
+                policyService, new PolicyEvaluator(),
+                resourceGrantRepository, subjectGroupMemberRepository,
+                policyMode, grants, groups);
     }
 
     // ── helpers ─────────────────────────────────────────────────────────
@@ -114,7 +123,7 @@ class AuthorizationServiceDecisionTest {
                 .grantedBy("test").active(true)
                 .conditions(conditions == null ? Map.of() : conditions)
                 .build();
-        when(assignmentRepository.findActiveAssignments(eq(SUBJECT), any()))
+        when(assignmentRepository.findActiveAssignmentsForSubjects(any(), any()))
                 .thenReturn(List.of(a));
         when(scopeClosureRepository.scopeContains(ORG_SCOPE, PROJECT_SCOPE)).thenReturn(true);
         when(rolePermissionRepository.findPermissionKeysByRoleIds(Set.of(ROLE)))
@@ -125,7 +134,7 @@ class AuthorizationServiceDecisionTest {
         DenyRule rule = DenyRule.builder()
                 .id(UUID.randomUUID()).subjectId(SUBJECT).permissionKey(permissionKey)
                 .scopeId(scopeId).reason("test").createdBy("test").active(true).build();
-        when(denyRuleRepository.findAllActiveDenyRulesForSubject(eq(SUBJECT), any()))
+        when(denyRuleRepository.findAllActiveDenyRulesForSubjects(any(), any()))
                 .thenReturn(List.of(rule));
     }
 
@@ -326,7 +335,7 @@ class AuthorizationServiceDecisionTest {
 
     @Test
     void requiredAllowModeDeniesWhenNoAllowPolicyMatches() {
-        service = buildService("required-allow");
+        service = buildService("required-allow", false, false);
         grantRole(null, PERM);
         policy("ALLOW", PERM, Map.of("field", "subject", "op", "eq", "value", "someone-else"));
         AuthorizationResponse r = service.authorize(request(PERM, PROJECT_SCOPE));
@@ -336,7 +345,7 @@ class AuthorizationServiceDecisionTest {
 
     @Test
     void requiredAllowModeAllowsWhenAllowPolicyMatches() {
-        service = buildService("required-allow");
+        service = buildService("required-allow", false, false);
         grantRole(null, PERM);
         policy("ALLOW", PERM, Map.of("field", "subject", "op", "eq", "value", SUBJECT));
         AuthorizationResponse r = service.authorize(request(PERM, PROJECT_SCOPE));
@@ -357,11 +366,77 @@ class AuthorizationServiceDecisionTest {
         assertTrue(r.getAuthorized()); // would-deny recorded in audit, decision unaffected
     }
 
+    // ── resource grants & groups ────────────────────────────────────────
+
+    private void grantResource(String permissionKey) {
+        ResourceGrant grant = ResourceGrant.builder()
+                .id(UUID.randomUUID()).subjectId(SUBJECT)
+                .permissionKey(permissionKey).resourceType("invoice").resourceId("INV-1")
+                .grantedBy("test").build();
+        when(resourceGrantRepository.findActiveForResource(any(), eq("invoice"), eq("INV-1"), any()))
+                .thenReturn(List.of(grant));
+    }
+
+    @Test
+    void resourceGrantAllowsWithoutAnyRole() {
+        service = buildService("deny-only", true, false);
+        grantResource(PERM);
+        AuthorizationResponse r = service.authorize(request(PERM, PROJECT_SCOPE));
+        assertTrue(r.getAuthorized());
+        assertEquals("ALLOW: Permission granted via resource grant", r.getReason());
+    }
+
+    @Test
+    void resourceGrantRescuesFailedRoleConditions() {
+        service = buildService("deny-only", true, false);
+        grantRole(Map.of("require_mfa", true), PERM); // role path fails without MFA
+        grantResource(PERM);
+        AuthorizationResponse r = service.authorize(request(PERM, PROJECT_SCOPE));
+        assertTrue(r.getAuthorized()); // grant path independent of role conditions
+    }
+
+    @Test
+    void denyRuleStillBeatsResourceGrant() {
+        service = buildService("deny-only", true, false);
+        grantResource(PERM);
+        denyRule(PERM, null);
+        AuthorizationResponse r = service.authorize(request(PERM, PROJECT_SCOPE));
+        assertFalse(r.getAuthorized());
+    }
+
+    @Test
+    void actionWildcardGrantMatchesOnlyItsResourcePath() {
+        service = buildService("deny-only", true, false);
+        grantResource("invoice.invoice.*");
+        assertTrue(service.authorize(request(PERM, PROJECT_SCOPE)).getAuthorized());
+        assertFalse(service.authorize(request("invoice.other.approve", PROJECT_SCOPE)).getAuthorized());
+    }
+
+    @Test
+    void groupAssignmentGrantsPermissionToMember() {
+        service = buildService("deny-only", false, true);
+        UUID groupId = UUID.randomUUID();
+        when(subjectGroupMemberRepository.findActiveGroupIds(SUBJECT)).thenReturn(List.of(groupId));
+
+        Assignment groupAssignment = Assignment.builder()
+                .id(UUID.randomUUID()).subjectId(groupId.toString()).subjectType("GROUP")
+                .roleId(ROLE).scopeId(ORG_SCOPE).grantedBy("test").active(true)
+                .conditions(Map.of()).build();
+        when(assignmentRepository.findActiveAssignmentsForSubjects(any(), any()))
+                .thenReturn(List.of(groupAssignment));
+        when(scopeClosureRepository.scopeContains(ORG_SCOPE, PROJECT_SCOPE)).thenReturn(true);
+        when(rolePermissionRepository.findPermissionKeysByRoleIds(Set.of(ROLE)))
+                .thenReturn(Set.of(PERM));
+
+        AuthorizationResponse r = service.authorize(request(PERM, PROJECT_SCOPE));
+        assertTrue(r.getAuthorized());
+    }
+
     // ── failure modes ───────────────────────────────────────────────────
 
     @Test
     void infrastructureFailureThrows503NotDeny() {
-        when(denyRuleRepository.findAllActiveDenyRulesForSubject(anyString(), any()))
+        when(denyRuleRepository.findAllActiveDenyRulesForSubjects(any(), any()))
                 .thenThrow(new RuntimeException("db down"));
         assertThrows(AuthorizationServiceException.class,
                 () -> service.authorize(request(PERM, PROJECT_SCOPE)));

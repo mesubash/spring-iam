@@ -6,6 +6,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,4 +28,11 @@ public interface DenyRuleRepository extends JpaRepository<DenyRule, UUID> {
             "AND (dr.expiresAt IS NULL OR dr.expiresAt > :now)")
     List<DenyRule> findAllActiveDenyRulesForSubject(@Param("subjectId") String subjectId,
                                                     @Param("now") Instant now);
+
+    @Query("SELECT dr FROM DenyRule dr " +
+            "WHERE dr.subjectId IN :subjectIds " +
+            "AND dr.active = true " +
+            "AND (dr.expiresAt IS NULL OR dr.expiresAt > :now)")
+    List<DenyRule> findAllActiveDenyRulesForSubjects(@Param("subjectIds") Collection<String> subjectIds,
+                                                     @Param("now") Instant now);
 }

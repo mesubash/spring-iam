@@ -130,6 +130,12 @@ iam:
     max-requests: 10        # per IP per endpoint per window
     window-seconds: 60      # sliding window
 
+  features:
+    resource-grants: false    # per-instance ReBAC grants
+    groups: false             # subject groups
+    service-registry: false   # per-service API keys + manifest sync
+    oauth2: false             # informational — social login wiring
+
   authn:
     session:
       max-per-identity: 10        # LRU eviction beyond this

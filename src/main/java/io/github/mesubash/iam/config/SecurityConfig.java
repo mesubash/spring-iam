@@ -171,12 +171,21 @@ public class SecurityConfig {
                                 "/api/v1/audit/**"
                         ).hasAnyRole("SuperAdmin", "CountryAdmin", "AccessAdmin", "SecurityAdmin", "AuditViewer")
 
-                        // Roles, assignments, deny-rules: authenticated — service layer enforces
-                        // scope containment and permission ceiling via DelegatedManagementGuard
+                        // Manifest sync: the service's own API key or an admin token
+                        .requestMatchers(
+                                "/api/v1/services/*/permissions"
+                        ).hasAnyRole("INTERNAL", "SuperAdmin")
+
+                        // Roles, assignments, deny-rules, grants, groups, services, meta:
+                        // authenticated — service layer / method security enforce the rest
                         .requestMatchers(
                                 "/api/v1/roles/**",
                                 "/api/v1/assignments/**",
-                                "/api/v1/deny-rules/**"
+                                "/api/v1/deny-rules/**",
+                                "/api/v1/resource-grants/**",
+                                "/api/v1/groups/**",
+                                "/api/v1/services/**",
+                                "/api/v1/meta/**"
                         ).authenticated()
 
                         // Everything else requires authentication

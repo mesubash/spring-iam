@@ -6,6 +6,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,6 +20,14 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
             "AND (a.expiresAt IS NULL OR a.expiresAt > :now)")
     List<Assignment> findActiveAssignments(@Param("subjectId") String subjectId,
                                            @Param("now") Instant now);
+
+    // Subject plus its group ids — one query covers direct and group grants
+    @Query("SELECT a FROM Assignment a " +
+            "WHERE a.subjectId IN :subjectIds " +
+            "AND a.active = true " +
+            "AND (a.expiresAt IS NULL OR a.expiresAt > :now)")
+    List<Assignment> findActiveAssignmentsForSubjects(@Param("subjectIds") Collection<String> subjectIds,
+                                                      @Param("now") Instant now);
 
     @Query("SELECT a FROM Assignment a " +
             "WHERE a.subjectId = :subjectId " +

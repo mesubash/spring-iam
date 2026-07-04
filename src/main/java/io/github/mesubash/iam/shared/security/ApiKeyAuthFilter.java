@@ -1,9 +1,12 @@
 package io.github.mesubash.iam.shared.security;
 
+import io.github.mesubash.iam.authz.repository.ServiceClientRepository;
+import io.github.mesubash.iam.config.FeatureFlags;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -20,10 +23,14 @@ import java.util.List;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
     private static final String API_KEY_HEADER = "X-Internal-Api-Key";
     private static final String API_KEY_PREFIX = "ApiKey ";
+
+    private final ServiceClientRepository serviceClientRepository;
+    private final FeatureFlags featureFlags;
 
     @Value("${iam.security.internal-api-key:}")
     private String internalApiKey;
@@ -34,7 +41,8 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-        if (internalApiKey == null || internalApiKey.isBlank() || isExcluded(request)) {
+        boolean singleKeyConfigured = internalApiKey != null && !internalApiKey.isBlank();
+        if ((!singleKeyConfigured && !featureFlags.isServiceRegistry()) || isExcluded(request)) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -58,8 +66,22 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        // API key provided but invalid — reject (timing-safe comparison)
-        if (!timingSafeEquals(internalApiKey, providedKey)) {
+        String principal = null;
+        if (singleKeyConfigured && timingSafeEquals(internalApiKey, providedKey)) {
+            principal = "internal-client";
+        } else if (featureFlags.isServiceRegistry()) {
+            // Per-service keys: only the SHA-256 is stored, lookup is by hash
+            principal = serviceClientRepository
+                    .findByApiKeyHashAndActiveTrue(sha256(providedKey))
+                    .map(service -> {
+                        service.setLastSeenAt(java.time.Instant.now());
+                        serviceClientRepository.save(service);
+                        return "service:" + service.getName();
+                    })
+                    .orElse(null);
+        }
+
+        if (principal == null) {
             log.warn("Invalid API key attempt from IP: {}", request.getRemoteAddr());
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType("application/json");
@@ -69,12 +91,21 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
         UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(
-                        "internal-client",
+                        principal,
                         null,
                         List.of(new SimpleGrantedAuthority("ROLE_INTERNAL")));
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         filterChain.doFilter(request, response);
+    }
+
+    private static String sha256(String value) {
+        try {
+            return java.util.HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
     }
 
     /**
