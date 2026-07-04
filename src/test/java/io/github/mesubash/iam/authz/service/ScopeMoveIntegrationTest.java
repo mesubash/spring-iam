@@ -18,10 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * (closure rebuild, ltree path rewrite, GUC-gated trigger).
  * Requires docker compose postgres + redis, like the context test.
  */
-@SpringBootTest(properties = {
-        "spring.security.oauth2.client.registration.google.client-id=test-client",
-        "spring.security.oauth2.client.registration.google.client-secret=test-secret"
-})
+@SpringBootTest
 class ScopeMoveIntegrationTest {
 
     @Autowired private ScopeService scopeService;

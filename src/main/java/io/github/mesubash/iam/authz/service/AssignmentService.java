@@ -10,9 +10,15 @@ import io.github.mesubash.iam.authz.repository.ScopeClosureRepository;
 import io.github.mesubash.iam.authz.repository.ScopeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 
@@ -21,12 +27,18 @@ import java.util.*;
 @RequiredArgsConstructor
 public class AssignmentService {
 
+    private static final HttpClient HTTP = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(3)).build();
+
     private final AssignmentRepository assignmentRepository;
     private final RoleRepository roleRepository;
     private final ScopeRepository scopeRepository;
     private final ScopeClosureRepository scopeClosureRepository;
     private final CacheService cacheService;
     private final DelegatedManagementGuard delegationGuard;
+
+    @Value("${iam.break-glass.webhook-url:}")
+    private String breakGlassWebhook;
 
     @Transactional(readOnly = true)
     public List<Assignment> getAll() {
@@ -136,7 +148,38 @@ public class AssignmentService {
 
         log.warn("BREAK-GLASS granted: subject={}, role={}, scope={}, minutes={}, reason='{}', ref={}",
                 subjectId, role.getName(), scopeId, capped, reason, referenceId);
+        fireBreakGlassWebhook(subjectId, role.getName(), capped, reason, referenceId);
         return assignment;
+    }
+
+    // Fire-and-forget alert so break-glass grants are noticed immediately.
+    private void fireBreakGlassWebhook(String subjectId, String roleName, int minutes,
+                                       String reason, String referenceId) {
+        if (breakGlassWebhook == null || breakGlassWebhook.isBlank()) {
+            return;
+        }
+        String json = String.format(
+                "{\"event\":\"break_glass\",\"subjectId\":\"%s\",\"role\":\"%s\",\"minutes\":%d,"
+                        + "\"reason\":%s,\"referenceId\":%s}",
+                subjectId, roleName, minutes, jsonString(reason), jsonString(referenceId));
+        try {
+            HttpRequest req = HttpRequest.newBuilder(URI.create(breakGlassWebhook))
+                    .timeout(Duration.ofSeconds(5))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(json))
+                    .build();
+            HTTP.sendAsync(req, HttpResponse.BodyHandlers.discarding())
+                    .exceptionally(ex -> {
+                        log.warn("Break-glass webhook failed: {}", ex.getMessage());
+                        return null;
+                    });
+        } catch (Exception e) {
+            log.warn("Break-glass webhook dispatch failed: {}", e.getMessage());
+        }
+    }
+
+    private static String jsonString(String value) {
+        return value == null ? "null" : "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 
     @Transactional

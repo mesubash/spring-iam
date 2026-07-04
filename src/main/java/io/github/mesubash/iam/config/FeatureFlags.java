@@ -21,14 +21,16 @@ public class FeatureFlags {
     private boolean oauth2 = false;           // social login (informational for now)
     private boolean breakGlass = false;       // emergency time-boxed elevation
     private boolean introspection = false;    // token introspection endpoint
+    private boolean revocationFeed = false;   // GET /token/revocations for polling consumers
 
     public Map<String, Boolean> asMap() {
-        return Map.of(
-                "resource-grants", resourceGrants,
-                "groups", groups,
-                "service-registry", serviceRegistry,
-                "oauth2", oauth2,
-                "break-glass", breakGlass,
-                "introspection", introspection);
+        return Map.ofEntries(
+                Map.entry("resource-grants", resourceGrants),
+                Map.entry("groups", groups),
+                Map.entry("service-registry", serviceRegistry),
+                Map.entry("oauth2", oauth2),
+                Map.entry("break-glass", breakGlass),
+                Map.entry("introspection", introspection),
+                Map.entry("revocation-feed", revocationFeed));
     }
 }

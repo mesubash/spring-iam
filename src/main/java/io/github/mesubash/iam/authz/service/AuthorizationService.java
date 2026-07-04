@@ -1212,6 +1212,7 @@ public class AuthorizationService {
                 .auditId(auditId)
                 .timestamp(Instant.now())
                 .latencyMs(latencyMs)
+                .policyVersion(cacheService.currentVersionToken())
                 .build();
     }
 

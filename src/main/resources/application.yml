@@ -129,14 +129,23 @@ iam:
   rate-limit:
     max-requests: 10        # per IP per endpoint per window
     window-seconds: 60      # sliding window
+    fail-mode: open         # open (availability) | closed (reject when Redis down)
 
   features:
     resource-grants: false    # per-instance ReBAC grants
     groups: false             # subject groups
     service-registry: false   # per-service API keys + manifest sync
-    oauth2: false             # informational — social login wiring
+    oauth2: false             # social login (gates all OAuth beans + endpoints)
     break-glass: false        # emergency time-boxed elevation
     introspection: false      # POST /api/v1/token/introspect
+    revocation-feed: false    # GET /api/v1/token/revocations
+
+  integrity:
+    fail-on-error: false      # refuse startup on broken invariants
+    reconciliation-cron: "-"  # nightly closure/ltree drift check ("-" disables)
+
+  break-glass:
+    webhook-url: ${IAM_BREAK_GLASS_WEBHOOK:}   # optional alert POST on grant
 
   authn:
     session:
@@ -165,6 +174,7 @@ app:
     secret: ${APP_JWT_SECRET:changeThisToALongRandomSecretKeyForProduction}
     expiration: 900000                   # access token, 15 minutes
     refresh-expiration: 604800000        # session lifetime, 7 days
+    claims-mode: ${APP_JWT_CLAIMS_MODE:roles}   # minimal | roles | permissions
     refresh-token-cookie-name: __Host-Refresh
     refresh-token-expiration-days: 7
     encrypt-cookies: ${APP_JWT_ENCRYPT_COOKIES:true}
@@ -187,18 +197,12 @@ cors:
   allow-credentials: true
 
 # OAuth2 Configuration
-spring.security.oauth2.client:
-  registration:
-    google:
-      client-id: ${GOOGLE_CLIENT_ID:}
-      client-secret: ${GOOGLE_CLIENT_SECRET:}
-      scope: email,profile
-      redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
-  provider:
-    google:
-      authorization-uri: https://accounts.google.com/o/oauth2/v2/auth
-      token-uri: https://oauth2.googleapis.com/token
-      user-info-uri: https://www.googleapis.com/oauth2/v3/userinfo
+# No client registration is defined by default so the app boots with
+# iam.features.oauth2=false and no OAuth credentials. To enable social login,
+# set iam.features.oauth2=true AND provide a registration, e.g. via env:
+#   SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_ID=...
+#   SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_SECRET=...
+# Google's provider endpoints are built in; only client-id/secret are needed.
 
 # Logging Configuration
 logging:

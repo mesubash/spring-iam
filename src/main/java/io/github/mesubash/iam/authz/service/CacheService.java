@@ -164,6 +164,11 @@ public class CacheService {
         log.warn("Cleared ALL authorization caches (epoch bump)");
     }
 
+    /** Combined monotonic token across the global version counters. */
+    public long currentVersionToken() {
+        return version(VER_EPOCH) + version(VER_ROLE) + version(VER_SCOPE) + version(VER_POLICY);
+    }
+
     public CacheStats getCacheStats() {
         return CacheStats.builder()
                 .epoch(version(VER_EPOCH))

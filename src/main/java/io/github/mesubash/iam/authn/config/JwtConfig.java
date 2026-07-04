@@ -11,4 +11,8 @@ public class JwtConfig {
     private String secret;
     private long expiration;
     private long refreshExpiration;
+
+    // How much authorization data rides in the access token:
+    // minimal | roles (default) | permissions
+    private String claimsMode = "roles";
 }

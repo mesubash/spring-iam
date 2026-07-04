@@ -30,22 +30,44 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class JwtTokenProvider {
 
+    // ROOT scope — permissions-mode claims are computed here
+    private static final UUID ROOT_SCOPE = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
     private final JwtConfig jwtConfig;
     private final SigningKeyService signingKeyService;
+    // Only used in permissions mode; optional so unit contexts stay light
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private io.github.mesubash.iam.shared.service.AuthzQueryService authzQueryService;
 
     public String generateAccessToken(UserPrincipal principal, UUID sessionId) {
         SigningKeyService.ActiveKey key = signingKeyService.activeKey();
         Date now = new Date();
+        String mode = jwtConfig.getClaimsMode() != null ? jwtConfig.getClaimsMode() : "roles";
 
-        return Jwts.builder()
+        var builder = Jwts.builder()
                 .header().keyId(key.kid()).and()
                 .subject(principal.getId().toString())
                 .id(UUID.randomUUID().toString())                     // jti — blacklist handle
                 .claim("sid", sessionId != null ? sessionId.toString() : null)
                 .claim("typ", "access")
                 .claim("email_verified", principal.getIdentity() != null
-                        && Boolean.TRUE.equals(principal.getIdentity().getEmailVerified()))
-                .claim("roles", principal.getRoles())
+                        && Boolean.TRUE.equals(principal.getIdentity().getEmailVerified()));
+
+        if (!"minimal".equalsIgnoreCase(mode)) {
+            builder.claim("roles", principal.getRoles());
+        }
+        if ("permissions".equalsIgnoreCase(mode) && authzQueryService != null) {
+            try {
+                builder.claim("perms", authzQueryService.getEffectivePermissions(
+                                principal.getId(), ROOT_SCOPE))
+                        .claim("scope", ROOT_SCOPE.toString());
+            } catch (Exception e) {
+                log.warn("permissions-mode claim computation failed for {}: {}",
+                        principal.getId(), e.getMessage());
+            }
+        }
+
+        return builder
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + jwtConfig.getExpiration()))
                 .signWith(key.privateKey(), Jwts.SIG.RS256)

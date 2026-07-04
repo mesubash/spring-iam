@@ -12,6 +12,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,6 +32,7 @@ import java.util.UUID;
  * OAuth2 Controller for handling social login endpoints
  */
 @Slf4j
+@ConditionalOnProperty(prefix = "iam.features", name = "oauth2", havingValue = "true")
 @RestController
 @RequestMapping("/api/auth/oauth")
 @RequiredArgsConstructor

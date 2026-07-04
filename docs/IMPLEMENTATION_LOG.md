@@ -5,6 +5,14 @@
 
 ---
 
+## Phase 6 — Claims modes, OAuth gating, feed/token/webhook polish
+
+| Date | Block | What was done | Commit |
+|------|-------|---------------|--------|
+| 2026-07-04 | claims | `app.jwt.claims-mode` (minimal/roles/permissions) in JwtTokenProvider; permissions mode adds effective perms at ROOT + scope claim (optional AuthzQueryService dep) | Phase 6 commit |
+| 2026-07-04 | oauth | OAuth2 now truly flag-gated: 4 beans + OAuthController `@ConditionalOnProperty(iam.features.oauth2)`, SecurityConfig wires oauth2Login only when present, static google registration removed from yml (supply via env when enabling). App boots clean with zero OAuth props — dummy test props removed | Phase 6 commit |
+| 2026-07-04 | polish | `policyVersion` consistency token on authorize responses; revocation feed `GET /token/revocations?since=` (flag); nightly `ScopeReconciliationJob` (closure/self-row drift, cron-disabled default); break-glass fire-and-forget webhook (JDK HttpClient); rate-limiter explicit `fail-mode` (open/closed). Suite 45/45 | Phase 6 commit |
+
 ## Phase 5 — PDP extras, AuthN extras, integrity, registry
 
 | Date | Block | What was done | Commit |

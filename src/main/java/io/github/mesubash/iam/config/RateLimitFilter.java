@@ -39,6 +39,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
     @Value("${iam.rate-limit.window-seconds:60}")
     private int windowSeconds;
 
+    // open = allow when Redis is down (availability) | closed = reject (strict)
+    @Value("${iam.rate-limit.fail-mode:open}")
+    private String failMode;
+
     public RateLimitFilter(StringRedisTemplate redisTemplate) {
         this.redisTemplate = redisTemplate;
     }
@@ -79,7 +83,15 @@ public class RateLimitFilter extends OncePerRequestFilter {
             response.setHeader("X-RateLimit-Limit", String.valueOf(maxRequests));
             response.setHeader("X-RateLimit-Remaining", String.valueOf(Math.max(0, remaining)));
         } catch (RedisConnectionFailureException ex) {
-            log.warn("Redis unavailable for rate limiting — allowing request");
+            if ("closed".equalsIgnoreCase(failMode)) {
+                log.error("Redis unavailable for rate limiting — rejecting (fail-mode=closed)");
+                response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+                response.setContentType("application/json");
+                response.getWriter().write(
+                        "{\"success\":false,\"message\":\"Rate limiter unavailable. Please retry.\"}");
+                return;
+            }
+            log.error("Redis unavailable for rate limiting — allowing request (fail-mode=open)");
         }
 
         filterChain.doFilter(request, response);

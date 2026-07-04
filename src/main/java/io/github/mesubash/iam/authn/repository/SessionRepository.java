@@ -17,4 +17,7 @@ public interface SessionRepository extends JpaRepository<Session, UUID> {
     @Query("SELECT s FROM Session s WHERE s.identityId = :identityId AND s.revokedAt IS NULL " +
            "AND s.expiresAt > :now ORDER BY s.lastUsedAt DESC")
     List<Session> findActiveByIdentity(@Param("identityId") UUID identityId, @Param("now") Instant now);
+
+    @Query("SELECT s FROM Session s WHERE s.revokedAt > :since ORDER BY s.revokedAt")
+    List<Session> findRevokedSince(@Param("since") Instant since);
 }

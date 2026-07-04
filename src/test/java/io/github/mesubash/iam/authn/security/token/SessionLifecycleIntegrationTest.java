@@ -22,10 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * rotation, idempotent retry inside the grace window, reuse detection
  * outside it, and session revocation.
  */
-@SpringBootTest(properties = {
-        "spring.security.oauth2.client.registration.google.client-id=test-client",
-        "spring.security.oauth2.client.registration.google.client-secret=test-secret"
-})
+@SpringBootTest
 class SessionLifecycleIntegrationTest {
 
     @Autowired private SessionService sessionService;

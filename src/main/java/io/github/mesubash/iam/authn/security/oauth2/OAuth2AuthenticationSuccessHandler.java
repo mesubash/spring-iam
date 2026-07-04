@@ -28,6 +28,8 @@ import java.util.Base64;
  * redirects with only that code. The frontend swaps the code for tokens at
  * POST /api/auth/oauth/exchange.
  */
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+@ConditionalOnProperty(prefix = "iam.features", name = "oauth2", havingValue = "true")
 @Component
 @Slf4j
 @RequiredArgsConstructor

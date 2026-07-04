@@ -19,5 +19,6 @@ public class AuthorizationResponse {
     private List<String> effectivePermissions;
     private UUID auditId;
     private Instant timestamp;
-    private Long latencyMs;  // For monitoring
+    private Long latencyMs;      // For monitoring
+    private Long policyVersion;  // Consistency token — monotonic across cache invalidations
 }

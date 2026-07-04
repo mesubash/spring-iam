@@ -50,10 +50,17 @@ public class SecurityConfig {
     private final CustomUserDetailsService customUserDetailsService;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final CustomOAuth2UserService customOAuth2UserService;
-    private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
-    private final OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler;
-    private final HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository;
+
+
+    // OAuth2 — present only when iam.features.oauth2=true
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private CustomOAuth2UserService customOAuth2UserService;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository;
 
     // AuthZ components
     private final ApiKeyAuthFilter apiKeyAuthFilter;
@@ -207,18 +214,22 @@ public class SecurityConfig {
                         // Everything else requires authentication
                         .anyRequest().authenticated()
                 )
-                // OAuth2 login config
-                .oauth2Login(oauth2 -> oauth2
-                        .authorizationEndpoint(authorization -> authorization
-                                .authorizationRequestRepository(authorizationRequestRepository)
-                        )
-                        .loginPage("/api/auth/oauth/login")
-                        .userInfoEndpoint(userInfo -> userInfo
-                                .userService(customOAuth2UserService)
-                        )
-                        .successHandler(oAuth2AuthenticationSuccessHandler)
-                        .failureHandler(oAuth2AuthenticationFailureHandler)
-                );
+                ;
+
+        // OAuth2 login only when the feature is enabled (beans present)
+        if (customOAuth2UserService != null) {
+            http.oauth2Login(oauth2 -> oauth2
+                    .authorizationEndpoint(authorization -> authorization
+                            .authorizationRequestRepository(authorizationRequestRepository)
+                    )
+                    .loginPage("/api/auth/oauth/login")
+                    .userInfoEndpoint(userInfo -> userInfo
+                            .userService(customOAuth2UserService)
+                    )
+                    .successHandler(oAuth2AuthenticationSuccessHandler)
+                    .failureHandler(oAuth2AuthenticationFailureHandler)
+            );
+        }
 
         http.authenticationProvider(buildAuthenticationProvider());
 

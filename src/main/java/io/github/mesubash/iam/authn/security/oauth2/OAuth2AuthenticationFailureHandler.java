@@ -16,6 +16,8 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+@ConditionalOnProperty(prefix = "iam.features", name = "oauth2", havingValue = "true")
 @Component
 @RequiredArgsConstructor
 @Slf4j

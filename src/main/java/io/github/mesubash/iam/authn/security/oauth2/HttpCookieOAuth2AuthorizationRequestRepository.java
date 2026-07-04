@@ -22,6 +22,8 @@ import java.util.stream.Stream;
  * This avoids {@code authorization_request_not_found} errors when callbacks hit a different
  * server instance or the browser drops the JSESSIONID cookie.
  */
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+@ConditionalOnProperty(prefix = "iam.features", name = "oauth2", havingValue = "true")
 @Component
 @RequiredArgsConstructor
 public class HttpCookieOAuth2AuthorizationRequestRepository
