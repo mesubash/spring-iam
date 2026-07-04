@@ -1,0 +1,15 @@
+# The Java image build (Dockerfile) must NOT pull in the frontend or build cruft.
+# The React console (web/) has its own build + deploy — see web/README.md.
+web/
+target/
+.git/
+.gitignore
+.idea/
+.vscode/
+docs/
+postman/
+logs/
+*.md
+.env
+.env.*
+!.env.example

@@ -90,6 +90,7 @@ Dev seed admin (from `V5__example_seed.sql`): `admin@example.com` /
 | [docs/AUTHN_DESIGN.md](docs/AUTHN_DESIGN.md) | Token issuer — deep design spec |
 | [docs/UI_PLAN.md](docs/UI_PLAN.md) | Admin console + frontend SDK plan |
 | [docs/FUTURE_ENHANCEMENTS.md](docs/FUTURE_ENHANCEMENTS.md) | Deferred features with trigger conditions |
+| [web/README.md](web/README.md) | `iam-console` — standalone React frontend (separate build/deploy) |
 
 ---
 

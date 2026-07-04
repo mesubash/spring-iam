@@ -12,11 +12,18 @@ One phase, three deliverables, strictly separated:
 
 | Artifact | What | Ships as | Audience |
 |---|---|---|---|
-| **Admin Console** | IAM's own management UI | static SPA inside the jar at `/admin` (optional module) | platform & tenant admins |
+| **iam-console** | one app for admins AND users | **standalone** React SPA in `web/` — own Docker image (nginx), deployed independently of the Java service | platform admins, tenant admins, end users |
 | **Frontend SDK** (`authz-sdk`) | permission-driven-UI toolkit | published TS package (framework-agnostic core + React bindings) | consumer-app developers |
 | **Sample pair** | reference consumer app: `sample-service` + `sample-ui` | `examples/` folder, own containers | template adopters + CI e2e |
 
 Rule of thumb: **SDK is product, console is dogfood, sample is documentation-that-runs.**
+
+**Deployment boundary (decided):** the console is a pure black-box REST consumer.
+It is **not** served from the Spring Boot jar and is **not** part of the Maven /
+Java Docker build (`.dockerignore` excludes `web/`). It builds and ships on its
+own image and talks to IAM only via `VITE_API_BASE_URL` / runtime `API_BASE_URL`.
+The root `docker-compose.yml` (Postgres + Redis + IAM) does not include it;
+`web/docker-compose.web.yml` runs the frontend alone.
 
 ---
 
@@ -34,7 +41,7 @@ Rule of thumb: **SDK is product, console is dogfood, sample is documentation-tha
 
 ### 3.1 Placement & auth
 
-- Static SPA served from the jar at `/admin` (optional Maven profile / feature flag). `dist/` is plain static output — deployments may host it elsewhere unchanged.
+- **Standalone** React app in `web/` (name `iam-console`), served by its own nginx image — NOT bundled into the jar, NOT in the Java build. Runtime API base URL via `API_BASE_URL` (nginx entrypoint writes `env-config.js`).
 - Logs in through IAM's own AuthN (`/api/auth/login`, OAuth if enabled); operates with the operator's bearer token and IAM's own `platform.*` permissions.
 - **Dogfooding contract:** the console is the first consumer of the SDK and of permission-driven rendering. Every screen and button is gated via `<Can permission="platform.…">`. If the pattern is awkward here, we fix the pattern — before adopters feel it.
 - Console discovers enabled features via `GET /api/v1/meta/features` (small new endpoint — returns active `iam.features.*` flags) and hides panels for disabled ones.
