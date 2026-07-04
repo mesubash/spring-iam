@@ -11,43 +11,53 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * One issued opaque refresh token inside a session's rotation chain.
- * Stored as SHA-256 only; the chain head has replaced_by == null.
- */
+/** One login on one device. Refresh tokens rotate inside a session. */
 @Entity
-@Table(name = "refresh_tokens")
+@Table(name = "sessions")
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor
 @Builder
-public class RefreshToken {
+public class Session {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "session_id", nullable = false)
-    private UUID sessionId;
+    @Column(name = "identity_id", nullable = false)
+    private UUID identityId;
 
-    @Column(name = "token_hash", nullable = false, unique = true, length = 64)
-    private String tokenHash;
+    @JdbcTypeCode(SqlTypes.INET)
+    @Column(name = "created_ip", columnDefinition = "inet")
+    private String createdIp;
+
+    @Column(name = "user_agent", columnDefinition = "TEXT")
+    private String userAgent;
+
+    @Column(name = "device_label", length = 100)
+    private String deviceLabel;
 
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
 
+    @Column(name = "last_used_at")
+    private Instant lastUsedAt;
+
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
-    @Column(name = "replaced_by")
-    private UUID replacedBy;
-
-    @Column(name = "replaced_at")
-    private Instant replacedAt;
-
     @Column(name = "revoked_at")
     private Instant revokedAt;
+
+    @Column(name = "revoke_reason", length = 30)
+    private String revokeReason;
+
+    public boolean isAlive() {
+        return revokedAt == null && expiresAt.isAfter(Instant.now());
+    }
 }

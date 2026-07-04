@@ -140,14 +140,28 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
         return uri != null && isAllowedRedirect(uri);
     }
 
+    // Redirects must match the configured allowlist; with no allowlist
+    // configured, only the frontend base URL's origin is accepted.
     private boolean isAllowedRedirect(String uri) {
         if (!StringUtils.hasText(uri)) {
             return false;
         }
         try {
             URI candidate = new URI(uri);
-            // Allow any absolute/custom scheme redirect URI (no domain allowlist)
-            return StringUtils.hasText(candidate.getScheme());
+            if (!StringUtils.hasText(candidate.getScheme())) {
+                return false;
+            }
+
+            List<URI> allowed = parseAllowedRedirects();
+            if (allowed.isEmpty() && StringUtils.hasText(frontendBaseUrl)) {
+                try {
+                    allowed = List.of(new URI(frontendBaseUrl));
+                } catch (URISyntaxException ignored) {
+                    return false;
+                }
+            }
+
+            return allowed.stream().anyMatch(a -> isMatch(candidate, a));
         } catch (URISyntaxException e) {
             return false;
         }

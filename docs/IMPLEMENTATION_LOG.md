@@ -5,6 +5,16 @@
 
 ---
 
+## Phase 2 — AuthN token core
+
+| Date | Block | What was done | Commit |
+|------|-------|---------------|--------|
+| 2026-07-04 | A1 | Schema (V1 rewrite): `sessions` + rotation-chain `refresh_tokens` (SHA-256 at rest) + `signing_keys` | Phase 2 commit |
+| 2026-07-04 | A2 | RS256 everywhere: SigningKeyService (bootstrap RSA-2048 keygen, AES-GCM private-key encryption when IAM_KEY_ENCRYPTION_KEY set, rotation w/ 1h verify grace), JwtTokenProvider rewritten (kid header, jti/sid/typ/email_verified/roles claims, kid-resolving parser), `GET /.well-known/jwks.json` + `POST /api/v1/keys/rotate` | Phase 2 commit |
+| 2026-07-04 | A3 | Sessions: multi-device (cap 10, LRU evict), opaque refresh + rotation + 60s retry-grace (encrypted successor cache) + reuse⇒session-death (`noRollbackFor` so revocation survives the throw), jti/sid blacklist service (fail-closed), sessions API (list/revoke device). AuthServiceImpl login/refresh/logout/logout-all rewired; dual-store blacklist + refresh-as-JWT + `validateAndRefreshToken` deleted | Phase 2 commit |
+| 2026-07-04 | A4 | OAuth: single-use 60s exchange code replaces `?token=` redirect (`POST /api/auth/oauth/exchange`), redirect allowlist enforced (empty ⇒ frontend origin only), linking matrix (auto-link only on provider-verified email). Cookie: `__Host-Refresh`, secure default true, dedicated IAM_COOKIE_KEY (legacy fallback warns) | Phase 2 commit |
+| 2026-07-04 | A5 | Session lifecycle integration tests (rotate/grace-retry/reuse/logout-all/cap) against real Postgres+Redis. Suite 37/37. **Phase 2 core complete.** Carried: NotificationPort (emails still logged), introspection + revocation-feed endpoints, claims modes config, email-change flow, OTT hashing + in-memory fallback removal in RedisTokenService, client ip/ua into password-login sessions | Phase 2 commit |
+
 ## Phase 1 — AuthZ schema & engine
 
 **Plan (blocks):**

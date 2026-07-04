@@ -60,23 +60,54 @@ CREATE INDEX idx_credentials_lookup   ON credentials(credential_type, identifier
 
 COMMENT ON TABLE credentials IS 'Login methods. PASSWORD stores bcrypt in secret_hash. OAuth types store NULL secret_hash; identifier is provider user ID.';
 
--- NOTE: restructured into sessions + rotation chains in Phase 2.
-CREATE TABLE refresh_tokens (
+-- One login on one device = one session. Refresh tokens rotate inside a
+-- session; replaying a rotated token outside the retry grace kills the session.
+CREATE TABLE sessions (
     id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     identity_id   UUID NOT NULL REFERENCES identities(id) ON DELETE CASCADE,
-    token_hash    VARCHAR(128) NOT NULL,
-    ip_address    INET,
+    created_ip    INET,
     user_agent    TEXT,
+    device_label  VARCHAR(100),
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_used_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at    TIMESTAMPTZ NOT NULL,
     revoked_at    TIMESTAMPTZ,
     revoke_reason VARCHAR(30)
-        CHECK (revoke_reason IN ('LOGOUT', 'ROTATION', 'ADMIN', 'SECURITY', 'EXPIRED')),
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        CHECK (revoke_reason IN ('LOGOUT', 'LOGOUT_ALL', 'ADMIN', 'SECURITY',
+                                 'REUSE_DETECTED', 'EXPIRED', 'EVICTED'))
 );
 
-CREATE INDEX idx_refresh_tokens_hash     ON refresh_tokens(token_hash)  WHERE revoked_at IS NULL;
-CREATE INDEX idx_refresh_tokens_identity ON refresh_tokens(identity_id) WHERE revoked_at IS NULL;
-CREATE INDEX idx_refresh_tokens_expires  ON refresh_tokens(expires_at);
+CREATE INDEX idx_sessions_identity ON sessions(identity_id) WHERE revoked_at IS NULL;
+
+-- Rotation chain: one row per issued token, head has replaced_by IS NULL.
+-- Opaque tokens, stored as SHA-256 only.
+CREATE TABLE refresh_tokens (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    session_id  UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    token_hash  VARCHAR(64) NOT NULL UNIQUE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at  TIMESTAMPTZ NOT NULL,
+    replaced_by UUID REFERENCES refresh_tokens(id),
+    replaced_at TIMESTAMPTZ,
+    revoked_at  TIMESTAMPTZ
+);
+
+CREATE INDEX idx_rt_session ON refresh_tokens(session_id);
+
+-- Asymmetric signing keys. One ACTIVE key signs; ROTATED keys stay in JWKS
+-- until not_after so in-flight tokens verify; REVOKED = removed immediately.
+CREATE TABLE signing_keys (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    kid         VARCHAR(64) NOT NULL UNIQUE,
+    algorithm   VARCHAR(10) NOT NULL DEFAULT 'RS256' CHECK (algorithm IN ('RS256')),
+    public_key  TEXT NOT NULL,
+    private_key TEXT NOT NULL,
+    status      VARCHAR(20) NOT NULL DEFAULT 'ACTIVE'
+        CHECK (status IN ('ACTIVE', 'ROTATED', 'REVOKED')),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    rotated_at  TIMESTAMPTZ,
+    not_after   TIMESTAMPTZ
+);
 
 CREATE TABLE security_events (
     id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

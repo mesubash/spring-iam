@@ -63,22 +63,27 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         if (identityOptional.isPresent()) {
             identity = identityOptional.get();
 
-            // Check if OAuth credential already exists
             Optional<Credential> existingCredential = credentialRepository
                     .findByIdentityIdAndCredentialType(identity.getId(), credentialType);
 
             if (existingCredential.isEmpty()) {
-                // Link new OAuth provider to existing identity
+                // Auto-link only when the provider asserts the email as verified —
+                // otherwise an attacker registering the victim's email at a lax
+                // provider would inherit the victim's identity.
+                if (!oAuth2UserInfo.isEmailVerified()) {
+                    throw new OAuth2AuthenticationException(
+                            "account_exists: sign in with your password, then link this provider");
+                }
                 Credential credential = Credential.builder()
                         .identity(identity)
                         .credentialType(credentialType)
                         .identifier(oAuth2UserInfo.getId())
                         .build();
                 credentialRepository.save(credential);
+                log.info("Linked {} credential to identity {}", credentialType, identity.getId());
             }
 
-            // Mark email as verified via OAuth
-            if (!Boolean.TRUE.equals(identity.getEmailVerified())) {
+            if (!Boolean.TRUE.equals(identity.getEmailVerified()) && oAuth2UserInfo.isEmailVerified()) {
                 identity.setEmailVerified(true);
                 identityRepository.save(identity);
             }
@@ -95,7 +100,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
     private Identity registerNewOAuthUser(CredentialType credentialType, OAuth2UserInfo oAuth2UserInfo) {
         Identity identity = Identity.builder()
                 .primaryEmail(oAuth2UserInfo.getEmail())
-                .emailVerified(true)
+                .emailVerified(oAuth2UserInfo.isEmailVerified())
                 .accountStatus(AccountStatus.ACTIVE)
                 .build();
         identity = identityRepository.save(identity);

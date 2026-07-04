@@ -1,7 +1,8 @@
 package io.github.mesubash.iam.authn.security;
 
-import io.github.mesubash.iam.authn.security.token.TokenService;
+import io.github.mesubash.iam.authn.security.token.TokenBlacklistService;
 import io.github.mesubash.iam.shared.exception.InvalidTokenException;
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,7 +28,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final CustomUserDetailsService customUserDetailsService;
-    private final TokenService tokenService;
+    private final TokenBlacklistService tokenBlacklistService;
 
     @Override
     protected void doFilterInternal(
@@ -46,16 +47,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             if (StringUtils.hasText(jwt)) {
                 try {
-                    if (jwtTokenProvider.validateToken(jwt)) {
-                        if (tokenService.isTokenBlacklisted(jwt)) {
-                            log.warn("Rejected blacklisted token for path: {}", request.getRequestURI());
-                            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token has been revoked");
-                            return;
-                        }
+                    Claims claims = jwtTokenProvider.parseToken(jwt);
 
-                        String userIdStr = jwtTokenProvider.getUserIdFromToken(jwt);
-                        UUID userId = UUID.fromString(userIdStr);
-
+                    if (!"access".equals(claims.get("typ", String.class))) {
+                        log.debug("Rejected non-access token for path: {}", request.getRequestURI());
+                    } else if (tokenBlacklistService.isBlacklisted(
+                            claims.getId(), jwtTokenProvider.getSid(claims))) {
+                        log.warn("Rejected revoked token for path: {}", request.getRequestURI());
+                        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token has been revoked");
+                        return;
+                    } else {
+                        UUID userId = UUID.fromString(claims.getSubject());
                         UserDetails userDetails = customUserDetailsService.loadUserById(userId);
 
                         UsernamePasswordAuthenticationToken authentication =
@@ -95,6 +97,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                path.startsWith("/api/auth/resend-verification") ||
                path.equals("/") ||
                path.equals("/health") ||
+               path.startsWith("/.well-known/") ||
                path.startsWith("/actuator") ||
                path.endsWith(".html") ||
                path.endsWith(".css") ||

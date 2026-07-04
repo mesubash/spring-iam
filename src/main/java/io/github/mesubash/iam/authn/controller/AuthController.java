@@ -1,7 +1,6 @@
 package io.github.mesubash.iam.authn.controller;
 
 import io.github.mesubash.iam.authn.dto.*;
-import io.github.mesubash.iam.authn.security.JwtTokenProvider;
 import io.github.mesubash.iam.authn.security.TokenEncryptionUtil;
 import io.github.mesubash.iam.authn.service.AuthService;
 import io.github.mesubash.iam.shared.dto.ApiResponse;
@@ -37,15 +36,14 @@ public class AuthController {
 
     private final AuthService authService;
     private final TokenEncryptionUtil tokenEncryptionUtil;
-    private final JwtTokenProvider jwtTokenProvider;
 
-    @Value("${app.jwt.refresh-token-cookie-name:__Host-Session-Id}")
+    @Value("${app.jwt.refresh-token-cookie-name:__Host-Refresh}")
     private String refreshTokenCookieName;
 
     @Value("${app.jwt.refresh-token-expiration-days:7}")
     private int refreshTokenExpirationDays;
 
-    @Value("${app.cookie.secure:false}")
+    @Value("${app.cookie.secure:true}")
     private boolean secureCookie;
 
     @Value("${app.cookie.http-only:true}")
@@ -103,17 +101,30 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("Token refreshed successfully", responseBody));
     }
 
+    @PostMapping("/oauth/exchange")
+    @Operation(summary = "Exchange OAuth code",
+            description = "Swap the single-use code from the OAuth redirect for tokens")
+    public ResponseEntity<ApiResponse<JwtResponse>> exchangeOAuthCode(
+            @RequestBody java.util.Map<String, String> body,
+            HttpServletResponse response) {
+        JwtResponse jwtResponse = authService.exchangeOAuthCode(body.get("code"));
+
+        setRefreshTokenCookie(response, jwtResponse.getRefreshToken());
+        JwtResponse responseBody = new JwtResponse(
+                jwtResponse.getAccessToken(), jwtResponse.getExpiresIn(), jwtResponse.getIdentity());
+
+        return ResponseEntity.ok(ApiResponse.success("Login successful", responseBody));
+    }
+
     @PostMapping("/logout")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "User logout", description = "Logout user and invalidate tokens")
     public ResponseEntity<ApiResponse<SuccessResponse>> logout(
             @RequestHeader("Authorization") String authHeader,
-            HttpServletRequest request,
             HttpServletResponse response) {
         String accessToken = authHeader.replace("Bearer ", "");
-        String refreshToken = getRefreshTokenFromCookieIfPresent(request);
 
-        authService.logout(accessToken, refreshToken);
+        authService.logout(accessToken);
 
         clearRefreshTokenCookie(response);
 
@@ -237,14 +248,12 @@ public class AuthController {
                 throw new UnauthorizedException("Refresh token not found in cookie");
             }
 
+            // Refresh tokens are opaque — validity is decided by SessionService
             for (String cv : candidateCookies) {
                 try {
-                    String token = encryptCookies ? tokenEncryptionUtil.decrypt(cv) : cv;
-                    if (jwtTokenProvider.validateToken(token)) {
-                        return token;
-                    }
+                    return encryptCookies ? tokenEncryptionUtil.decrypt(cv) : cv;
                 } catch (Exception e) {
-                    log.debug("Failed to decrypt/validate cookie value: {}", e.getMessage());
+                    log.debug("Failed to decrypt cookie value: {}", e.getMessage());
                 }
             }
 
@@ -270,20 +279,4 @@ public class AuthController {
         response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, builder.build().toString());
     }
 
-    private String getRefreshTokenFromCookieIfPresent(HttpServletRequest request) {
-        if (request.getCookies() == null) {
-            return null;
-        }
-        String cv = Arrays.stream(request.getCookies())
-                .filter(cookie -> refreshTokenCookieName.equals(cookie.getName()))
-                .map(Cookie::getValue)
-                .findFirst()
-                .orElse(null);
-
-        if (cv == null) {
-            return null;
-        }
-
-        return encryptCookies ? tokenEncryptionUtil.decrypt(cv) : cv;
-    }
 }

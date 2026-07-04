@@ -14,11 +14,15 @@ import io.github.mesubash.iam.authn.entity.enums.TokenType;
 import io.github.mesubash.iam.authn.repository.CredentialRepository;
 import io.github.mesubash.iam.authn.repository.IdentityRepository;
 import io.github.mesubash.iam.authn.security.JwtTokenProvider;
+import io.github.mesubash.iam.authn.security.TokenEncryptionUtil;
 import io.github.mesubash.iam.authn.security.UserPrincipal;
+import io.github.mesubash.iam.authn.security.oauth2.OAuth2AuthenticationSuccessHandler;
+import io.github.mesubash.iam.authn.security.token.SessionService;
+import io.github.mesubash.iam.authn.security.token.TokenBlacklistService;
 import io.github.mesubash.iam.authn.security.token.TokenService;
 import io.github.mesubash.iam.authn.service.AuthService;
-import io.github.mesubash.iam.authn.service.RefreshTokenBlacklistService;
 import io.github.mesubash.iam.authn.service.SecurityEventService;
+import io.jsonwebtoken.Claims;
 import io.github.mesubash.iam.shared.dto.RoleClaimsDto;
 import io.github.mesubash.iam.shared.exception.*;
 import io.github.mesubash.iam.shared.service.AuthzQueryService;
@@ -52,7 +56,10 @@ public class AuthServiceImpl implements AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
     private final TokenService tokenService;
-    private final RefreshTokenBlacklistService refreshTokenBlacklistService;
+    private final SessionService sessionService;
+    private final TokenBlacklistService tokenBlacklistService;
+    private final TokenEncryptionUtil tokenEncryptionUtil;
+    private final org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
     private final JwtConfig jwtConfig;
     private final AuthzQueryService authzQueryService;
     private final SecurityEventService securityEventService;
@@ -129,18 +136,17 @@ public class AuthServiceImpl implements AuthService {
         identity.setAccountLockedUntil(null);
         identityRepository.save(identity);
 
-        String accessToken = jwtTokenProvider.generateToken(authentication);
-        String refreshToken = jwtTokenProvider.generateRefreshToken(authentication, false);
+        // One session per device — other sessions stay alive
+        SessionService.IssuedRefresh issued = sessionService.createSession(
+                identity.getId(), null, null);
+        String accessToken = jwtTokenProvider.generateAccessToken(
+                userPrincipal, issued.session().getId());
         long expiresIn = jwtConfig.getExpiration() / 1000;
-
-        String userId = identity.getId().toString();
-        tokenService.revokeAll(userId, TokenType.REFRESH);
-        tokenService.store(userId, refreshToken, TokenType.REFRESH);
 
         securityEventService.logEvent(identity, SecurityEventType.LOGIN_SUCCESS, null, null);
         log.info("User logged in successfully: {}", request.getEmail());
 
-        return new JwtResponse(accessToken, refreshToken, expiresIn, toIdentityInfo(identity));
+        return new JwtResponse(accessToken, issued.rawToken(), expiresIn, toIdentityInfo(identity));
     }
 
     @Override
@@ -149,109 +155,72 @@ public class AuthServiceImpl implements AuthService {
             throw new InvalidTokenException("Refresh token is required");
         }
 
-        if (!jwtTokenProvider.validateToken(refreshToken)) {
-            throw new InvalidTokenException("Invalid refresh token");
-        }
+        SessionService.RotationResult rotation = sessionService.rotate(refreshToken);
 
-        if (refreshTokenBlacklistService.isBlacklisted(refreshToken)) {
-            throw new TokenReuseException("Refresh token has been revoked");
-        }
-
-        String userId = jwtTokenProvider.getUserIdFromToken(refreshToken);
-
-        if (!tokenService.validate(userId, refreshToken, TokenType.REFRESH)) {
-            throw new TokenReuseException("Invalid refresh token");
-        }
-
-        Identity identity = identityRepository.findById(UUID.fromString(userId))
+        Identity identity = identityRepository.findById(rotation.session().getIdentityId())
                 .orElseThrow(() -> new UnauthorizedException("Invalid or expired refresh token"));
 
         ensureAccountActive(identity);
 
-        // Get fresh roles from AuthZ
+        // Roles come fresh from AuthZ on every refresh — revocations propagate here
         List<String> roles = getRolesForIdentity(identity.getId());
-
         UserPrincipal userPrincipal = UserPrincipal.create(identity, null, roles);
-        Authentication authentication = new UsernamePasswordAuthenticationToken(
-                userPrincipal, null, userPrincipal.getAuthorities());
 
-        String newAccessToken = jwtTokenProvider.generateToken(authentication);
-        String newRefreshToken = jwtTokenProvider.generateRefreshToken(authentication, false);
+        String newAccessToken = jwtTokenProvider.generateAccessToken(
+                userPrincipal, rotation.session().getId());
         long expiresIn = jwtConfig.getExpiration() / 1000;
 
-        tokenService.rotate(userId, refreshToken, newRefreshToken, TokenType.REFRESH);
-
-        return new JwtResponse(newAccessToken, newRefreshToken, expiresIn, toIdentityInfo(identity));
+        return new JwtResponse(newAccessToken, rotation.rawToken(), expiresIn, toIdentityInfo(identity));
     }
 
     @Override
-    @Transactional
-    public JwtResponse validateAndRefreshToken(String accessToken) {
-        if (accessToken == null || accessToken.isBlank()) {
-            throw new InvalidTokenException("Access token is required");
+    public JwtResponse exchangeOAuthCode(String code) {
+        if (code == null || code.isBlank()) {
+            throw new InvalidTokenException("Exchange code is required");
         }
 
-        if (!jwtTokenProvider.validateToken(accessToken)) {
-            throw new InvalidTokenException("Invalid access token");
+        // Single-use: GETDEL — a second exchange with the same code fails
+        String encrypted = stringRedisTemplate.opsForValue()
+                .getAndDelete(OAuth2AuthenticationSuccessHandler.EXCHANGE_PREFIX + code);
+        if (encrypted == null) {
+            throw new InvalidTokenException("Invalid or expired exchange code");
         }
 
-        String userId = jwtTokenProvider.getUserIdFromToken(accessToken);
-        Identity identity = identityRepository.findById(UUID.fromString(userId))
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        String[] bundle = tokenEncryptionUtil.decrypt(encrypted).split("\\|", 3);
+        UUID identityId = UUID.fromString(bundle[0]);
+        UUID sessionId = UUID.fromString(bundle[1]);
+        String rawRefresh = bundle[2];
 
+        Identity identity = identityRepository.findById(identityId)
+                .orElseThrow(() -> new InvalidTokenException("Identity not found"));
         ensureAccountActive(identity);
 
         List<String> roles = getRolesForIdentity(identity.getId());
-
         UserPrincipal userPrincipal = UserPrincipal.create(identity, null, roles);
-        Authentication authentication = new UsernamePasswordAuthenticationToken(
-                userPrincipal, null, userPrincipal.getAuthorities());
 
-        String newAccessToken = jwtTokenProvider.generateToken(authentication);
-        String newRefreshToken = jwtTokenProvider.generateRefreshToken(authentication, false);
+        String accessToken = jwtTokenProvider.generateAccessToken(userPrincipal, sessionId);
         long expiresIn = jwtConfig.getExpiration() / 1000;
 
-        tokenService.revokeAll(userId, TokenType.REFRESH);
-        tokenService.store(userId, newRefreshToken, TokenType.REFRESH);
-
-        return new JwtResponse(newAccessToken, newRefreshToken, expiresIn, toIdentityInfo(identity));
+        return new JwtResponse(accessToken, rawRefresh, expiresIn, toIdentityInfo(identity));
     }
 
     @Override
     @Transactional
-    public void logout(String accessToken, String refreshToken) {
-        String userId = null;
-
-        if (accessToken != null && !accessToken.isBlank()) {
-            try {
-                userId = jwtTokenProvider.getUserIdFromToken(accessToken);
-                long remainingTime = jwtTokenProvider.getExpirationTime(accessToken);
-                if (remainingTime > 0) {
-                    tokenService.blacklistToken(accessToken, remainingTime);
-                }
-            } catch (Exception ex) {
-                log.warn("Failed to process access token during logout: {}", ex.getMessage());
-            }
+    public void logout(String accessToken) {
+        if (accessToken == null || accessToken.isBlank()) {
+            return;
         }
+        try {
+            Claims claims = jwtTokenProvider.parseToken(accessToken);
+            long remaining = claims.getExpiration().getTime() - System.currentTimeMillis();
+            tokenBlacklistService.blacklistJti(claims.getId(), remaining);
 
-        if (refreshToken != null && !refreshToken.isBlank()) {
-            try {
-                String refreshTokenUserId = jwtTokenProvider.getUserIdFromToken(refreshToken);
-                tokenService.revoke(refreshTokenUserId, refreshToken, TokenType.REFRESH);
-
-                Date expirationDate = jwtTokenProvider.getExpirationDateFromToken(refreshToken);
-                OffsetDateTime expiresAt = OffsetDateTime.ofInstant(
-                        expirationDate.toInstant(), ZoneOffset.UTC);
-                refreshTokenBlacklistService.blacklistToken(
-                        refreshToken, UUID.fromString(refreshTokenUserId), expiresAt, "LOGOUT");
-            } catch (Exception ex) {
-                log.warn("Failed to revoke refresh token during logout: {}", ex.getMessage());
-                if (userId != null) {
-                    tokenService.revokeAll(userId, TokenType.REFRESH);
-                }
+            UUID sid = jwtTokenProvider.getSid(claims);
+            if (sid != null) {
+                sessionService.revokeSession(sid, "LOGOUT");
             }
-        } else if (userId != null) {
-            tokenService.revokeAll(userId, TokenType.REFRESH);
+        } catch (Exception ex) {
+            log.warn("Failed to process access token during logout: {}", ex.getMessage());
         }
     }
 
@@ -374,7 +343,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void logoutAll(String userId) {
-        tokenService.revokeAll(userId, TokenType.REFRESH);
+        sessionService.revokeAll(UUID.fromString(userId), "LOGOUT_ALL");
 
         identityRepository.findById(UUID.fromString(userId))
                 .ifPresent(identity -> securityEventService.logEvent(

@@ -130,6 +130,15 @@ iam:
     max-requests: 10        # per IP per endpoint per window
     window-seconds: 60      # sliding window
 
+  authn:
+    session:
+      max-per-identity: 10        # LRU eviction beyond this
+      rotation-grace-seconds: 60  # rotated-token retry window before reuse = theft
+    cookie:
+      encryption-key: ${IAM_COOKIE_KEY:}          # independent from signing keys
+    keys:
+      encryption-key: ${IAM_KEY_ENCRYPTION_KEY:}  # encrypts private signing keys at rest
+
   security:
     # If empty, API key check is disabled
     internal-api-key: ${IAM_INTERNAL_API_KEY:}
@@ -142,15 +151,20 @@ iam:
 # AuthN Configuration
 app:
   jwt:
+    # Access tokens are RS256-signed with keys from signing_keys (bootstrap-
+    # generated). This secret only feeds the legacy cookie-key fallback when
+    # iam.authn.cookie.encryption-key is unset.
     secret: ${APP_JWT_SECRET:changeThisToALongRandomSecretKeyForProduction}
-    expiration: 900000                   # 15 minutes (maps to JwtConfig.expiration)
-    refresh-expiration: 604800000        # 7 days    (maps to JwtConfig.refreshExpiration)
-    refresh-token-cookie-name: __Host-Session-Id
+    expiration: 900000                   # access token, 15 minutes
+    refresh-expiration: 604800000        # session lifetime, 7 days
+    refresh-token-cookie-name: __Host-Refresh
     refresh-token-expiration-days: 7
     encrypt-cookies: ${APP_JWT_ENCRYPT_COOKIES:true}
   cookie:
     domain: ${APP_COOKIE_DOMAIN:}
-    secure: ${APP_COOKIE_SECURE:false}
+    # __Host- cookies require Secure; browsers reject them otherwise.
+    # Override to false only for plain-HTTP local dev (rename the cookie too).
+    secure: ${APP_COOKIE_SECURE:true}
     http-only: true
     same-site: Lax
   frontend:

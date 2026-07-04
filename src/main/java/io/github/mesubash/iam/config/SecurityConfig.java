@@ -119,7 +119,7 @@ public class SecurityConfig {
                     )
                 )
                 .authorizeHttpRequests(authz -> authz
-                        // Public - docs, health, static
+                        // Public - docs, health, static, JWKS
                         .requestMatchers(
                                 "/",
                                 "/health",
@@ -128,6 +128,7 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/api-docs/**",
                                 "/v3/api-docs/**",
+                                "/.well-known/**",
                                 "/error",
                                 "/*.css", "/*.js", "/*.ico"
                         ).permitAll()

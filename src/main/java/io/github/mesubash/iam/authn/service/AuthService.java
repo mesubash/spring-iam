@@ -13,9 +13,9 @@ public interface AuthService {
 
     JwtResponse refreshToken(String refreshToken);
 
-    JwtResponse validateAndRefreshToken(String accessToken);
+    JwtResponse exchangeOAuthCode(String code);
 
-    void logout(String accessToken, String refreshToken);
+    void logout(String accessToken);
 
     void forgotPassword(String email);
 

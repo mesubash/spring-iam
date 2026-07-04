@@ -1,155 +1,61 @@
 package io.github.mesubash.iam.authn.security;
 
 import io.github.mesubash.iam.authn.config.JwtConfig;
-import io.github.mesubash.iam.authn.entity.enums.TokenType;
-import io.github.mesubash.iam.authn.security.token.TokenService;
+import io.github.mesubash.iam.authn.security.token.SigningKeyService;
 import io.github.mesubash.iam.shared.exception.InvalidTokenException;
 import io.github.mesubash.iam.shared.exception.TokenExpiredException;
-import io.github.mesubash.iam.shared.exception.TokenReuseException;
-import io.jsonwebtoken.*;
-import io.jsonwebtoken.security.Keys;
-import io.jsonwebtoken.security.SignatureException;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.MalformedJwtException;
+import io.jsonwebtoken.ProtectedHeader;
+import io.jsonwebtoken.UnsupportedJwtException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
-import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
+import java.security.Key;
 import java.util.Date;
-import java.util.List;
+import java.util.UUID;
 
+/**
+ * Issues and verifies RS256 access tokens. Signing uses the ACTIVE key from
+ * SigningKeyService; verification resolves the key by the token's kid header,
+ * so rotated keys keep verifying until their grace window ends.
+ * Refresh tokens are opaque and live in SessionService — not JWTs.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class JwtTokenProvider {
 
     private final JwtConfig jwtConfig;
-    private final TokenService tokenService;
+    private final SigningKeyService signingKeyService;
 
-    private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(jwtConfig.getSecret().getBytes(StandardCharsets.UTF_8));
-    }
-
-    /**
-     * Generate JWT access token with roles list from AuthZ.
-     */
-    public String generateToken(Authentication authentication) {
-        UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
-
+    public String generateAccessToken(UserPrincipal principal, UUID sessionId) {
+        SigningKeyService.ActiveKey key = signingKeyService.activeKey();
         Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + jwtConfig.getExpiration());
 
-        String token = Jwts.builder()
-                .subject(userPrincipal.getId().toString())
-                .claim("roles", userPrincipal.getRoles())
-                .claim("type", "access")
+        return Jwts.builder()
+                .header().keyId(key.kid()).and()
+                .subject(principal.getId().toString())
+                .id(UUID.randomUUID().toString())                     // jti — blacklist handle
+                .claim("sid", sessionId != null ? sessionId.toString() : null)
+                .claim("typ", "access")
+                .claim("email_verified", principal.getIdentity() != null
+                        && Boolean.TRUE.equals(principal.getIdentity().getEmailVerified()))
+                .claim("roles", principal.getRoles())
                 .issuedAt(now)
-                .expiration(expiryDate)
-                .signWith(getSigningKey())
+                .expiration(new Date(now.getTime() + jwtConfig.getExpiration()))
+                .signWith(key.privateKey(), Jwts.SIG.RS256)
                 .compact();
-
-        log.debug("Generated access token for user ID: {} (roles: {})", userPrincipal.getId(), userPrincipal.getRoles());
-        return token;
-    }
-
-    public String generateRefreshToken(Authentication authentication) {
-        return generateRefreshToken(authentication, true);
-    }
-
-    public String generateRefreshToken(Authentication authentication, boolean persist) {
-        UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
-
-        Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + jwtConfig.getRefreshExpiration());
-
-        String token = Jwts.builder()
-                .subject(userPrincipal.getId().toString())
-                .claim("type", "refresh")
-                .issuedAt(now)
-                .expiration(expiryDate)
-                .signWith(getSigningKey())
-                .compact();
-
-        if (persist) {
-            try {
-                tokenService.store(userPrincipal.getId().toString(), token, TokenType.REFRESH);
-            } catch (Exception e) {
-                log.warn("Failed to store refresh token for user {}", userPrincipal.getId(), e);
-            }
-        }
-
-        log.debug("Generated refresh token for user: {}", userPrincipal.getEmail());
-        return token;
-    }
-
-    public String rotateRefreshToken(String oldRefreshToken) {
-        Claims claims = parseToken(oldRefreshToken);
-        String type = claims.get("type", String.class);
-        if (!"refresh".equals(type)) throw new RuntimeException("Provided token is not a refresh token");
-
-        String userId = claims.getSubject();
-        if (tokenService.isTokenBlacklisted(oldRefreshToken)) {
-            throw new TokenReuseException("Refresh token has been already used or blacklisted");
-        }
-
-        Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + jwtConfig.getRefreshExpiration());
-
-        String newToken = Jwts.builder()
-                .subject(userId)
-                .claim("type", "refresh")
-                .issuedAt(now)
-                .expiration(expiryDate)
-                .signWith(getSigningKey())
-                .compact();
-
-        try {
-            tokenService.rotate(userId, oldRefreshToken, newToken, TokenType.REFRESH);
-            tokenService.blacklistToken(oldRefreshToken, 900000);
-            return newToken;
-        } catch (TokenReuseException tre) {
-            try {
-                tokenService.revokeAll(userId, TokenType.REFRESH);
-                tokenService.blacklistToken(oldRefreshToken, 900000);
-            } catch (Exception e) {
-                log.warn("Failed to revoke tokens after detected reuse for user {}", userId, e);
-            }
-            throw tre;
-        }
-    }
-
-    public boolean validateRefreshToken(String token) {
-        try {
-            Claims claims = parseToken(token);
-            String type = claims.get("type", String.class);
-            if (!"refresh".equals(type)) return false;
-            String userId = claims.getSubject();
-            return tokenService.validate(userId, token, TokenType.REFRESH);
-        } catch (Exception e) {
-            log.debug("Refresh token validation failed", e);
-            return false;
-        }
-    }
-
-    public String getUserIdFromToken(String token) {
-        return parseToken(token).getSubject();
-    }
-
-    @SuppressWarnings("unchecked")
-    public List<String> getRolesFromToken(String token) {
-        Claims claims = parseToken(token);
-        Object roles = claims.get("roles");
-        if (roles instanceof List<?>) {
-            return (List<String>) roles;
-        }
-        return List.of();
     }
 
     public Claims parseToken(String token) {
         try {
             return Jwts.parser()
-                    .verifyWith(getSigningKey())
+                    .keyLocator(header -> resolveKey((ProtectedHeader) header))
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
@@ -166,68 +72,38 @@ public class JwtTokenProvider {
         }
     }
 
-    public boolean validateToken(String authToken) {
-        try {
-            Jwts.parser()
-                    .verifyWith(getSigningKey())
-                    .build()
-                    .parseSignedClaims(authToken);
-            return true;
-        } catch (SignatureException ex) {
-            log.error("Invalid JWT signature: {}", ex.getMessage());
-            throw new InvalidTokenException("Invalid JWT signature", ex);
-        } catch (MalformedJwtException ex) {
-            log.error("Invalid JWT token: {}", ex.getMessage());
-            throw new InvalidTokenException("Invalid JWT token", ex);
-        } catch (ExpiredJwtException ex) {
-            log.error("Expired JWT token: {}", ex.getMessage());
-            throw new TokenExpiredException("Expired JWT token", ex);
-        } catch (UnsupportedJwtException ex) {
-            log.error("Unsupported JWT token: {}", ex.getMessage());
-            throw new InvalidTokenException("Unsupported JWT token", ex);
-        } catch (IllegalArgumentException ex) {
-            log.error("JWT claims string is empty: {}", ex.getMessage());
-            throw new InvalidTokenException("JWT claims string is empty", ex);
-        }
+    public boolean validateToken(String token) {
+        parseToken(token);
+        return true;
     }
 
-    public boolean isTokenExpired(String token) {
-        try {
-            Claims claims = Jwts.parser()
-                    .verifyWith(getSigningKey())
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
-            return claims.getExpiration().before(new Date());
-        } catch (Exception e) {
-            return true;
-        }
+    public String getUserIdFromToken(String token) {
+        return parseToken(token).getSubject();
     }
 
-    public Date getExpirationDateFromToken(String token) {
-        return Jwts.parser()
-                .verifyWith(getSigningKey())
-                .build()
-                .parseSignedClaims(token)
-                .getPayload()
-                .getExpiration();
+    public String getJti(Claims claims) {
+        return claims.getId();
     }
 
-    public long getTokenExpiryDuration(String accessToken) {
-        Date expiration = Jwts.parser()
-                .verifyWith(getSigningKey())
-                .build()
-                .parseSignedClaims(accessToken)
-                .getPayload()
-                .getExpiration();
-        return expiration.getTime() - System.currentTimeMillis();
+    public UUID getSid(Claims claims) {
+        String sid = claims.get("sid", String.class);
+        return sid != null ? UUID.fromString(sid) : null;
     }
 
+    /** Remaining lifetime in ms; 0 if expired or unparseable. */
     public long getExpirationTime(String token) {
         try {
-            return getTokenExpiryDuration(token);
+            return parseToken(token).getExpiration().getTime() - System.currentTimeMillis();
         } catch (Exception e) {
             return 0;
         }
+    }
+
+    private Key resolveKey(ProtectedHeader header) {
+        Key key = signingKeyService.publicKeyFor(header.getKeyId());
+        if (key == null) {
+            throw new InvalidTokenException("Unknown or retired signing key");
+        }
+        return key;
     }
 }

@@ -24,10 +24,22 @@ public class TokenEncryptionUtil {
     private final SecretKey secretKey;
     private final SecureRandom secureRandom;
 
-    public TokenEncryptionUtil(@Value("${app.jwt.secret}") String jwtSecret) {
+    public TokenEncryptionUtil(
+            @Value("${iam.authn.cookie.encryption-key:}") String cookieKey,
+            @Value("${app.jwt.secret:}") String legacySecret) {
+        String keySource = cookieKey;
+        if (keySource == null || keySource.isBlank()) {
+            if (legacySecret == null || legacySecret.isBlank()) {
+                throw new IllegalStateException(
+                        "No cookie encryption key configured — set IAM_COOKIE_KEY");
+            }
+            log.warn("Cookie encryption key derived from app.jwt.secret — "
+                    + "set IAM_COOKIE_KEY for an independent key in production");
+            keySource = legacySecret;
+        }
         try {
             byte[] keyBytes = java.security.MessageDigest.getInstance("SHA-256")
-                    .digest(jwtSecret.getBytes(StandardCharsets.UTF_8));
+                    .digest(keySource.getBytes(StandardCharsets.UTF_8));
             this.secretKey = new SecretKeySpec(keyBytes, "AES");
             this.secureRandom = new SecureRandom();
         } catch (Exception e) {
