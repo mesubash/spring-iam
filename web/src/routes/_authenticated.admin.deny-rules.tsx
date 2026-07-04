@@ -23,7 +23,6 @@ import {
 import { formatDate } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/admin/deny-rules")({
-  head: () => ({ meta: [{ title: "Deny Rules — IAM Console" }] }),
   component: () => (
     <PermissionGuardedPage permission="platform.deny_rule.read">
       <DenyRulesPage />

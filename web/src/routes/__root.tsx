@@ -4,17 +4,35 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
-  HeadContent,
-  Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect } from "react";
 
-import appCss from "../styles.css?url";
 import { reportError } from "../lib/error-reporting";
 import { AuthProvider } from "@/context/AuthContext";
 import { AuthzProvider } from "@/context/AuthzContext";
 import { Toaster } from "@/components/ui/sonner";
 import { ApiError } from "@/api/client";
+
+export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  component: RootComponent,
+  notFoundComponent: NotFoundComponent,
+  errorComponent: ErrorComponent,
+});
+
+function RootComponent() {
+  const { queryClient } = Route.useRouteContext();
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <AuthzProvider>
+          <Outlet />
+          <Toaster richColors closeButton position="top-right" duration={4000} />
+        </AuthzProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  );
+}
 
 function NotFoundComponent() {
   return (
@@ -50,7 +68,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   if (error instanceof ApiError && error.status === 403) {
     return (
       <div className="mx-auto max-w-2xl px-6 py-10">
-        <div className="rounded border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-[13px] text-[var(--muted-foreground)]">
+        <div className="rounded border border-border bg-card px-4 py-3 text-[13px] text-muted-foreground">
           Not available for your access level.
           <button
             type="button"
@@ -58,7 +76,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
               router.invalidate();
               reset();
             }}
-            className="ml-3 text-[var(--primary)] hover:underline"
+            className="ml-3 text-primary hover:underline"
           >
             Retry
           </button>
@@ -74,7 +92,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
           This page didn't load
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+          Something went wrong. Try refreshing or head back home.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
@@ -95,60 +113,5 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
         </div>
       </div>
     </div>
-  );
-}
-
-export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "IAM Console" },
-      { name: "description", content: "Identity and access management console." },
-      { property: "og:title", content: "IAM Console" },
-      { property: "og:description", content: "Identity and access management console." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-    links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
-    ],
-  }),
-  shellComponent: RootShell,
-  component: RootComponent,
-  notFoundComponent: NotFoundComponent,
-  errorComponent: ErrorComponent,
-});
-
-function RootShell({ children }: { children: ReactNode }) {
-  return (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  );
-}
-
-function RootComponent() {
-  const { queryClient } = Route.useRouteContext();
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AuthzProvider>
-          <Outlet />
-          <Toaster richColors closeButton position="top-right" duration={4000} />
-        </AuthzProvider>
-      </AuthProvider>
-    </QueryClientProvider>
   );
 }

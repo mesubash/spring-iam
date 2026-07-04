@@ -7,7 +7,6 @@ import { Tag } from "@/components/iam/badges";
 import { Input } from "@/components/ui/input";
 
 export const Route = createFileRoute("/_authenticated/me/access")({
-  head: () => ({ meta: [{ title: "My Access — IAM Console" }] }),
   component: MyAccessPage,
 });
 

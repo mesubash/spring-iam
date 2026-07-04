@@ -5,7 +5,6 @@ import { useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated")({
-  ssr: false,
   beforeLoad: () => {
     // Client-side session bootstrap decides; layout renders a spinner while
     // isBootstrapping. If not authenticated after bootstrap, redirect below.

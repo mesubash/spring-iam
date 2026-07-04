@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_authenticated/admin/policies")({
-  head: () => ({ meta: [{ title: "Policies — IAM Console" }] }),
   component: () => (
     <PermissionGuardedPage permission="platform.policy.read">
       <PoliciesPage />

@@ -12,7 +12,6 @@ import { Label } from "@/components/ui/label";
 import { useAuthz } from "@/context/AuthzContext";
 
 export const Route = createFileRoute("/_authenticated/admin/groups")({
-  head: () => ({ meta: [{ title: "Groups — IAM Console" }] }),
   component: GroupsPage,
 });
 

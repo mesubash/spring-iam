@@ -12,7 +12,6 @@ import { DecisionBadge, Tag } from "@/components/iam/badges";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/admin/explain")({
-  head: () => ({ meta: [{ title: "Explain — IAM Console" }] }),
   component: ExplainPage,
 });
 

@@ -10,7 +10,6 @@ import { Label } from "@/components/ui/label";
 import { ApiError } from "@/api/client";
 
 export const Route = createFileRoute("/_authenticated/me/security")({
-  head: () => ({ meta: [{ title: "Security — IAM Console" }] }),
   component: SecurityPage,
 });
 

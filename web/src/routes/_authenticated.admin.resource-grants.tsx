@@ -21,7 +21,6 @@ import {
 import { formatDate } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/admin/resource-grants")({
-  head: () => ({ meta: [{ title: "Resource Grants — IAM Console" }] }),
   component: ResourceGrantsPage,
 });
 

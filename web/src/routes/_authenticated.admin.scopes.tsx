@@ -23,7 +23,6 @@ import { cn } from "@/lib/utils";
 import { useAuthz } from "@/context/AuthzContext";
 
 export const Route = createFileRoute("/_authenticated/admin/scopes")({
-  head: () => ({ meta: [{ title: "Scopes — IAM Console" }] }),
   component: () => (
     <PermissionGuardedPage permission="platform.scope.read">
       <ScopesPage />

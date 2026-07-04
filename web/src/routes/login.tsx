@@ -9,7 +9,6 @@ import { ApiError } from "@/api/client";
 import { Eye, EyeOff, ShieldCheck } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
-  head: () => ({ meta: [{ title: "Sign in — IAM Console" }] }),
   component: LoginPage,
 });
 

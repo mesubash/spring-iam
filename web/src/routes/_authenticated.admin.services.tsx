@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_authenticated/admin/services")({
-  head: () => ({ meta: [{ title: "Services — IAM Console" }] }),
   component: ServicesPage,
 });
 

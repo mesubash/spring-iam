@@ -11,7 +11,6 @@ import { Input } from "@/components/ui/input";
 import { formatDate } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/admin/audit")({
-  head: () => ({ meta: [{ title: "Audit — IAM Console" }] }),
   component: () => (
     <PermissionGuardedPage permission="platform.audit.read">
       <AuditPage />

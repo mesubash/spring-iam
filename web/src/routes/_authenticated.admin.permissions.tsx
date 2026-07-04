@@ -10,7 +10,6 @@ import { Tag } from "@/components/iam/badges";
 import { Input } from "@/components/ui/input";
 
 export const Route = createFileRoute("/_authenticated/admin/permissions")({
-  head: () => ({ meta: [{ title: "Permissions — IAM Console" }] }),
   component: () => (
     <PermissionGuardedPage permission="platform.permission.read">
       <PermissionsPage />

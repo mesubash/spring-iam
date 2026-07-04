@@ -23,7 +23,6 @@ import {
 import { formatDate, isExpiring } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/admin/assignments")({
-  head: () => ({ meta: [{ title: "Assignments — IAM Console" }] }),
   component: () => (
     <PermissionGuardedPage permission="platform.assignment.read">
       <AssignmentsPage />

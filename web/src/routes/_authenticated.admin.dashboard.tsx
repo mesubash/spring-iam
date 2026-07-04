@@ -9,7 +9,6 @@ import type { AuditEntry } from "@/api/types";
 import { useAuthz } from "@/context/AuthzContext";
 
 export const Route = createFileRoute("/_authenticated/admin/dashboard")({
-  head: () => ({ meta: [{ title: "Dashboard — IAM Console" }] }),
   component: DashboardPage,
 });
 

@@ -13,7 +13,6 @@ import { useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/context/AuthContext";
 
 export const Route = createFileRoute("/_authenticated/me/sessions")({
-  head: () => ({ meta: [{ title: "My Sessions — IAM Console" }] }),
   component: MySessionsPage,
 });
 
