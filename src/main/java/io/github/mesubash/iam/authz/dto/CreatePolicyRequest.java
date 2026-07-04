@@ -15,6 +15,8 @@ public class CreatePolicyRequest {
     private String resourceType;
     private UUID scopeId;
     private String effect;
+    // ENFORCE (default) | SHADOW — SHADOW evaluates + audits but never decides
+    private String enforcementMode;
     private Integer priority;
     private Map<String, Object> conditions;
     private Boolean active;

@@ -57,13 +57,16 @@ public class Policy {
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
+    @Builder.Default
     private Map<String, Object> conditions = new HashMap<>();
 
     // SHADOW: evaluated and audited, never affects the decision
     @Column(name = "enforcement_mode", length = 10)
+    @Builder.Default
     private String enforcementMode = "ENFORCE";
 
     @Column(nullable = false)
+    @Builder.Default
     private Boolean active = true;
 
     @Column(name = "created_at")

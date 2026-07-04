@@ -248,18 +248,29 @@ public class AuthController {
 
     // --- Cookie helpers ---
 
+    // Browsers reject __Host-/__Secure- cookies without Secure. In non-secure
+    // (dev) mode, drop the prefix so the cookie is still accepted.
+    private String effectiveCookieName() {
+        if (!secureCookie && (refreshTokenCookieName.startsWith("__Host-")
+                || refreshTokenCookieName.startsWith("__Secure-"))) {
+            return "Refresh-Session";
+        }
+        return refreshTokenCookieName;
+    }
+
     private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
         String cookieValue = encryptCookies ? tokenEncryptionUtil.encrypt(refreshToken) : refreshToken;
+        String name = effectiveCookieName();
 
         org.springframework.http.ResponseCookie.ResponseCookieBuilder builder =
-            org.springframework.http.ResponseCookie.from(refreshTokenCookieName, cookieValue)
+            org.springframework.http.ResponseCookie.from(name, cookieValue)
                 .httpOnly(httpOnlyCookie)
                 .secure(secureCookie)
                 .maxAge(java.time.Duration.ofDays(refreshTokenExpirationDays))
                 .path("/")
                 .sameSite(sameSiteCookie);
 
-        if (!refreshTokenCookieName.startsWith("__Host-")
+        if (!name.startsWith("__Host-")
                 && cookieDomain != null && !cookieDomain.isEmpty()) {
             builder.domain(cookieDomain);
         }
@@ -268,9 +279,10 @@ public class AuthController {
     }
 
     private String getRefreshTokenFromCookie(HttpServletRequest request) {
+        String name = effectiveCookieName();
         if (request.getCookies() != null) {
             List<String> candidateCookies = Arrays.stream(request.getCookies())
-                    .filter(cookie -> refreshTokenCookieName.equals(cookie.getName()))
+                    .filter(cookie -> name.equals(cookie.getName()))
                     .map(Cookie::getValue)
                     .collect(Collectors.toList());
 
@@ -293,15 +305,16 @@ public class AuthController {
     }
 
     private void clearRefreshTokenCookie(HttpServletResponse response) {
+        String name = effectiveCookieName();
         org.springframework.http.ResponseCookie.ResponseCookieBuilder builder =
-            org.springframework.http.ResponseCookie.from(refreshTokenCookieName, "")
+            org.springframework.http.ResponseCookie.from(name, "")
                 .httpOnly(true)
                 .secure(secureCookie)
                 .maxAge(0)
                 .path("/")
                 .sameSite(sameSiteCookie);
 
-        if (!refreshTokenCookieName.startsWith("__Host-")
+        if (!name.startsWith("__Host-")
                 && cookieDomain != null && !cookieDomain.isEmpty()) {
             builder.domain(cookieDomain);
         }

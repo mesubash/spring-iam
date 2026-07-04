@@ -45,6 +45,8 @@ public class ServiceClient {
     @Builder.Default
     private List<String> ownedDomains = new ArrayList<>();
 
+    // Never serialize the key hash in list/detail responses
+    @com.fasterxml.jackson.annotation.JsonIgnore
     @Column(name = "api_key_hash", nullable = false, length = 128)
     private String apiKeyHash;
 

@@ -34,6 +34,7 @@ public class Permission {
     private String description;
 
     @Column(name = "is_deprecated")
+    @Builder.Default
     private Boolean isDeprecated = false;
 
     @Column(name = "created_at")

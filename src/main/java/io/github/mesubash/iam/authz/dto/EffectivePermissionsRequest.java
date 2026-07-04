@@ -17,5 +17,10 @@ public class EffectivePermissionsRequest {
     private UUID scopeId;
     private AuthorizationRequest.ResourceContext resource;
     private AuthorizationRequest.RequestContext context;
-    private boolean includeDenied;
+    // Boxed: a primitive here made Jackson reject any body omitting the field
+    private Boolean includeDenied;
+
+    public boolean isIncludeDenied() {
+        return Boolean.TRUE.equals(includeDenied);
+    }
 }

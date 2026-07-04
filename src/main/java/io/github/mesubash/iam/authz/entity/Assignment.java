@@ -27,6 +27,7 @@ public class Assignment {
     private String subjectId;
 
     @Column(name = "subject_type", length = 20)
+    @Builder.Default
     private String subjectType = "USER";
 
     @Column(name = "role_id", nullable = false)
@@ -37,6 +38,7 @@ public class Assignment {
 
     // STANDARD | BREAK_GLASS | MIGRATION
     @Column(length = 20)
+    @Builder.Default
     private String origin = "STANDARD";
 
     @Column(name = "granted_by", nullable = false)
@@ -50,9 +52,11 @@ public class Assignment {
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
+    @Builder.Default
     private Map<String, Object> conditions = new HashMap<>();
 
     @Column(nullable = false)
+    @Builder.Default
     private Boolean active = true;
 
     @Column(name = "revoked_at")

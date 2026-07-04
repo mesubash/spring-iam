@@ -45,6 +45,8 @@ public class PolicyController {
                 .resourceType(request.getResourceType())
                 .scopeId(request.getScopeId())
                 .effect(request.getEffect() != null ? request.getEffect() : "ALLOW")
+                .enforcementMode(request.getEnforcementMode() != null
+                        ? request.getEnforcementMode().toUpperCase() : "ENFORCE")
                 .priority(request.getPriority() != null ? request.getPriority() : 0)
                 .conditions(request.getConditions())
                 .active(request.getActive() != null ? request.getActive() : true)
@@ -65,6 +67,7 @@ public class PolicyController {
                 .resourceType(request.getResourceType())
                 .scopeId(request.getScopeId())
                 .effect(request.getEffect())
+                .enforcementMode(request.getEnforcementMode())
                 .priority(request.getPriority())
                 .conditions(request.getConditions())
                 .active(request.getActive())

@@ -12,6 +12,7 @@ public class UpdatePolicyRequest {
     private String resourceType;
     private UUID scopeId;
     private String effect;
+    private String enforcementMode;
     private Integer priority;
     private Map<String, Object> conditions;
     private Boolean active;

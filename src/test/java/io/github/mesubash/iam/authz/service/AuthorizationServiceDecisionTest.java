@@ -160,7 +160,7 @@ class AuthorizationServiceDecisionTest {
         grantRole(null, "invoice.invoice.read");
         AuthorizationResponse r = service.authorize(request(PERM, PROJECT_SCOPE));
         assertFalse(r.getAuthorized());
-        assertEquals("DENY: Permission not granted by any role", r.getReason());
+        assertEquals("no_permission", r.getReason());
     }
 
     @Test
@@ -198,7 +198,7 @@ class AuthorizationServiceDecisionTest {
         denyRule(PERM, null);
         AuthorizationResponse r = service.authorize(request(PERM, PROJECT_SCOPE));
         assertFalse(r.getAuthorized());
-        assertEquals("DENY: Explicit deny rule exists", r.getReason());
+        assertEquals("explicit_deny", r.getReason());
     }
 
     @Test
@@ -242,7 +242,7 @@ class AuthorizationServiceDecisionTest {
         when(scopeRepository.findActiveFlag(PROJECT_SCOPE)).thenReturn(Optional.of(false));
         AuthorizationResponse r = service.authorize(request(PERM, PROJECT_SCOPE));
         assertFalse(r.getAuthorized());
-        assertEquals("DENY: Scope inactive or not found", r.getReason());
+        assertEquals("scope_inactive", r.getReason());
     }
 
     @Test
@@ -264,7 +264,7 @@ class AuthorizationServiceDecisionTest {
                 .timestamp(Instant.parse("2026-07-04T22:30:00Z")).build();
         AuthorizationResponse r = service.authorize(request(PERM, PROJECT_SCOPE, ctx));
         assertFalse(r.getAuthorized());
-        assertEquals("DENY: Outside allowed time window", r.getReason());
+        assertEquals("condition_failed", r.getReason());
     }
 
     @Test
@@ -290,7 +290,7 @@ class AuthorizationServiceDecisionTest {
         grantRole(Map.of("require_mfa", true), PERM);
         AuthorizationResponse r = service.authorize(request(PERM, PROJECT_SCOPE));
         assertFalse(r.getAuthorized());
-        assertEquals("DENY: MFA required", r.getReason());
+        assertEquals("condition_failed", r.getReason());
     }
 
     @Test
@@ -339,7 +339,7 @@ class AuthorizationServiceDecisionTest {
         policy("ALLOW", PERM, Map.of("field", "subject", "op", "eq", "value", "someone-else"));
         AuthorizationResponse r = service.authorize(request(PERM, PROJECT_SCOPE));
         assertFalse(r.getAuthorized());
-        assertEquals("DENY: No ALLOW policy matched", r.getReason());
+        assertEquals("no_matching_allow_policy", r.getReason());
     }
 
     @Test
@@ -382,7 +382,7 @@ class AuthorizationServiceDecisionTest {
         grantResource(PERM);
         AuthorizationResponse r = service.authorize(request(PERM, PROJECT_SCOPE));
         assertTrue(r.getAuthorized());
-        assertEquals("ALLOW: Permission granted via resource grant", r.getReason());
+        assertEquals("resource_grant", r.getReason());
     }
 
     @Test

@@ -444,7 +444,7 @@ public class AuthorizationService {
             // ================================================================
 
             if (!isScopeActive(resourceScopeId)) {
-                String reason = "DENY: Scope inactive or not found";
+                String reason = "scope_inactive";
                 UUID auditId = UUID.randomUUID();
                 auditWriter.write(auditId, request, false, reason, null);
                 denyCounter.increment();
@@ -470,7 +470,7 @@ public class AuthorizationService {
             }
 
             if (matchesDenyRule(deniedPermissions, permissionKey, resourceScopeId)) {
-                String reason = "DENY: Explicit deny rule exists";
+                String reason = "explicit_deny";
                 UUID auditId = UUID.randomUUID();
                 auditWriter.write(auditId, request, false, reason, null);
                 denyCounter.increment();
@@ -524,16 +524,11 @@ public class AuthorizationService {
             }
 
             if (!permitted) {
-                String reason;
-                if (permissionsResult != null && permissionsResult.permissionBlockedByConditions) {
-                    reason = permissionsResult.conditionFailureReason != null
-                            ? permissionsResult.conditionFailureReason
-                            : "DENY: Assignment conditions not satisfied";
-                } else if (hasConditionalAssignments) {
-                    reason = "DENY: Permission not granted or assignment conditions not satisfied";
-                } else {
-                    reason = "DENY: Permission not granted by any role";
-                }
+                // Stable reason codes (see AUTHZ_DESIGN §4.13); the human detail
+                // is available via /authorize/explain.
+                String reason = (permissionsResult != null && permissionsResult.permissionBlockedByConditions)
+                        ? "condition_failed"
+                        : "no_permission";
                 UUID auditId = UUID.randomUUID();
                 auditWriter.write(auditId, request, false, reason, null);
                 denyCounter.increment();
@@ -548,9 +543,7 @@ public class AuthorizationService {
             PolicyDecision policyDecision = evaluatePolicies(request);
             if (!policyDecision.allowed) {
                 UUID auditId = UUID.randomUUID();
-                String reason = policyDecision.reason != null
-                        ? policyDecision.reason
-                        : "DENY: Policy evaluation failed";
+                String reason = policyDecision.reason != null ? policyDecision.reason : "policy_deny";
                 auditWriter.write(auditId, request, false, reason, policyDecision.shadowResults);
                 denyCounter.increment();
 
@@ -561,9 +554,7 @@ public class AuthorizationService {
             // ALL CHECKS PASSED - ALLOW
             // ================================================================
 
-            String reason = viaGrant
-                    ? "ALLOW: Permission granted via resource grant"
-                    : "ALLOW: Permission granted via role assignment";
+            String reason = viaGrant ? "resource_grant" : "allowed";
             UUID auditId = UUID.randomUUID();
             auditWriter.write(auditId, request, true, reason, policyDecision.shadowResults);
             allowCounter.increment();
@@ -849,7 +840,7 @@ public class AuthorizationService {
         // DENY always takes precedence
         for (Policy policy : denyPolicies) {
             if (policyEvaluator.evaluate(policy.getConditions(), request)) {
-                return PolicyDecision.deny("DENY: Policy '" + policy.getName() + "'", shadow);
+                return PolicyDecision.deny("policy_deny", shadow);
             }
         }
 
@@ -865,7 +856,7 @@ public class AuthorizationService {
                 }
             }
             if (!allowMatched) {
-                return PolicyDecision.deny("DENY: No ALLOW policy matched", shadow);
+                return PolicyDecision.deny("no_matching_allow_policy", shadow);
             }
         }
 

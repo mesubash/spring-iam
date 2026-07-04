@@ -23,6 +23,7 @@ public class DenyRule {
     private String subjectId;
 
     @Column(name = "subject_type", length = 20)
+    @Builder.Default
     private String subjectType = "USER";
 
     @Column(name = "permission_key", nullable = false, length = 150)
@@ -47,6 +48,7 @@ public class DenyRule {
     private Instant expiresAt;
 
     @Column(nullable = false)
+    @Builder.Default
     private Boolean active = true;
 
     @PrePersist

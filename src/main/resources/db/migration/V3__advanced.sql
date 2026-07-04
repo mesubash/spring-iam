@@ -73,12 +73,13 @@ CREATE TABLE resource_grants (
     granted_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at     TIMESTAMPTZ,
     revoked_at     TIMESTAMPTZ,
-    revoked_by     VARCHAR(100),
-
-    CONSTRAINT uq_resource_grant
-        UNIQUE (subject_id, permission_key, resource_type, resource_id)
+    revoked_by     VARCHAR(100)
 );
 
+-- Uniqueness applies only to live grants — a revoked tuple can be re-granted.
+CREATE UNIQUE INDEX uq_resource_grant
+    ON resource_grants (subject_id, permission_key, resource_type, resource_id)
+    WHERE revoked_at IS NULL;
 CREATE INDEX idx_rg_subject  ON resource_grants(subject_id) WHERE revoked_at IS NULL;
 CREATE INDEX idx_rg_resource ON resource_grants(resource_type, resource_id) WHERE revoked_at IS NULL;
 

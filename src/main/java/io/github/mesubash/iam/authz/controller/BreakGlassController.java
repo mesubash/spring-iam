@@ -35,7 +35,7 @@ public class BreakGlassController {
             description = "Creates a short-lived assignment (origin BREAK_GLASS); mandatory reason")
     public ResponseEntity<Assignment> grant(
             @AuthenticationPrincipal UserPrincipal caller,
-            @RequestBody BreakGlassRequest request) {
+            @jakarta.validation.Valid @RequestBody BreakGlassRequest request) {
         if (!featureFlags.isBreakGlass()) {
             throw new ResourceNotFoundException("Break-glass is not enabled");
         }

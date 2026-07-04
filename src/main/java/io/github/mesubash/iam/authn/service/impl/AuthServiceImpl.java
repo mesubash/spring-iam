@@ -21,6 +21,7 @@ import io.github.mesubash.iam.authn.security.token.SessionService;
 import io.github.mesubash.iam.authn.security.token.TokenBlacklistService;
 import io.github.mesubash.iam.authn.security.token.TokenService;
 import io.github.mesubash.iam.authn.service.AuthService;
+import io.github.mesubash.iam.authn.service.LoginAttemptService;
 import io.github.mesubash.iam.authn.service.NotificationPort;
 import io.github.mesubash.iam.authn.service.SecurityEventService;
 import io.jsonwebtoken.Claims;
@@ -65,12 +66,7 @@ public class AuthServiceImpl implements AuthService {
     private final AuthzQueryService authzQueryService;
     private final SecurityEventService securityEventService;
     private final NotificationPort notificationPort;
-
-    @Value("${iam.account.lockout.max-attempts:5}")
-    private int maxLoginAttempts;
-
-    @Value("${iam.account.lockout.lockout-duration-minutes:30}")
-    private int lockoutDurationMinutes;
+    private final LoginAttemptService loginAttemptService;
 
     @Override
     @Transactional
@@ -111,15 +107,17 @@ public class AuthServiceImpl implements AuthService {
     public JwtResponse login(LoginRequest request, String ipAddress, String userAgent) {
         log.info("User attempting to login: {}", request.getEmail());
 
-        // Check if account is locked before attempting auth
-        identityRepository.findByPrimaryEmail(request.getEmail()).ifPresent(this::checkAndUnlockIfExpired);
+        // Check if account is locked before attempting auth (own tx)
+        identityRepository.findByPrimaryEmail(request.getEmail())
+                .ifPresent(loginAttemptService::unlockIfExpired);
 
         Authentication authentication;
         try {
             authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
         } catch (BadCredentialsException ex) {
-            handleFailedLogin(request.getEmail());
+            // Runs in a separate committed tx so the counter survives the throw below
+            loginAttemptService.recordFailure(request.getEmail());
             throw new UnauthorizedException("Invalid email or password");
         }
 
@@ -450,40 +448,6 @@ public class AuthServiceImpl implements AuthService {
 
         tokenService.revoke(userId, token, TokenType.ACCOUNT_REACTIVATION);
         log.info("Account reactivated for user: {}", userId);
-    }
-
-    private void handleFailedLogin(String email) {
-        identityRepository.findByPrimaryEmail(email).ifPresent(identity -> {
-            int attempts = (identity.getFailedLoginAttempts() != null ? identity.getFailedLoginAttempts() : 0) + 1;
-            identity.setFailedLoginAttempts(attempts);
-
-            if (attempts >= maxLoginAttempts) {
-                identity.setAccountStatus(AccountStatus.LOCKED);
-                identity.setAccountLockedUntil(OffsetDateTime.now().plusMinutes(lockoutDurationMinutes));
-                securityEventService.logEvent(identity, SecurityEventType.ACCOUNT_LOCKED, null, null,
-                        Map.of("reason", "max_login_attempts_exceeded", "attempts", attempts));
-                log.warn("Account locked for {} after {} failed attempts", email, attempts);
-            } else {
-                securityEventService.logEvent(identity, SecurityEventType.LOGIN_FAILED, null, null,
-                        Map.of("attempts", attempts));
-            }
-
-            identityRepository.save(identity);
-        });
-    }
-
-    private void checkAndUnlockIfExpired(Identity identity) {
-        if (identity.getAccountStatus() == AccountStatus.LOCKED
-                && identity.getAccountLockedUntil() != null
-                && OffsetDateTime.now().isAfter(identity.getAccountLockedUntil())) {
-            identity.setAccountStatus(AccountStatus.ACTIVE);
-            identity.setFailedLoginAttempts(0);
-            identity.setAccountLockedUntil(null);
-            identityRepository.save(identity);
-            securityEventService.logEvent(identity, SecurityEventType.ACCOUNT_UNLOCKED, null, null,
-                    Map.of("reason", "lockout_expired"));
-            log.info("Account auto-unlocked for: {}", identity.getPrimaryEmail());
-        }
     }
 
     private void ensureAccountActive(Identity identity) {

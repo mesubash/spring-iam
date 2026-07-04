@@ -7,6 +7,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.dao.DataAccessException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.InternalAuthenticationServiceException;
+import org.springframework.security.authentication.LockedException;
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -299,6 +303,85 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.UNAUTHORIZED.value())
                 .error("Unauthorized")
                 .message("Invalid email or password")
+                .path(request.getDescription(false).replace("uri=", ""))
+                .build();
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+    }
+
+    // Bean-validation on request bodies whose element/param constraints throw
+    // ConstraintViolationException (e.g. List<@Valid ...>) — surface as 400.
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException ex, WebRequest request) {
+        java.util.Map<String, String> violations = new java.util.HashMap<>();
+        ex.getConstraintViolations().forEach(v ->
+                violations.put(v.getPropertyPath().toString(), v.getMessage()));
+        ErrorResponse response = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error("Validation Failed")
+                .message("Request contains invalid values")
+                .validationErrors(violations)
+                .path(request.getDescription(false).replace("uri=", ""))
+                .build();
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    // Boot 4 wraps method-parameter/element validation (e.g. List<@Valid ...>)
+    // in this instead of ConstraintViolationException.
+    @ExceptionHandler(org.springframework.web.method.annotation.HandlerMethodValidationException.class)
+    public ResponseEntity<ErrorResponse> handleHandlerMethodValidation(
+            org.springframework.web.method.annotation.HandlerMethodValidationException ex, WebRequest request) {
+        java.util.Map<String, String> violations = new java.util.HashMap<>();
+        int[] i = {0};
+        ex.getAllErrors().forEach(err -> {
+            String field = err instanceof org.springframework.validation.FieldError fe
+                    ? fe.getField() : "param" + i[0]++;
+            violations.put(field, err.getDefaultMessage());
+        });
+        ErrorResponse response = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error("Validation Failed")
+                .message("Request contains invalid values")
+                .validationErrors(violations)
+                .path(request.getDescription(false).replace("uri=", ""))
+                .build();
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    // Login-time account states surfaced by the authentication provider.
+    // (EmailNotVerifiedException has its own 403 handler above.)
+    @ExceptionHandler({DisabledException.class, LockedException.class})
+    public ResponseEntity<ErrorResponse> handleAccountState(RuntimeException ex, WebRequest request) {
+        String message = ex instanceof LockedException
+                ? "Account is locked. Please try again later or contact support."
+                : "Account is not active or email is not verified.";
+        ErrorResponse response = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.UNAUTHORIZED.value())
+                .error("Unauthorized")
+                .message(message)
+                .path(request.getDescription(false).replace("uri=", ""))
+                .build();
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+    }
+
+    // The provider wraps loadUser failures (e.g. email-not-verified) in this.
+    @ExceptionHandler(InternalAuthenticationServiceException.class)
+    public ResponseEntity<ErrorResponse> handleInternalAuth(InternalAuthenticationServiceException ex, WebRequest request) {
+        Throwable cause = ex.getCause();
+        if (cause instanceof EmailNotVerifiedException enve) {
+            return handleEmailNotVerified(enve, request);
+        }
+        if (cause instanceof UnauthorizedException) {
+            return handleUnauthorized((UnauthorizedException) cause, request);
+        }
+        log.error("Authentication service error", ex);
+        ErrorResponse response = ErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.UNAUTHORIZED.value())
+                .error("Unauthorized")
+                .message("Authentication failed")
                 .path(request.getDescription(false).replace("uri=", ""))
                 .build();
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);

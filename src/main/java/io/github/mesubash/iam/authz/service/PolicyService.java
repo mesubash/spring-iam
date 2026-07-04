@@ -96,6 +96,9 @@ public class PolicyService {
         existing.setResourceType(updated.getResourceType());
         existing.setScopeId(updated.getScopeId());
         existing.setEffect(updated.getEffect());
+        if (updated.getEnforcementMode() != null) {
+            existing.setEnforcementMode(updated.getEnforcementMode().toUpperCase());
+        }
         existing.setPriority(updated.getPriority());
         existing.setConditions(updated.getConditions());
         existing.setActive(updated.getActive());
@@ -124,6 +127,14 @@ public class PolicyService {
                 throw new IllegalArgumentException("Invalid policy effect: " + policy.getEffect());
             }
             policy.setEffect(effect);
+        }
+
+        if (policy.getEnforcementMode() != null) {
+            String mode = policy.getEnforcementMode().toUpperCase();
+            if (!mode.equals("ENFORCE") && !mode.equals("SHADOW")) {
+                throw new IllegalArgumentException("Invalid enforcement mode: " + policy.getEnforcementMode());
+            }
+            policy.setEnforcementMode(mode);
         }
 
         if (policy.getPermissionKey() != null) {
