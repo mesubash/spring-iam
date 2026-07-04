@@ -138,7 +138,7 @@ class AuthorizationServiceDecisionTest {
         return p;
     }
 
-    // ── L0/L1: RBAC × scope ─────────────────────────────────────────────
+    // ── RBAC × scope ─────────────────────────────────────────────
 
     @Test
     void allowsWhenRoleGrantsPermissionAtAncestorScope() {
@@ -182,7 +182,7 @@ class AuthorizationServiceDecisionTest {
         assertTrue(r.getAuthorized());
     }
 
-    // ── L2: deny rules ──────────────────────────────────────────────────
+    // ── deny rules ──────────────────────────────────────────────────
 
     @Test
     void explicitDenyRuleWinsOverRoleGrant() {
@@ -226,7 +226,7 @@ class AuthorizationServiceDecisionTest {
         assertFalse(r.getAuthorized());
     }
 
-    // ── L1: scope validity ──────────────────────────────────────────────
+    // ── scope validity ──────────────────────────────────────────────
 
     @Test
     void inactiveScopeDeniesBeforeAnyOtherCheck() {
@@ -247,7 +247,7 @@ class AuthorizationServiceDecisionTest {
         assertTrue(r.getAuthorized()); // deny scope does not contain resource scope
     }
 
-    // ── L3: assignment conditions ───────────────────────────────────────
+    // ── assignment conditions ───────────────────────────────────────
 
     @Test
     void timeWindowConditionDeniesOutsideWindow() {
@@ -298,7 +298,7 @@ class AuthorizationServiceDecisionTest {
         assertFalse(r.getAuthorized());
     }
 
-    // ── L4: policies ────────────────────────────────────────────────────
+    // ── policies ────────────────────────────────────────────────────
 
     @Test
     void matchingDenyPolicyDenies() {

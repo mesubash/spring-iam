@@ -14,5 +14,9 @@ public class CreateRoleRequest {
     private String displayName;
     private String description;
     private String orgType;
+
+    // NULL = global role; set = role belongs to that scope's subtree
+    private UUID ownerScopeId;
+
     private List<UUID> permissionIds;
 }

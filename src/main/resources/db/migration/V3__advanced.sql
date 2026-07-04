@@ -4,7 +4,7 @@
 -- Tables for flag-gated layers ship here; unused tables cost nothing.
 -- ============================================================================
 
--- L2: explicit overrides, checked first, always win.
+-- Explicit overrides, checked first, always win.
 -- permission_key: segments of (name | *), optional trailing '**' (any depth).
 CREATE TABLE deny_rules (
     id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -31,7 +31,7 @@ CREATE INDEX idx_deny_rules_expires ON deny_rules(expires_at)
 
 COMMENT ON TABLE deny_rules IS 'Checked FIRST; DENY always wins. scope_id NULL = everywhere. ** = any remaining depth.';
 
--- L4: ABAC condition trees. SHADOW mode evaluates + audits but never decides.
+-- ABAC condition trees. SHADOW mode evaluates + audits but never decides.
 CREATE TABLE policies (
     id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name             VARCHAR(120) UNIQUE NOT NULL,
@@ -58,7 +58,7 @@ CREATE TRIGGER trg_policies_updated_at
     BEFORE UPDATE ON policies
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
--- L5: per-instance ReBAC grants — additional allow path, deny rules still win.
+-- Per-instance ReBAC grants — additional allow path, deny rules still win.
 CREATE TABLE resource_grants (
     id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     subject_id     VARCHAR(255) NOT NULL,

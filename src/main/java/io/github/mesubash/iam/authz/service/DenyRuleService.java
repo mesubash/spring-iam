@@ -31,9 +31,9 @@ public class DenyRuleService {
     }
 
     @Transactional
-    public DenyRule create(UserPrincipal caller, String subjectId, String permissionKey,
-                           UUID scopeId, String reason, String referenceId,
-                           Instant expiresAt) {
+    public DenyRule create(UserPrincipal caller, String subjectId, String subjectType,
+                           String permissionKey, UUID scopeId, String reason,
+                           String referenceId, Instant expiresAt) {
 
         // Enforce scope containment: caller must have authority over the target scope
         if (scopeId != null) {
@@ -42,7 +42,9 @@ public class DenyRuleService {
 
         // Validate permission exists (unless wildcard pattern — wildcard deny rules require SuperAdmin)
         if (permissionKey.contains("*")) {
-            if (!permissionKey.matches("^[a-z_*]+\\.[a-z_*]+\\.[a-z_*]+$")) {
+            // segments of (name | *), optional trailing '**' matching any remaining depth
+            if (!permissionKey.matches(
+                    "^(\\*\\*|(\\*|[a-z][a-z0-9_]*)(\\.(\\*|[a-z][a-z0-9_]*))*(\\.\\*\\*)?)$")) {
                 throw new IllegalArgumentException("Invalid permission pattern: " + permissionKey);
             }
             if (!delegationGuard.isPlatformAdmin(caller)) {
@@ -59,6 +61,7 @@ public class DenyRuleService {
 
         DenyRule denyRule = DenyRule.builder()
                 .subjectId(subjectId)
+                .subjectType(subjectType != null ? subjectType : "USER")
                 .permissionKey(permissionKey)
                 .scopeId(scopeId)
                 .reason(reason)

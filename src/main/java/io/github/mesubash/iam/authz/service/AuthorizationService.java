@@ -52,7 +52,7 @@ public class AuthorizationService {
     // required-allow: if ALLOW candidates exist, at least one must match.
     private final String policyMode;
 
-    // L5 hook — repository wiring lands with the feature-flag phase.
+    // Per-instance resource grants — wired when the feature flag ships.
     private final boolean resourceGrantsEnabled;
 
     // Metrics
@@ -371,7 +371,7 @@ public class AuthorizationService {
         return active;
     }
 
-    // L5 seam: per-instance grants land with the feature-flag phase.
+    // Per-instance grants lookup — implemented when the feature flag ships.
     private boolean resourceGrantAllows(AuthorizationRequest request) {
         return false;
     }

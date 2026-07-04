@@ -59,6 +59,7 @@ public class RoleController {
                 request.getDisplayName(),
                 request.getDescription(),
                 request.getOrgType(),
+                request.getOwnerScopeId(),
                 request.getPermissionIds()
         );
 

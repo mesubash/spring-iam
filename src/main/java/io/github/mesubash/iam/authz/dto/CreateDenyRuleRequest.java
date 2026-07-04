@@ -11,6 +11,9 @@ public class CreateDenyRuleRequest {
     @NotBlank(message = "Subject ID is required")
     private String subjectId;
 
+    // USER (default) | SERVICE | GROUP — GROUP denies every member
+    private String subjectType;
+
     @NotBlank(message = "Permission key is required")
     private String permissionKey;
 

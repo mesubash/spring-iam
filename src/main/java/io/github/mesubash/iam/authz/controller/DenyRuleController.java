@@ -43,6 +43,7 @@ public class DenyRuleController {
         DenyRule denyRule = denyRuleService.create(
                 caller,
                 request.getSubjectId(),
+                request.getSubjectType(),
                 request.getPermissionKey(),
                 request.getScopeId(),
                 request.getReason(),

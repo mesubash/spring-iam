@@ -6,6 +6,7 @@ import io.github.mesubash.iam.authz.entity.Role;
 import io.github.mesubash.iam.authz.entity.Scope;
 import io.github.mesubash.iam.authz.repository.AssignmentRepository;
 import io.github.mesubash.iam.authz.repository.RoleRepository;
+import io.github.mesubash.iam.authz.repository.ScopeClosureRepository;
 import io.github.mesubash.iam.authz.repository.ScopeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +24,7 @@ public class AssignmentService {
     private final AssignmentRepository assignmentRepository;
     private final RoleRepository roleRepository;
     private final ScopeRepository scopeRepository;
+    private final ScopeClosureRepository scopeClosureRepository;
     private final CacheService cacheService;
     private final DelegatedManagementGuard delegationGuard;
 
@@ -56,6 +58,13 @@ public class AssignmentService {
         // Validate scope exists
         Scope scope = scopeRepository.findById(scopeId)
                 .orElseThrow(() -> new IllegalArgumentException("Scope not found"));
+
+        // Tenant-scoped role: only assignable within its owning subtree
+        if (role.getOwnerScopeId() != null
+                && !scopeClosureRepository.scopeContains(role.getOwnerScopeId(), scopeId)) {
+            throw new IllegalArgumentException(
+                    "Role '" + role.getName() + "' belongs to another subtree and cannot be assigned here");
+        }
 
         // Check if assignment already exists
         Optional<Assignment> existing = assignmentRepository.findBySubjectRoleScope(

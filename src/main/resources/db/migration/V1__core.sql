@@ -1,5 +1,5 @@
 -- ============================================================================
--- V1 — CORE: extensions, AuthN tables, AuthZ L0 (permissions, roles)
+-- V1 — CORE: extensions, AuthN tables, AuthZ core (permissions, roles)
 -- ============================================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -110,7 +110,7 @@ CREATE TRIGGER trg_credentials_updated_at
 
 
 -- ============================================================================
--- AUTHZ L0: PERMISSIONS + ROLES
+-- AUTHZ CORE: PERMISSIONS + ROLES
 -- ============================================================================
 
 -- Permission key: 3-6 dot-separated segments, domain.<resource-path>.action.

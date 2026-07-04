@@ -50,7 +50,7 @@ public class RoleService {
 
     @Transactional(readOnly = true)
     public Optional<Role> getByName(String name) {
-        return roleRepository.findByName(name);
+        return roleRepository.findByOwnerScopeIdIsNullAndName(name);
     }
 
     @Transactional(readOnly = true)
@@ -61,13 +61,18 @@ public class RoleService {
 
     @Transactional
     public Role create(UserPrincipal caller, String name, String displayName, String description,
-                       String orgType, List<UUID> permissionIds) {
+                       String orgType, UUID ownerScopeId, List<UUID> permissionIds) {
 
         // Enforce permission ceiling: caller cannot grant permissions they don't hold
         delegationGuard.assertWithinPermissionCeiling(caller, permissionIds);
 
-        // Check if role already exists
-        Optional<Role> existing = roleRepository.findByName(name);
+        // Tenant-scoped role: caller must have authority over the owning subtree
+        if (ownerScopeId != null) {
+            delegationGuard.assertCanManageScope(caller, ownerScopeId);
+        }
+
+        // Uniqueness is per owner scope — tenant roles may share names across subtrees
+        Optional<Role> existing = roleRepository.findByOwnerAndName(ownerScopeId, name);
         if (existing.isPresent()) {
             throw new IllegalArgumentException("Role already exists: " + name);
         }
@@ -87,6 +92,7 @@ public class RoleService {
                 .displayName(displayName)
                 .description(description)
                 .orgType(orgType)
+                .ownerScopeId(ownerScopeId)
                 .isSystemRole(false)
                 .active(true)
                 .createdBy(createdBy)
