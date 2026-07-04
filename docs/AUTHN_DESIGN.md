@@ -2,7 +2,7 @@
 
 > **Status:** PROPOSAL — authentication module only
 > **Date:** 2026-07-04
-> Companions: `AUTHZ_DESIGN.md` (authorization engine), `TEMPLATE_REDESIGN_PROPOSAL.md` (template overview), `UI_PLAN.md` (frontend track), `FUTURE_ENHANCEMENTS.md` (deferred items)
+> Companions: `AUTHZ_DESIGN.md` (authorization engine), `ARCHITECTURE.md` (overview), `UI_PLAN.md` (frontend track), `FUTURE_ENHANCEMENTS.md` (deferred items)
 > **Scope of this document:** identity & credential model, token architecture (issuing, rotation, revocation), session management, OAuth2, account lifecycle, Redis keyspace, security spec, APIs, migration diff — with worked examples.
 
 ---
@@ -600,7 +600,7 @@ notification:
 | Code deletions | `RefreshTokenBlacklistServiceImpl` (DB is now primary — merged into session service), `JwtTokenProvider` dead methods, custom OAuth state code, `TokenEncryptionUtil` key-derivation-from-JWT-secret (replaced by dedicated key) |
 | JWT | HS256 shared secret → RS256 + JWKS; refresh JWT → opaque |
 
-Execution slot: this is backend **Phase 2** in `TEMPLATE_REDESIGN_PROPOSAL.md` §13 (Phase 1 = AuthZ schema flexibility ships first; the two are independent).
+This shipped after the AuthZ schema flexibility work; the two modules are independent.
 
 ---
 

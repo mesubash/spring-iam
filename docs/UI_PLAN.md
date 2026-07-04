@@ -2,7 +2,7 @@
 
 > **Status:** PLAN — approved direction, implementation later (after backend Phase 3 API freeze)
 > **Date:** 2026-07-04
-> Companions: `AUTHZ_DESIGN.md` (engine), `TEMPLATE_REDESIGN_PROPOSAL.md` (template), `FUTURE_ENHANCEMENTS.md` (deferred items)
+> Companions: `AUTHZ_DESIGN.md` (engine), `ARCHITECTURE.md` (overview), `FUTURE_ENHANCEMENTS.md` (deferred items)
 
 ---
 
@@ -140,7 +140,7 @@ Explicit non-choices: no Next.js (no SSR need), no Redux (Query covers it), no C
 
 ## 8. Execution Order & Gates
 
-UI work follows the backend phases in `TEMPLATE_REDESIGN_PROPOSAL.md` §13 (Phases 1–4). New phases:
+The backend (AuthN + AuthZ) is complete; the UI track is the remaining work. Phases:
 
 | Phase | Deliverable | Gate to start |
 |---|---|---|

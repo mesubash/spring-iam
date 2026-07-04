@@ -1,6 +1,6 @@
 # Future Enhancements — Deferred by Design
 
-> Companion to `AUTHZ_DESIGN.md` (authorization) and `TEMPLATE_REDESIGN_PROPOSAL.md` (full template).
+> Companion to `AUTHZ_DESIGN.md` (authorization) and `ARCHITECTURE.md` (overview).
 > Everything here was consciously **deferred**, not forgotten. Each entry records: what it is, why it waits, a design sketch so future-us doesn't restart from zero, and the **trigger** — the observable condition that says "build it now."
 > Date: 2026-07-04
 

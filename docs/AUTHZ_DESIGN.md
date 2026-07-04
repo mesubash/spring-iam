@@ -1,6 +1,6 @@
 # Authorization (AuthZ) — Complete Design
 
-> **Status:** PROPOSAL — authorization module only (AuthN covered separately in `TEMPLATE_REDESIGN_PROPOSAL.md`)
+> Authorization module design (AuthN covered separately in `AUTHN_DESIGN.md`).
 > **Date:** 2026-07-04
 > **Scope of this document:** the full authorization model, current schema, proposed schema, decision pipeline, condition languages, caching, delegation, APIs, and worked examples for every concept.
 

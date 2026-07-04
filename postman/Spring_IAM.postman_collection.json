@@ -1,735 +1,2590 @@
 {
-	"info": {
-		"_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-		"name": "Spring IAM",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-	},
-	"item": [
-		{
-			"name": "Health",
-			"item": [
-				{
-					"name": "Cache Stats",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/health/cache-stats",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "health", "cache-stats"]
-						}
-					}
-				},
-				{
-					"name": "Metrics",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/health/metrics",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "health", "metrics"]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Authentication",
-			"item": [
-				{
-					"name": "Register",
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"fullName\": \"Admin User\",\n  \"email\": \"admin@example.com\",\n  \"password\": \"Admin@123!\"\n}",
-							"options": { "raw": { "language": "json" } }
-						},
-						"url": {
-							"raw": "{{base_url}}/api/auth/register",
-							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "register"]
-						}
-					}
-				},
-				{
-					"name": "Login",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"type": "text/javascript",
-								"exec": [
-									"if (pm.response.code === 200) {",
-									"    var json = pm.response.json();",
-									"    if (json.data && json.data.accessToken) {",
-									"        pm.collectionVariables.set(\"access_token\", json.data.accessToken);",
-									"    }",
-									"}"
-								]
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"Admin@123!\"\n}",
-							"options": { "raw": { "language": "json" } }
-						},
-						"url": {
-							"raw": "{{base_url}}/api/auth/login",
-							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "login"]
-						}
-					}
-				},
-				{
-					"name": "Refresh Token",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "POST",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/auth/refresh",
-							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "refresh"]
-						}
-					}
-				},
-				{
-					"name": "Logout",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "POST",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/auth/logout",
-							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "logout"]
-						}
-					}
-				},
-				{
-					"name": "Change Password",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"currentPassword\": \"Admin@123!\",\n  \"newPassword\": \"NewAdmin@456!\",\n  \"confirmPassword\": \"NewAdmin@456!\"\n}",
-							"options": { "raw": { "language": "json" } }
-						},
-						"url": {
-							"raw": "{{base_url}}/api/auth/change-password",
-							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "change-password"]
-						}
-					}
-				},
-				{
-					"name": "Get Current User",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/auth/me",
-							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "me"]
-						}
-					}
-				},
-				{
-					"name": "Update Current User",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "PUT",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"displayName\": \"Admin User\"\n}",
-							"options": { "raw": { "language": "json" } }
-						},
-						"url": {
-							"raw": "{{base_url}}/api/auth/me",
-							"host": ["{{base_url}}"],
-							"path": ["api", "auth", "me"]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Scopes",
-			"item": [
-				{
-					"name": "List Scopes",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/scopes",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "scopes"]
-						}
-					}
-				},
-				{
-					"name": "Get Scope",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/scopes/{{scope_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "scopes", "{{scope_id}}"]
-						}
-					}
-				},
-				{
-					"name": "Get Scope Descendants",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/scopes/{{scope_id}}/descendants",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "scopes", "{{scope_id}}", "descendants"]
-						}
-					}
-				},
-				{
-					"name": "Create Scope",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"type\": \"REGION\",\n  \"name\": \"Example Region\",\n  \"code\": \"EX_REGION\",\n  \"parentId\": \"00000000-0000-0000-0000-000000000001\"\n}",
-							"options": { "raw": { "language": "json" } }
-						},
-						"url": {
-							"raw": "{{base_url}}/api/v1/scopes",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "scopes"]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Permissions",
-			"item": [
-				{
-					"name": "List Permissions",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/permissions",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "permissions"]
-						}
-					}
-				},
-				{
-					"name": "List Permissions by Domain",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/permissions?domain=platform",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "permissions"],
-							"query": [{ "key": "domain", "value": "platform" }]
-						}
-					}
-				},
-				{
-					"name": "Create Permission",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"key\": \"example.resource.read\",\n  \"domain\": \"example\",\n  \"resource\": \"resource\",\n  \"action\": \"read\",\n  \"description\": \"Read example resource\"\n}",
-							"options": { "raw": { "language": "json" } }
-						},
-						"url": {
-							"raw": "{{base_url}}/api/v1/permissions",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "permissions"]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Roles",
-			"item": [
-				{
-					"name": "List Roles",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/roles",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "roles"]
-						}
-					}
-				},
-				{
-					"name": "Get Role",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/roles/{{role_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "roles", "{{role_id}}"]
-						}
-					}
-				},
-				{
-					"name": "Get Role Permissions",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/roles/{{role_id}}/permissions",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "roles", "{{role_id}}", "permissions"]
-						}
-					}
-				},
-				{
-					"name": "Create Role",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"name\": \"ExampleRole\",\n  \"displayName\": \"Example Role\",\n  \"description\": \"Example role for testing\",\n  \"permissionIds\": []\n}",
-							"options": { "raw": { "language": "json" } }
-						},
-						"url": {
-							"raw": "{{base_url}}/api/v1/roles",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "roles"]
-						}
-					}
-				},
-				{
-					"name": "Update Role Permissions",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "PUT",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "[]",
-							"options": { "raw": { "language": "json" } }
-						},
-						"url": {
-							"raw": "{{base_url}}/api/v1/roles/{{role_id}}/permissions",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "roles", "{{role_id}}", "permissions"]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Assignments",
-			"item": [
-				{
-					"name": "List Assignments",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/assignments?subjectId={{subject_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "assignments"],
-							"query": [{ "key": "subjectId", "value": "{{subject_id}}" }]
-						}
-					}
-				},
-				{
-					"name": "Create Assignment",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"subjectId\": \"00000000-1000-0000-0000-000000000001\",\n  \"subjectType\": \"USER\",\n  \"roleId\": \"{{role_id}}\",\n  \"scopeId\": \"{{scope_id}}\"\n}",
-							"options": { "raw": { "language": "json" } }
-						},
-						"url": {
-							"raw": "{{base_url}}/api/v1/assignments",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "assignments"]
-						}
-					}
-				},
-				{
-					"name": "Delete Assignment",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "DELETE",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/assignments/{{assignment_id}}?reason=testing",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "assignments", "{{assignment_id}}"],
-							"query": [{ "key": "reason", "value": "testing" }]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Deny Rules",
-			"item": [
-				{
-					"name": "List Deny Rules",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/deny-rules?subjectId={{subject_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "deny-rules"],
-							"query": [{ "key": "subjectId", "value": "{{subject_id}}" }]
-						}
-					}
-				},
-				{
-					"name": "Create Deny Rule",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"subjectId\": \"{{subject_id}}\",\n  \"permissionKey\": \"example.resource.read\",\n  \"reason\": \"Testing deny rule\"\n}",
-							"options": { "raw": { "language": "json" } }
-						},
-						"url": {
-							"raw": "{{base_url}}/api/v1/deny-rules",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "deny-rules"]
-						}
-					}
-				},
-				{
-					"name": "Delete Deny Rule",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "DELETE",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/deny-rules/{{deny_rule_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "deny-rules", "{{deny_rule_id}}"]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Authorization",
-			"item": [
-				{
-					"name": "Authorize",
-					"request": {
-						"method": "POST",
-						"header": [
-							{ "key": "X-Internal-Api-Key", "value": "{{api_key}}" }
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"subject\": \"00000000-1000-0000-0000-000000000001\",\n  \"permission\": \"platform.role.read\",\n  \"resource\": {\n    \"type\": \"role\",\n    \"scopeId\": \"00000000-0000-0000-0000-000000000001\"\n  }\n}",
-							"options": { "raw": { "language": "json" } }
-						},
-						"url": {
-							"raw": "{{base_url}}/api/v1/authorize",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "authorize"]
-						}
-					}
-				},
-				{
-					"name": "Authorize Batch",
-					"request": {
-						"method": "POST",
-						"header": [
-							{ "key": "X-Internal-Api-Key", "value": "{{api_key}}" }
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "[\n  {\n    \"subject\": \"00000000-1000-0000-0000-000000000001\",\n    \"permission\": \"platform.role.read\",\n    \"resource\": {\n      \"type\": \"role\",\n      \"scopeId\": \"00000000-0000-0000-0000-000000000001\"\n    }\n  },\n  {\n    \"subject\": \"00000000-1000-0000-0000-000000000001\",\n    \"permission\": \"platform.scope.read\",\n    \"resource\": {\n      \"type\": \"scope\",\n      \"scopeId\": \"00000000-0000-0000-0000-000000000001\"\n    }\n  }\n]",
-							"options": { "raw": { "language": "json" } }
-						},
-						"url": {
-							"raw": "{{base_url}}/api/v1/authorize/batch",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "authorize", "batch"]
-						}
-					}
-				},
-				{
-					"name": "Effective Permissions",
-					"request": {
-						"method": "POST",
-						"header": [
-							{ "key": "X-Internal-Api-Key", "value": "{{api_key}}" }
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"subject\": \"00000000-1000-0000-0000-000000000001\",\n  \"scopeId\": \"00000000-0000-0000-0000-000000000001\"\n}",
-							"options": { "raw": { "language": "json" } }
-						},
-						"url": {
-							"raw": "{{base_url}}/api/v1/effective-permissions",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "effective-permissions"]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "User AuthZ",
-			"item": [
-				{
-					"name": "My Scopes",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/authz/me/scopes",
-							"host": ["{{base_url}}"],
-							"path": ["api", "authz", "me", "scopes"]
-						}
-					}
-				},
-				{
-					"name": "My Permissions",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/authz/me/permissions?scopeId=00000000-0000-0000-0000-000000000001",
-							"host": ["{{base_url}}"],
-							"path": ["api", "authz", "me", "permissions"],
-							"query": [{ "key": "scopeId", "value": "00000000-0000-0000-0000-000000000001" }]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Policies",
-			"item": [
-				{
-					"name": "List Policies",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/policies",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "policies"]
-						}
-					}
-				},
-				{
-					"name": "Create Policy",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"name\": \"test-policy\",\n  \"effect\": \"DENY\",\n  \"conditions\": {\n    \"all\": [\n      {\n        \"field\": \"subject\",\n        \"op\": \"eq\",\n        \"value\": \"$resource.metadata.ownerId\"\n      }\n    ]\n  },\n  \"active\": true\n}",
-							"options": { "raw": { "language": "json" } }
-						},
-						"url": {
-							"raw": "{{base_url}}/api/v1/policies",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "policies"]
-						}
-					}
-				},
-				{
-					"name": "Delete Policy",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "DELETE",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/policies/{{policy_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "policies", "{{policy_id}}"]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Role Hierarchy",
-			"item": [
-				{
-					"name": "Create Hierarchy",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"parentRoleId\": \"{{parent_role_id}}\",\n  \"childRoleId\": \"{{child_role_id}}\"\n}",
-							"options": { "raw": { "language": "json" } }
-						},
-						"url": {
-							"raw": "{{base_url}}/api/v1/role-hierarchy",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "role-hierarchy"]
-						}
-					}
-				},
-				{
-					"name": "Get Parent Roles",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/role-hierarchy/parents/{{role_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "role-hierarchy", "parents", "{{role_id}}"]
-						}
-					}
-				},
-				{
-					"name": "Get Child Roles",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/role-hierarchy/children/{{role_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "role-hierarchy", "children", "{{role_id}}"]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Permission Groups",
-			"item": [
-				{
-					"name": "List Permission Groups",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/permission-groups",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "permission-groups"]
-						}
-					}
-				},
-				{
-					"name": "Create Permission Group",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"name\": \"Example Group\",\n  \"description\": \"Test group\"\n}",
-							"options": { "raw": { "language": "json" } }
-						},
-						"url": {
-							"raw": "{{base_url}}/api/v1/permission-groups",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "permission-groups"]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "Audit",
-			"item": [
-				{
-					"name": "Audit by Subject",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/audit/subject/00000000-1000-0000-0000-000000000001?limit=10",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "audit", "subject", "00000000-1000-0000-0000-000000000001"],
-							"query": [{ "key": "limit", "value": "10" }]
-						}
-					}
-				},
-				{
-					"name": "Audit Statistics",
-					"request": {
-						"auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }] },
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/v1/audit/statistics/00000000-1000-0000-0000-000000000001?sinceDaysAgo=7",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "audit", "statistics", "00000000-1000-0000-0000-000000000001"],
-							"query": [{ "key": "sinceDaysAgo", "value": "7" }]
-						}
-					}
-				}
-			]
-		}
-	],
-	"variable": [
-		{ "key": "base_url", "value": "http://localhost:8080" },
-		{ "key": "access_token", "value": "" },
-		{ "key": "api_key", "value": "" },
-		{ "key": "scope_id", "value": "00000000-0000-0000-0000-000000000001" },
-		{ "key": "role_id", "value": "10000000-0000-0000-0000-000000000001" },
-		{ "key": "subject_id", "value": "00000000-1000-0000-0000-000000000001" },
-		{ "key": "assignment_id", "value": "" },
-		{ "key": "deny_rule_id", "value": "" },
-		{ "key": "policy_id", "value": "" },
-		{ "key": "parent_role_id", "value": "" },
-		{ "key": "child_role_id", "value": "" }
-	]
+  "info": {
+    "name": "Spring IAM",
+    "description": "Postman collection for the Spring Boot IAM service (authentication + authorization/PDP). Log in once via Auth > Login; the test script stores the access token in the accessToken collection variable and every other request reuses it. PDP/internal endpoints use X-Internal-Api-Key = {{internalApiKey}}; the service manifest sync uses {{serviceApiKey}}. The refresh token is a __Host-Refresh cookie handled automatically by Postman.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "internalApiKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "serviceApiKey",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john.doe@example.com\",\n  \"password\": \"SecurePass123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Create a new user account. Email verification required before login."
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john.doe@example.com\",\n  \"password\": \"SecurePass123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Authenticate and receive an RS256 access token. The test script stores data.accessToken into the accessToken collection variable. The refresh token is set as a __Host-Refresh cookie (handled by Postman)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Save the access token from a successful login so every other",
+                  "// request in this collection is authenticated automatically.",
+                  "try {",
+                  "    var res = pm.response.json();",
+                  "    if (res && res.data && res.data.accessToken) {",
+                  "        pm.collectionVariables.set('accessToken', res.data.accessToken);",
+                  "        console.log('accessToken saved to collection variable');",
+                  "    } else {",
+                  "        console.warn('No data.accessToken found in login response');",
+                  "    }",
+                  "} catch (e) {",
+                  "    console.error('Failed to parse login response: ' + e);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Rotate the access token using the __Host-Refresh cookie. No body — Postman sends the cookie automatically."
+          },
+          "response": []
+        },
+        {
+          "name": "OAuth Exchange Code",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"single-use-oauth-code-from-redirect\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/oauth/exchange",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "oauth",
+                "exchange"
+              ]
+            },
+            "description": "Swap the single-use code from the OAuth redirect for tokens."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Invalidate the current access token and clear the refresh cookie."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout All Sessions",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout-all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout-all"
+              ]
+            },
+            "description": "Revoke all refresh tokens (sessions) for the current user."
+          },
+          "response": []
+        },
+        {
+          "name": "Change Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newEmail\": \"new.email@example.com\",\n  \"currentPassword\": \"SecurePass123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/change-email",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "change-email"
+              ]
+            },
+            "description": "Requires current password; a verification link is sent to the new address."
+          },
+          "response": []
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"SecurePass123\",\n  \"newPassword\": \"EvenStronger456\",\n  \"confirmPassword\": \"EvenStronger456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/change-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "change-password"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/forgot-password?email=john.doe@example.com",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "forgot-password"
+              ],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "john.doe@example.com"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/reset-password?token=reset-token-from-email&newPassword=BrandNewPass789",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "reset-password"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "reset-token-from-email"
+                },
+                {
+                  "key": "newPassword",
+                  "value": "BrandNewPass789"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Email",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/verify-email?token=verification-token-from-email",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-email"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "verification-token-from-email"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Email & Setup Password",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"invite-token-from-email\",\n  \"newPassword\": \"SecurePass123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/verify-email-and-setup-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-email-and-setup-password"
+              ]
+            },
+            "description": "Verify an invited user's email and set the password in one step."
+          },
+          "response": []
+        },
+        {
+          "name": "Resend Verification",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/resend-verification?email=john.doe@example.com",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "resend-verification"
+              ],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "john.doe@example.com"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Email Change",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/verify-email-change?token=email-change-token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-email-change"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "email-change-token"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Request Reactivation",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/request-reactivation?email=john.doe@example.com",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "request-reactivation"
+              ],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "john.doe@example.com"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Reactivation",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/verify-reactivation?token=reactivation-token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-reactivation"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "reactivation-token"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "OAuth Providers",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/oauth/providers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "oauth",
+                "providers"
+              ]
+            },
+            "description": "List available OAuth providers (only when iam.features.oauth2=true)."
+          },
+          "response": []
+        },
+        {
+          "name": "OAuth Login (Google)",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/oauth/login/google?redirectUri=https://himalayanguardian.com/oauth2/redirect",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "oauth",
+                "login",
+                "google"
+              ],
+              "query": [
+                {
+                  "key": "redirectUri",
+                  "value": "https://himalayanguardian.com/oauth2/redirect"
+                }
+              ]
+            },
+            "description": "Browser redirect to Google OAuth. Open in a browser, not as an API call."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Keys & Discovery",
+      "item": [
+        {
+          "name": "JWKS",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/.well-known/jwks.json",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                ".well-known",
+                "jwks.json"
+              ]
+            },
+            "description": "Public signing keys for local JWT verification by consuming services."
+          },
+          "response": []
+        },
+        {
+          "name": "Rotate Signing Key",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/keys/rotate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "keys",
+                "rotate"
+              ]
+            },
+            "description": "SuperAdmin only. New key signs immediately; the old key verifies during its grace window."
+          },
+          "response": []
+        },
+        {
+          "name": "Enabled Features (Meta)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/meta/features",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "meta",
+                "features"
+              ]
+            },
+            "description": "Deployment feature discovery so clients can hide disabled modules."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Authorization (PDP)",
+      "item": [
+        {
+          "name": "Authorize (check)",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"22222222-2222-2222-2222-222222222222\",\n  \"permission\": \"incident.report.read\",\n  \"resource\": {\n    \"type\": \"incident\",\n    \"id\": \"incident-123\",\n    \"scopeId\": \"00000000-0000-0000-0000-000000000000\",\n    \"metadata\": {\n      \"ownerId\": \"22222222-2222-2222-2222-222222222222\"\n    }\n  },\n  \"context\": {\n    \"ipAddress\": \"203.0.113.10\",\n    \"userAgent\": \"example-service/1.0\",\n    \"requestId\": \"req-abc-123\",\n    \"additionalContext\": {\n      \"channel\": \"web\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize"
+              ]
+            },
+            "description": "The hot-path PDP decision endpoint. Internal API key or system JWT."
+          },
+          "response": []
+        },
+        {
+          "name": "Authorize Batch",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"subject\": \"22222222-2222-2222-2222-222222222222\",\n    \"permission\": \"incident.report.read\",\n    \"resource\": {\n      \"type\": \"incident\",\n      \"id\": \"incident-123\",\n      \"scopeId\": \"00000000-0000-0000-0000-000000000000\",\n      \"metadata\": {\n        \"ownerId\": \"22222222-2222-2222-2222-222222222222\"\n      }\n    },\n    \"context\": {\n      \"ipAddress\": \"203.0.113.10\",\n      \"userAgent\": \"example-service/1.0\",\n      \"requestId\": \"req-abc-123\",\n      \"additionalContext\": {\n        \"channel\": \"web\"\n      }\n    }\n  },\n  {\n    \"subject\": \"22222222-2222-2222-2222-222222222222\",\n    \"permission\": \"incident.report.update\",\n    \"resource\": {\n      \"type\": \"incident\",\n      \"id\": \"incident-456\",\n      \"scopeId\": \"00000000-0000-0000-0000-000000000000\"\n    }\n  }\n]",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize/batch",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize",
+                "batch"
+              ]
+            },
+            "description": "Evaluate up to 50 authorization requests in one call."
+          },
+          "response": []
+        },
+        {
+          "name": "Effective Permissions",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"22222222-2222-2222-2222-222222222222\",\n  \"scopeId\": \"00000000-0000-0000-0000-000000000000\",\n  \"includeDenied\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/effective-permissions?asOf=2026-07-01T00:00:00Z",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "effective-permissions"
+              ],
+              "query": [
+                {
+                  "key": "asOf",
+                  "value": "2026-07-01T00:00:00Z",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "All effective permissions for a subject at a scope. Optional ?asOf for point-in-time reconstruction."
+          },
+          "response": []
+        },
+        {
+          "name": "Filter Resources",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subjectId\": \"22222222-2222-2222-2222-222222222222\",\n  \"permission\": \"incident.report.read\",\n  \"resourceType\": \"incident\",\n  \"resourceIds\": [\n    \"incident-123\",\n    \"incident-456\",\n    \"incident-789\"\n  ],\n  \"scopeId\": \"00000000-0000-0000-0000-000000000000\",\n  \"context\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/filter-resources",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "filter-resources"
+              ]
+            },
+            "description": "Reduce a list of resource ids to the subset the subject may act on (max 500)."
+          },
+          "response": []
+        },
+        {
+          "name": "Explain Decision",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"22222222-2222-2222-2222-222222222222\",\n  \"permission\": \"incident.report.read\",\n  \"resource\": {\n    \"type\": \"incident\",\n    \"id\": \"incident-123\",\n    \"scopeId\": \"00000000-0000-0000-0000-000000000000\",\n    \"metadata\": {\n      \"ownerId\": \"22222222-2222-2222-2222-222222222222\"\n    }\n  },\n  \"context\": {\n    \"ipAddress\": \"203.0.113.10\",\n    \"userAgent\": \"example-service/1.0\",\n    \"requestId\": \"req-abc-123\",\n    \"additionalContext\": {\n      \"channel\": \"web\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize/explain",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize",
+                "explain"
+              ]
+            },
+            "description": "Admin-only dry-run trace of the decision pipeline; writes no audit record."
+          },
+          "response": []
+        },
+        {
+          "name": "Simulate Decision",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request\": {\n    \"subject\": \"22222222-2222-2222-2222-222222222222\",\n    \"permission\": \"incident.report.read\",\n    \"resource\": {\n      \"type\": \"incident\",\n      \"id\": \"incident-123\",\n      \"scopeId\": \"00000000-0000-0000-0000-000000000000\",\n      \"metadata\": {\n        \"ownerId\": \"22222222-2222-2222-2222-222222222222\"\n      }\n    },\n    \"context\": {\n      \"ipAddress\": \"203.0.113.10\",\n      \"userAgent\": \"example-service/1.0\",\n      \"requestId\": \"req-abc-123\",\n      \"additionalContext\": {\n        \"channel\": \"web\"\n      }\n    }\n  },\n  \"addAssignments\": [\n    {\n      \"roleId\": \"11111111-1111-1111-1111-111111111111\",\n      \"scopeId\": \"00000000-0000-0000-0000-000000000000\"\n    }\n  ],\n  \"removeAssignmentIds\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/authorize/simulate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "authorize",
+                "simulate"
+              ]
+            },
+            "description": "What-if evaluation with a hypothetical assignment set. Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "Access List (reverse lookup)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/access-list?permission=incident.report.read&scopeId=00000000-0000-0000-0000-000000000000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "access-list"
+              ],
+              "query": [
+                {
+                  "key": "permission",
+                  "value": "incident.report.read"
+                },
+                {
+                  "key": "scopeId",
+                  "value": "00000000-0000-0000-0000-000000000000"
+                }
+              ]
+            },
+            "description": "Who holds permission P at scope S. Admin only."
+          },
+          "response": []
+        },
+        {
+          "name": "Audit by Subject",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/audit/subject/22222222-2222-2222-2222-222222222222?limit=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "audit",
+                "subject",
+                "22222222-2222-2222-2222-222222222222"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": "Recent authorization decisions for a subject. Senior admins / audit viewers."
+          },
+          "response": []
+        },
+        {
+          "name": "Audit by Resource",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/audit/resource/incident/incident-123?limit=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "audit",
+                "resource",
+                "incident",
+                "incident-123"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Audit Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/audit/statistics/22222222-2222-2222-2222-222222222222?sinceDaysAgo=7",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "audit",
+                "statistics",
+                "22222222-2222-2222-2222-222222222222"
+              ],
+              "query": [
+                {
+                  "key": "sinceDaysAgo",
+                  "value": "7"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin — Permissions/Roles/Scopes",
+      "item": [
+        {
+          "name": "List Permissions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/permissions?domain=incident",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "domain",
+                  "value": "incident",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "SuperAdmin only. Optional ?domain filter."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Permission",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/permissions/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "permissions",
+                ":id"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Permission(s)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"key\": \"incident.report.read\",\n    \"domain\": \"incident\",\n    \"resource\": \"report\",\n    \"action\": \"read\",\n    \"description\": \"Read incident reports\"\n  }\n]",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "permissions"
+              ]
+            },
+            "description": "Accepts a single object or an array. Key must match domain.resource.action."
+          },
+          "response": []
+        },
+        {
+          "name": "List Roles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/roles?orgType=COUNTRY",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "roles"
+              ],
+              "query": [
+                {
+                  "key": "orgType",
+                  "value": "COUNTRY",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Role",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/roles/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "roles",
+                ":id"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Role Permissions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/roles/:id/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "roles",
+                ":id",
+                "permissions"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Role",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"incident_manager\",\n  \"displayName\": \"Incident Manager\",\n  \"description\": \"Manages incident reports within a scope\",\n  \"orgType\": \"COUNTRY\",\n  \"ownerScopeId\": null,\n  \"permissionIds\": [\n    \"33333333-3333-3333-3333-333333333333\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "roles"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Role Permissions",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  \"33333333-3333-3333-3333-333333333333\",\n  \"44444444-4444-4444-4444-444444444444\"\n]",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/roles/:id/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "roles",
+                ":id",
+                "permissions"
+              ]
+            },
+            "description": "Replaces the role's permission set with the supplied permission ids."
+          },
+          "response": []
+        },
+        {
+          "name": "List Scopes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/scopes?type=COUNTRY",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "scopes"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "COUNTRY",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "SuperAdmin only. Optional ?type filter."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Root Scope",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/scopes/root",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "scopes",
+                "root"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Scope",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/scopes/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "scopes",
+                ":id"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Scope Descendants",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/scopes/:id/descendants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "scopes",
+                ":id",
+                "descendants"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Scope",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"COUNTRY\",\n  \"name\": \"Nepal\",\n  \"code\": \"NP\",\n  \"parentId\": \"00000000-0000-0000-0000-000000000000\",\n  \"metadata\": {\n    \"iso\": \"NPL\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/scopes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "scopes"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Move Scope",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newParentId\": \"00000000-0000-0000-0000-000000000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/scopes/:id/move",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "scopes",
+                ":id",
+                "move"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Permission Groups",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/permission-groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "permission-groups"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Permission Group",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/permission-groups/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "permission-groups",
+                ":id"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Permission Group",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Incident Management\",\n  \"description\": \"Grouping for UI\",\n  \"parentGroupId\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/permission-groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "permission-groups"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Group Permissions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/permission-groups/:id/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "permission-groups",
+                ":id",
+                "permissions"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Group Permissions",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissionIds\": [\n    \"33333333-3333-3333-3333-333333333333\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/permission-groups/:id/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "permission-groups",
+                ":id",
+                "permissions"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Role Parents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/role-hierarchy/parents/:roleId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "role-hierarchy",
+                "parents",
+                ":roleId"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Role Children",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/role-hierarchy/children/:roleId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "role-hierarchy",
+                "children",
+                ":roleId"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Role Hierarchy",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parentRoleId\": \"11111111-1111-1111-1111-111111111111\",\n  \"childRoleId\": \"55555555-5555-5555-5555-555555555555\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/role-hierarchy",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "role-hierarchy"
+              ]
+            },
+            "description": "Make child role inherit the parent role's permissions."
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Role Hierarchy",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/role-hierarchy?parentRoleId=11111111-1111-1111-1111-111111111111&childRoleId=55555555-5555-5555-5555-555555555555",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "role-hierarchy"
+              ],
+              "query": [
+                {
+                  "key": "parentRoleId",
+                  "value": "11111111-1111-1111-1111-111111111111"
+                },
+                {
+                  "key": "childRoleId",
+                  "value": "55555555-5555-5555-5555-555555555555"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin — Assignments/Deny/Policies",
+      "item": [
+        {
+          "name": "List Assignments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/assignments?subjectId=22222222-2222-2222-2222-222222222222",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assignments"
+              ],
+              "query": [
+                {
+                  "key": "subjectId",
+                  "value": "22222222-2222-2222-2222-222222222222",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Assignment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subjectId\": \"22222222-2222-2222-2222-222222222222\",\n  \"subjectType\": \"USER\",\n  \"roleId\": \"11111111-1111-1111-1111-111111111111\",\n  \"scopeId\": \"00000000-0000-0000-0000-000000000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/assignments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assignments"
+              ]
+            },
+            "description": "Assign a role to a subject within a scope."
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke Assignment",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/assignments/:id?reason=Role no longer required",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assignments",
+                ":id"
+              ],
+              "query": [
+                {
+                  "key": "reason",
+                  "value": "Role no longer required",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Deny Rules",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deny-rules?subjectId=22222222-2222-2222-2222-222222222222",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deny-rules"
+              ],
+              "query": [
+                {
+                  "key": "subjectId",
+                  "value": "22222222-2222-2222-2222-222222222222"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Deny Rule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subjectId\": \"22222222-2222-2222-2222-222222222222\",\n  \"permissionKey\": \"incident.report.delete\",\n  \"reason\": \"Under investigation\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deny-rules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deny-rules"
+              ]
+            },
+            "description": "Explicit deny that overrides any grant."
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Deny Rule",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deny-rules/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deny-rules",
+                ":id"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Policies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/policies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "policies"
+              ]
+            },
+            "description": "SuperAdmin only."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Policy",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/policies/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "policies",
+                ":id"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Policy",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"same-country-only\",\n  \"description\": \"Restrict to same country\",\n  \"permissionKey\": \"incident.report.read\",\n  \"resourceType\": \"incident\",\n  \"scopeId\": \"00000000-0000-0000-0000-000000000000\",\n  \"effect\": \"ALLOW\",\n  \"priority\": 10,\n  \"conditions\": {\n    \"attribute\": \"resource.country\",\n    \"operator\": \"equals\",\n    \"value\": \"${subject.country}\"\n  },\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/policies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "policies"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Policy",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated description\",\n  \"effect\": \"ALLOW\",\n  \"priority\": 20,\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/policies/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "policies",
+                ":id"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Policy",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/policies/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "policies",
+                ":id"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Context Attributes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/context-attributes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "context-attributes"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Context Attribute",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"resource.country\",\n  \"valueType\": \"STRING\",\n  \"description\": \"Country the resource belongs to\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/context-attributes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "context-attributes"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Context Attribute",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/context-attributes/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "context-attributes",
+                ":id"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin — Grants/Groups/Services (flagged)",
+      "item": [
+        {
+          "name": "Create Resource Grant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subjectId\": \"22222222-2222-2222-2222-222222222222\",\n  \"subjectType\": \"USER\",\n  \"permissionKey\": \"incident.report.read\",\n  \"resourceType\": \"incident\",\n  \"resourceId\": \"incident-123\",\n  \"scopeId\": \"00000000-0000-0000-0000-000000000000\",\n  \"expiresAt\": \"2026-12-31T23:59:59Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/resource-grants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "resource-grants"
+              ]
+            },
+            "description": "Per-instance grant. Feature-flagged (iam.features.resource-grants)."
+          },
+          "response": []
+        },
+        {
+          "name": "List Resource Grants",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/resource-grants?subjectId=22222222-2222-2222-2222-222222222222&resourceType=incident&resourceId=incident-123",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "resource-grants"
+              ],
+              "query": [
+                {
+                  "key": "subjectId",
+                  "value": "22222222-2222-2222-2222-222222222222"
+                },
+                {
+                  "key": "resourceType",
+                  "value": "incident",
+                  "disabled": true
+                },
+                {
+                  "key": "resourceId",
+                  "value": "incident-123",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke Resource Grant",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/resource-grants/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "resource-grants",
+                ":id"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Groups",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "groups"
+              ]
+            },
+            "description": "SuperAdmin only. Feature-flagged (iam.features.groups)."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Group",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"on-call-responders\",\n  \"description\": \"Rotating on-call staff\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "groups"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Group Members",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/:id/members",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "groups",
+                ":id",
+                "members"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Group Member",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subjectId\": \"22222222-2222-2222-2222-222222222222\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/:id/members",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "groups",
+                ":id",
+                "members"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Group Member",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/:id/members/:subjectId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "groups",
+                ":id",
+                "members",
+                ":subjectId"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Register Service",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"incident-service\",\n  \"displayName\": \"Incident Service\",\n  \"ownedDomains\": [\n    \"incident\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services"
+              ]
+            },
+            "description": "SuperAdmin only. Returns the API key ONCE. Feature-flagged (iam.features.service-registry)."
+          },
+          "response": []
+        },
+        {
+          "name": "List Services",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services"
+              ]
+            },
+            "description": "SuperAdmin only."
+          },
+          "response": []
+        },
+        {
+          "name": "Sync Permission Manifest",
+          "request": {
+            "method": "PUT",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{serviceApiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissions\": [\n    {\n      \"key\": \"incident.report.read\",\n      \"description\": \"Read incident reports\"\n    },\n    {\n      \"key\": \"incident.report.update\",\n      \"description\": \"Update incident reports\"\n    }\n  ],\n  \"deprecateMissing\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services/:name/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "services",
+                ":name",
+                "permissions"
+              ]
+            },
+            "description": "Idempotent upsert of the service's own permission keys. Authenticated by the service's own API key (X-Internal-Api-Key: {{serviceApiKey}}) or a SuperAdmin bearer token."
+          },
+          "response": []
+        },
+        {
+          "name": "Grant Break-glass",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subjectId\": \"22222222-2222-2222-2222-222222222222\",\n  \"roleId\": \"11111111-1111-1111-1111-111111111111\",\n  \"scopeId\": \"00000000-0000-0000-0000-000000000000\",\n  \"durationMinutes\": 60,\n  \"reason\": \"Production incident P1\",\n  \"referenceId\": \"INC-2026-0042\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/break-glass",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "break-glass"
+              ]
+            },
+            "description": "Emergency time-boxed elevated access. Feature-flagged (iam.features.break-glass)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Token & Sessions",
+      "item": [
+        {
+          "name": "Introspect Token",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{accessToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/token/introspect",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "token",
+                "introspect"
+              ]
+            },
+            "description": "RFC 7662-shaped signature + expiry + revocation check. Internal callers only. Feature-flagged (iam.features.introspection)."
+          },
+          "response": []
+        },
+        {
+          "name": "Revocations Feed",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/token/revocations?since=2026-07-01T00:00:00Z",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "token",
+                "revocations"
+              ],
+              "query": [
+                {
+                  "key": "since",
+                  "value": "2026-07-01T00:00:00Z"
+                }
+              ]
+            },
+            "description": "Sessions revoked since a timestamp. Internal callers only. Feature-flagged (iam.features.revocation-feed)."
+          },
+          "response": []
+        },
+        {
+          "name": "List My Sessions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/sessions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "sessions"
+              ]
+            },
+            "description": "Active device sessions for the current user."
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke Session",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/sessions/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "sessions",
+                ":id"
+              ]
+            },
+            "description": "Log out one device by session id."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User Authz",
+      "item": [
+        {
+          "name": "My Scopes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/authz/me/scopes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authz",
+                "me",
+                "scopes"
+              ]
+            },
+            "description": "Scopes where the current user has active role assignments (org switcher)."
+          },
+          "response": []
+        },
+        {
+          "name": "My Permissions at Scope",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/authz/me/permissions?scopeId=00000000-0000-0000-0000-000000000000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "authz",
+                "me",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "scopeId",
+                  "value": "00000000-0000-0000-0000-000000000000"
+                }
+              ]
+            },
+            "description": "Effective permissions for the current user at the given scope."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Cache Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/health/cache-stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "health",
+                "cache-stats"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/health/metrics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "health",
+                "metrics"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
 }

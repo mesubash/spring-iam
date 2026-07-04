@@ -6,8 +6,9 @@ import lombok.Data;
 
 @Data
 public class CreatePermissionRequest {
+    // domain.<resource-path>.action — 3 to 6 dot-separated segments, digits allowed
     @NotBlank
-    @Pattern(regexp = "^[a-z_]+\\.[a-z_]+\\.[a-z_]+$")
+    @Pattern(regexp = "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*){2,5}$")
     private String key;
 
     @NotBlank
