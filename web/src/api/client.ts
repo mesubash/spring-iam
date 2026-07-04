@@ -65,29 +65,61 @@ async function doFetch(path: string, opts: Options): Promise<Response> {
   });
 }
 
-async function refreshToken(): Promise<boolean> {
+export type RefreshResult = { ok: boolean; identity: unknown };
+
+let refreshInFlight: Promise<RefreshResult> | null = null;
+
+async function doRefresh(): Promise<RefreshResult> {
   try {
     const res = await fetch(buildUrl("/api/auth/refresh"), {
       method: "POST",
       credentials: "include",
       headers: { Accept: "application/json" },
     });
-    if (!res.ok) return false;
+    if (!res.ok) return { ok: false, identity: null };
     const body = await res.json();
     const token = body?.data?.accessToken ?? body?.accessToken;
-    if (!token) return false;
+    const identity = body?.data?.identity ?? body?.identity ?? null;
+    if (!token) return { ok: false, identity: null };
     accessToken = token;
-    return true;
+    return { ok: true, identity };
   } catch {
-    return false;
+    return { ok: false, identity: null };
   }
+}
+
+/**
+ * Refresh the access token. The refresh cookie rotates on every use, so
+ * concurrent callers MUST share one request — otherwise a second call replays
+ * the already-rotated cookie and the backend revokes the session as reuse.
+ */
+export function refreshAccessToken(): Promise<RefreshResult> {
+  if (!refreshInFlight) {
+    refreshInFlight = doRefresh().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
+/** True when a response body is a `{ success|status, message, data }` envelope. */
+function unwrapEnvelope<T>(body: unknown): T {
+  if (
+    body &&
+    typeof body === "object" &&
+    "data" in body &&
+    ("success" in body || "status" in body)
+  ) {
+    return (body as { data: T }).data;
+  }
+  return body as T;
 }
 
 export async function request<T = unknown>(path: string, opts: Options = {}): Promise<T> {
   let res = await doFetch(path, opts);
 
   if (res.status === 401 && !opts.skipAuthRetry && !path.includes("/api/auth/")) {
-    const ok = await refreshToken();
+    const { ok } = await refreshAccessToken();
     if (ok) {
       res = await doFetch(path, opts);
     } else {
@@ -123,10 +155,7 @@ export async function request<T = unknown>(path: string, opts: Options = {}): Pr
     throw err;
   }
 
-  if (body && typeof body === "object" && "data" in body && "status" in body) {
-    return (body as { data: T }).data;
-  }
-  return body as T;
+  return unwrapEnvelope<T>(body);
 }
 
 export const api = {

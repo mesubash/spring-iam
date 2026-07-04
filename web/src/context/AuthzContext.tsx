@@ -46,7 +46,7 @@ export function AuthzProvider({ children }: { children: ReactNode }) {
     enabled: isAuthenticated,
   });
 
-  const scopes = scopesQ.data ?? [];
+  const scopes = Array.isArray(scopesQ.data) ? scopesQ.data : [];
 
   useEffect(() => {
     if (!scopeId && scopes.length > 0) {
@@ -86,7 +86,10 @@ export function AuthzProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const permissions = useMemo(() => new Set(permsQ.data ?? []), [permsQ.data]);
+  const permissions = useMemo(
+    () => new Set(Array.isArray(permsQ.data) ? permsQ.data : []),
+    [permsQ.data],
+  );
 
   const value = useMemo<AuthzState>(() => {
     const can = (key: string) => permissions.has(key);
