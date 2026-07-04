@@ -33,14 +33,18 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+    # Optional: works without a .env file, falling back to application.yml
+    # defaults. Copy .env.example to .env to override.
     env_file:
-        - .env
+        - path: .env
+          required: false
     environment:
-      # Override localhost values from .env with Docker network service names
+      # Override localhost values with the Docker-network service names
       DB_HOST: postgres
-      # The Postgres container still listens on 5432 inside the Docker network.
       DB_PORT: 5432
       REDIS_HOST: redis
+      # Feature flags default to false; enable per deployment, e.g.:
+      # IAM_FEATURES_SERVICE_REGISTRY: "true"
     ports:
       - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
 
