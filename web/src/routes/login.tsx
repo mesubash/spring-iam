@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -115,6 +115,15 @@ function LoginPage() {
           <Button type="submit" disabled={pending} className="w-full h-10">
             {pending ? "Signing in…" : "Sign in"}
           </Button>
+
+          <div className="text-center">
+            <Link
+              to="/forgot-password"
+              className="text-sm text-[var(--primary)] hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
         </form>
       </div>
     </div>

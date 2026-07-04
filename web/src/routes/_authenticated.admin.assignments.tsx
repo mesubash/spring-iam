@@ -2,11 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { assignmentsApi, rolesApi, scopesApi } from "@/api/resources";
+import { assignmentsApi, breakGlassApi, rolesApi, scopesApi } from "@/api/resources";
 import type { Assignment } from "@/api/types";
 import { PageHeader } from "@/components/iam/PageHeader";
 import { PermissionGuardedPage } from "@/components/iam/PermissionGuardedPage";
 import { Can } from "@/components/iam/Can";
+import { useAuthz } from "@/context/AuthzContext";
 import { DataTable, type Column } from "@/components/iam/DataTable";
 import { Tag } from "@/components/iam/badges";
 import { Button } from "@/components/ui/button";
@@ -59,7 +60,9 @@ function AssignmentsPage() {
     return m;
   }, [scopesQ.data]);
 
+  const { features } = useAuthz();
   const [createOpen, setCreateOpen] = useState(false);
+  const [breakGlassOpen, setBreakGlassOpen] = useState(false);
   const [revoking, setRevoking] = useState<Assignment | null>(null);
   const [reason, setReason] = useState("");
   const qc = useQueryClient();
@@ -156,7 +159,14 @@ function AssignmentsPage() {
         description="Role grants of subjects at scopes."
         actions={
           <Can permission="platform.assignment.create">
-            <Button onClick={() => setCreateOpen(true)}>Grant assignment</Button>
+            <div className="flex gap-2">
+              {features?.["break-glass"] ? (
+                <Button variant="outline" onClick={() => setBreakGlassOpen(true)}>
+                  Break-glass
+                </Button>
+              ) : null}
+              <Button onClick={() => setCreateOpen(true)}>Grant assignment</Button>
+            </div>
           </Can>
         }
       />
@@ -176,6 +186,7 @@ function AssignmentsPage() {
         rowKey={(a) => a.id}
       />
       {createOpen ? <GrantDialog open onOpenChange={setCreateOpen} /> : null}
+      {breakGlassOpen ? <BreakGlassDialog open onOpenChange={setBreakGlassOpen} /> : null}
       <ConfirmDialog
         open={!!revoking}
         onOpenChange={(v) => {
@@ -356,6 +367,143 @@ function GrantDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
           </Button>
           <Button onClick={() => m.mutate()} disabled={m.isPending || !canSubmit}>
             {m.isPending ? "Granting..." : "Grant"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function BreakGlassDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const qc = useQueryClient();
+  const rolesQ = useQuery({ queryKey: ["roles"], queryFn: () => rolesApi.list() });
+  const scopesQ = useQuery({ queryKey: ["scopes"], queryFn: () => scopesApi.list() });
+  const [subjectId, setSubjectId] = useState("");
+  const [roleId, setRoleId] = useState("");
+  const [scopeId, setScopeId] = useState("");
+  const [durationMinutes, setDurationMinutes] = useState("60");
+  const [reason, setReason] = useState("");
+  const [referenceId, setReferenceId] = useState("");
+
+  const scopes = useMemo(
+    () => [...(scopesQ.data ?? [])].sort((a, b) => a.path.localeCompare(b.path)),
+    [scopesQ.data],
+  );
+
+  const canSubmit =
+    !!subjectId.trim() && !!roleId && !!scopeId && !!reason.trim() && Number(durationMinutes) > 0;
+
+  const m = useMutation({
+    mutationFn: () =>
+      breakGlassApi.grant({
+        subjectId: subjectId.trim(),
+        roleId,
+        scopeId,
+        durationMinutes: Number(durationMinutes),
+        reason: reason.trim(),
+        referenceId: referenceId.trim() || undefined,
+      }),
+    onSuccess: () => {
+      toast.success("Break-glass access granted");
+      qc.invalidateQueries({ queryKey: ["assignments"] });
+      onOpenChange(false);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Break-glass access</DialogTitle>
+        </DialogHeader>
+        <div className="mb-1 rounded border border-[var(--warning)] bg-[var(--warning-subtle)] px-3 py-2 text-xs text-[var(--warning)]">
+          Emergency, time-boxed elevation. The grant is fully audited and expires automatically.
+          Use only for genuine incidents.
+        </div>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="bg-sub">Subject ID</Label>
+            <Input
+              id="bg-sub"
+              value={subjectId}
+              onChange={(e) => setSubjectId(e.target.value)}
+              className="font-mono text-xs"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="bg-role">Role</Label>
+            <select
+              id="bg-role"
+              value={roleId}
+              onChange={(e) => setRoleId(e.target.value)}
+              className="h-9 w-full rounded border border-[var(--border)] bg-[var(--card)] px-2 text-sm"
+            >
+              <option value="">Select a role…</option>
+              {(rolesQ.data ?? []).map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.displayName || r.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="bg-scope">Scope</Label>
+            <select
+              id="bg-scope"
+              value={scopeId}
+              onChange={(e) => setScopeId(e.target.value)}
+              className="h-9 w-full rounded border border-[var(--border)] bg-[var(--card)] px-2 text-sm"
+            >
+              <option value="">Select a scope…</option>
+              {scopes.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.path}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="bg-dur">Duration (minutes)</Label>
+            <Input
+              id="bg-dur"
+              type="number"
+              min={1}
+              value={durationMinutes}
+              onChange={(e) => setDurationMinutes(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="bg-reason">Reason (required)</Label>
+            <Input
+              id="bg-reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Incident reference or justification"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="bg-ref">Reference ID (optional)</Label>
+            <Input
+              id="bg-ref"
+              value={referenceId}
+              onChange={(e) => setReferenceId(e.target.value)}
+              placeholder="e.g. INC-1234"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={m.isPending}>
+            Cancel
+          </Button>
+          <Button onClick={() => m.mutate()} disabled={m.isPending || !canSubmit}>
+            {m.isPending ? "Granting…" : "Grant break-glass"}
           </Button>
         </DialogFooter>
       </DialogContent>

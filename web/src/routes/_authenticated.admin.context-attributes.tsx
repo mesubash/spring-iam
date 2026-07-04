@@ -76,7 +76,7 @@ function ContextAttributesPage() {
       header: "",
       width: "80px",
       render: (a) => (
-        <Can permission="platform.policy.delete">
+        <Can permission="platform.permission.create">
           <button
             type="button"
             onClick={(e) => {
@@ -98,7 +98,7 @@ function ContextAttributesPage() {
         title="Context attributes"
         description="Registered keys usable in policy conditions as context.additional.<name>. Values are supplied per request at authorization time."
         actions={
-          <Can permission="platform.policy.create">
+          <Can permission="platform.permission.create">
             <Button onClick={() => setCreating(true)}>New attribute</Button>
           </Can>
         }

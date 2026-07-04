@@ -1,9 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { assignmentsApi, auditApi, policiesApi, rolesApi, scopesApi } from "@/api/resources";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { toast } from "sonner";
+import { assignmentsApi, auditApi, keysApi, policiesApi, rolesApi, scopesApi } from "@/api/resources";
 import { PageHeader } from "@/components/iam/PageHeader";
 import { DataTable, type Column } from "@/components/iam/DataTable";
 import { DecisionBadge } from "@/components/iam/badges";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/iam/ConfirmDialog";
 import { formatDate } from "@/lib/format";
 import type { AuditEntry } from "@/api/types";
 import { useAuthz } from "@/context/AuthzContext";
@@ -98,6 +102,44 @@ function DashboardPage() {
         loading={audit.isLoading}
         empty="No recent decisions recorded for your account."
         rowKey={(e) => e.id}
+      />
+      {can("platform.permission.create") ? <KeyRotationCard /> : null}
+    </div>
+  );
+}
+
+function KeyRotationCard() {
+  const [confirm, setConfirm] = useState(false);
+
+  const rotate = useMutation({
+    mutationFn: () => keysApi.rotate(),
+    onSuccess: (res) => {
+      toast.success(`Signing key rotated${res?.kid ? ` (new kid ${res.kid})` : ""}`);
+      setConfirm(false);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="mt-8 rounded border border-border bg-card p-4">
+      <h2 className="text-sm font-semibold">Signing keys</h2>
+      <p className="mt-0.5 max-w-2xl text-xs text-muted-foreground">
+        Rotate the RS256 key used to sign access tokens. A new key becomes the active signer while
+        the previous key stays published in JWKS so tokens already issued remain valid until they
+        expire.
+      </p>
+      <Button variant="outline" className="mt-3" onClick={() => setConfirm(true)}>
+        Rotate signing key
+      </Button>
+      <ConfirmDialog
+        open={confirm}
+        onOpenChange={setConfirm}
+        title="Rotate signing key"
+        description="A new signing key is generated and becomes active immediately. This is a privileged, system-wide operation."
+        confirmLabel="Rotate key"
+        destructive
+        pending={rotate.isPending}
+        onConfirm={() => rotate.mutate()}
       />
     </div>
   );
