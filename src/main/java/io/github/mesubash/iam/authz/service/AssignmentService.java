@@ -99,6 +99,46 @@ public class AssignmentService {
         return saved;
     }
 
+    /**
+     * Emergency time-boxed elevation. Short mandatory expiry, origin BREAK_GLASS
+     * for reporting; rides the normal pipeline (deny rules still override).
+     */
+    @Transactional
+    public Assignment createBreakGlass(UserPrincipal caller, String subjectId, UUID roleId,
+                                       UUID scopeId, int durationMinutes, String reason, String referenceId) {
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("A reason is required for break-glass access");
+        }
+        int capped = Math.min(Math.max(durationMinutes, 1), 240); // hard cap 4h
+
+        delegationGuard.assertCanManageScope(caller, scopeId);
+        Role role = roleRepository.findById(roleId)
+                .orElseThrow(() -> new IllegalArgumentException("Role not found"));
+        scopeRepository.findById(scopeId)
+                .orElseThrow(() -> new IllegalArgumentException("Scope not found"));
+
+        Instant now = Instant.now();
+        Assignment assignment = assignmentRepository.save(Assignment.builder()
+                .subjectId(subjectId)
+                .subjectType("USER")
+                .roleId(roleId)
+                .scopeId(scopeId)
+                .grantedBy(caller.getId().toString())
+                .grantedAt(now)
+                .expiresAt(now.plusSeconds(capped * 60L))
+                .origin("BREAK_GLASS")
+                .conditions(new HashMap<>())
+                .active(true)
+                .build());
+
+        cacheService.invalidateUserPermissions(subjectId);
+        cacheService.incrementAssignmentVersion(subjectId);
+
+        log.warn("BREAK-GLASS granted: subject={}, role={}, scope={}, minutes={}, reason='{}', ref={}",
+                subjectId, role.getName(), scopeId, capped, reason, referenceId);
+        return assignment;
+    }
+
     @Transactional
     public Assignment revoke(UUID assignmentId, UserPrincipal caller, String reason) {
         Assignment assignment = assignmentRepository.findById(assignmentId)

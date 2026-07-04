@@ -9,13 +9,17 @@ public interface AuthService {
 
     void register(RegisterRequest request);
 
-    JwtResponse login(LoginRequest request);
+    JwtResponse login(LoginRequest request, String ipAddress, String userAgent);
 
     JwtResponse refreshToken(String refreshToken);
 
     JwtResponse exchangeOAuthCode(String code);
 
     void logout(String accessToken);
+
+    void changeEmail(String currentEmail, String newEmail, String currentPassword);
+
+    void verifyEmailChange(String token);
 
     void forgotPassword(String email);
 

@@ -431,6 +431,41 @@ class AuthorizationServiceDecisionTest {
         assertTrue(r.getAuthorized());
     }
 
+    // ── explain / filter (no audit) ─────────────────────────────────────
+
+    @Test
+    void explainTraceAllows() {
+        grantRole(null, PERM);
+        var explain = service.explain(request(PERM, PROJECT_SCOPE));
+        assertTrue(explain.isAllowed());
+        assertEquals("allowed", explain.getReason());
+        // deny → rbac/scope → conditions → policies all recorded
+        assertTrue(explain.getSteps().stream().anyMatch(s -> s.getName().equals("rbac_scope")
+                && s.getOutcome().equals("PASS")));
+    }
+
+    @Test
+    void explainTraceShowsDenyRule() {
+        grantRole(null, PERM);
+        denyRule(PERM, null);
+        var explain = service.explain(request(PERM, PROJECT_SCOPE));
+        assertFalse(explain.isAllowed());
+        assertEquals("explicit_deny", explain.getReason());
+    }
+
+    @Test
+    void filterResourcesReturnsOnlyAllowed() {
+        grantRole(null, PERM);
+        var req = new io.github.mesubash.iam.authz.dto.FilterResourcesRequest();
+        req.setSubjectId(SUBJECT);
+        req.setPermission(PERM);
+        req.setResourceType("invoice");
+        req.setScopeId(PROJECT_SCOPE);
+        req.setResourceIds(List.of("INV-1", "INV-2"));
+        // role grants the permission at scope, so all pass (no resource-specific gate here)
+        assertEquals(2, service.filterResources(req).size());
+    }
+
     // ── failure modes ───────────────────────────────────────────────────
 
     @Test

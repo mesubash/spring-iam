@@ -25,6 +25,7 @@ import io.github.mesubash.iam.authn.security.UserPrincipal;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -76,8 +77,10 @@ public class AuthController {
     @Operation(summary = "User login", description = "Authenticate user and return JWT tokens.")
     public ResponseEntity<ApiResponse<?>> login(
             @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest,
             HttpServletResponse response) {
-        JwtResponse jwtResponse = authService.login(request);
+        JwtResponse jwtResponse = authService.login(request, clientIp(httpRequest),
+                httpRequest.getHeader("User-Agent"));
 
         setRefreshTokenCookie(response, jwtResponse.getRefreshToken());
         JwtResponse responseBody = new JwtResponse(jwtResponse.getAccessToken(), jwtResponse.getExpiresIn(), jwtResponse.getIdentity());
@@ -179,6 +182,25 @@ public class AuthController {
                 SuccessResponse.of("Your password has been reset successfully")));
     }
 
+    @PostMapping("/change-email")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Change login email", description = "Requires current password; verification is sent to the new address")
+    public ResponseEntity<ApiResponse<SuccessResponse>> changeEmail(
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        authService.changeEmail(principal.getEmail(), body.get("newEmail"), body.get("currentPassword"));
+        return ResponseEntity.ok(ApiResponse.success("Verification sent",
+                SuccessResponse.of("Check the new address to confirm the change")));
+    }
+
+    @PostMapping("/verify-email-change")
+    @Operation(summary = "Confirm email change", description = "Consume the token sent to the new address")
+    public ResponseEntity<ApiResponse<SuccessResponse>> verifyEmailChange(@RequestParam String token) {
+        authService.verifyEmailChange(token);
+        return ResponseEntity.ok(ApiResponse.success("Email updated",
+                SuccessResponse.of("Your login email has been updated")));
+    }
+
     @PostMapping("/change-password")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Change password", description = "Change user password")
@@ -214,6 +236,14 @@ public class AuthController {
         authService.resendVerification(email);
         return ResponseEntity.ok(ApiResponse.success("Verification email sent",
                 SuccessResponse.of("Verification email has been sent to your email address")));
+    }
+
+    private String clientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 
     // --- Cookie helpers ---

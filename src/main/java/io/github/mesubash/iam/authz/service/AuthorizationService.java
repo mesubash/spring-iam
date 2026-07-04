@@ -13,6 +13,10 @@ import io.github.mesubash.iam.authz.dto.AuthorizationRequest;
 import io.github.mesubash.iam.authz.dto.AuthorizationResponse;
 import io.github.mesubash.iam.authz.dto.EffectivePermissionsRequest;
 import io.github.mesubash.iam.authz.dto.EffectivePermissionsResponse;
+import io.github.mesubash.iam.authz.dto.AccessListEntry;
+import io.github.mesubash.iam.authz.dto.ExplainResponse;
+import io.github.mesubash.iam.authz.dto.FilterResourcesRequest;
+import io.github.mesubash.iam.authz.dto.SimulateRequest;
 import io.github.mesubash.iam.shared.exception.AuthorizationServiceException;
 import io.github.mesubash.iam.util.IpRangeMatcher;
 import io.micrometer.core.instrument.Counter;
@@ -207,6 +211,221 @@ public class AuthorizationService {
                 .permissions(allowedPermissions)
                 .deniedPermissions(request.isIncludeDenied() ? deniedPermissions : null)
                 .build();
+    }
+
+    /**
+     * Dry-run trace of the decision pipeline. Same checks as authorize(),
+     * but records every step and writes NO audit record.
+     */
+    public ExplainResponse explain(AuthorizationRequest request) {
+        List<ExplainResponse.Step> steps = new ArrayList<>();
+        String subject = request.getSubject();
+        String permissionKey = request.getPermission();
+        UUID resourceScopeId = request.getResource().getScopeId();
+
+        if (!isScopeActive(resourceScopeId)) {
+            steps.add(step("scope_validity", "DENY", "Scope inactive or not found"));
+            return explainResult(false, "scope_inactive", steps);
+        }
+        steps.add(step("scope_validity", "PASS", "Scope is active"));
+
+        Set<CacheService.CachedDenyRule> denies = fetchDenyRules(subject);
+        if (matchesDenyRule(denies, permissionKey, resourceScopeId)) {
+            steps.add(step("deny_rules", "DENY", "An explicit deny rule matched"));
+            return explainResult(false, "explicit_deny", steps);
+        }
+        steps.add(step("deny_rules", "PASS",
+                denies.isEmpty() ? "No deny rules for subject" : "No matching deny rule"));
+
+        PermissionsResult pr = fetchUserPermissions(subject, permissionKey, resourceScopeId, request);
+        boolean viaRole = pr.permissions.contains(permissionKey);
+        if (viaRole) {
+            steps.add(step("rbac_scope", "PASS", "A role grants the permission within a containing scope"));
+            steps.add(step("conditions", "PASS", "Assignment conditions satisfied"));
+        } else if (pr.permissionBlockedByConditions) {
+            steps.add(step("rbac_scope", "PASS", "A role grants the permission"));
+            steps.add(step("conditions", "FAIL",
+                    pr.conditionFailureReason != null ? pr.conditionFailureReason : "Assignment conditions not satisfied"));
+        } else {
+            steps.add(step("rbac_scope", "FAIL", "No role grants the permission within a containing scope"));
+        }
+
+        boolean viaGrant = false;
+        if (!viaRole) {
+            if (resourceGrantsEnabled && resourceGrantAllows(request)) {
+                viaGrant = true;
+                steps.add(step("resource_grants", "PASS", "A resource grant allows this instance"));
+            } else {
+                steps.add(step("resource_grants", resourceGrantsEnabled ? "FAIL" : "SKIP",
+                        resourceGrantsEnabled ? "No matching resource grant" : "Resource grants disabled"));
+                return explainResult(false, pr.permissionBlockedByConditions ? "condition_failed" : "no_permission", steps);
+            }
+        }
+
+        PolicyDecision policy = evaluatePolicies(request);
+        if (!policy.allowed) {
+            steps.add(step("policies", "DENY", policy.reason != null ? policy.reason : "Policy denied"));
+            return explainResult(false, "policy_deny", steps);
+        }
+        steps.add(step("policies", "PASS", "No policy denied"));
+
+        return explainResult(true, viaGrant ? "resource_grant" : "allowed", steps);
+    }
+
+    /** Filter a list of resource ids to those the subject may act on (no audit). */
+    public List<String> filterResources(FilterResourcesRequest request) {
+        List<String> allowed = new ArrayList<>();
+        for (String resourceId : request.getResourceIds()) {
+            AuthorizationRequest.RequestContext ctx = request.getContext() == null ? null
+                    : AuthorizationRequest.RequestContext.builder()
+                            .additionalContext(request.getContext()).build();
+            AuthorizationRequest probe = AuthorizationRequest.builder()
+                    .subject(request.getSubjectId())
+                    .permission(request.getPermission())
+                    .resource(AuthorizationRequest.ResourceContext.builder()
+                            .type(request.getResourceType())
+                            .id(resourceId)
+                            .scopeId(request.getScopeId())
+                            .build())
+                    .context(ctx)
+                    .build();
+            if (decideNoAudit(probe)) {
+                allowed.add(resourceId);
+            }
+        }
+        return allowed;
+    }
+
+    /** What-if evaluation with a hypothetical assignment set. Never persists, never audits. */
+    public ExplainResponse simulate(SimulateRequest sim) {
+        AuthorizationRequest request = sim.getRequest();
+        String subject = request.getSubject();
+        String permissionKey = request.getPermission();
+        UUID resourceScopeId = request.getResource().getScopeId();
+
+        Set<UUID> removed = new HashSet<>(sim.getRemoveAssignmentIds());
+        List<Assignment> assignments = new ArrayList<>(assignmentRepository
+                .findActiveAssignmentsForSubjects(subjectKeys(subject), Instant.now()).stream()
+                .filter(a -> !removed.contains(a.getId()))
+                .toList());
+        for (SimulateRequest.Hypothetical h : sim.getAddAssignments()) {
+            assignments.add(Assignment.builder()
+                    .id(UUID.randomUUID()).subjectId(subject).subjectType("USER")
+                    .roleId(h.getRoleId()).scopeId(h.getScopeId())
+                    .grantedBy("SIMULATION").active(true).conditions(new HashMap<>())
+                    .build());
+        }
+
+        List<ExplainResponse.Step> steps = new ArrayList<>();
+        if (matchesDenyRule(fetchDenyRules(subject), permissionKey, resourceScopeId)) {
+            steps.add(step("deny_rules", "DENY", "An explicit deny rule matched"));
+            return explainResult(false, "explicit_deny", steps);
+        }
+        steps.add(step("deny_rules", "PASS", "No matching deny rule"));
+
+        PermissionsResult pr = computePermissions(assignments, permissionKey, resourceScopeId, request);
+        boolean granted = pr.permissions.contains(permissionKey);
+        steps.add(step("rbac_scope", granted ? "PASS" : "FAIL",
+                granted ? "Granted by the (hypothetical) role set" : "Not granted by the (hypothetical) role set"));
+        if (!granted) {
+            return explainResult(false, "no_permission", steps);
+        }
+
+        PolicyDecision policy = evaluatePolicies(request);
+        steps.add(step("policies", policy.allowed ? "PASS" : "DENY",
+                policy.allowed ? "No policy denied" : (policy.reason != null ? policy.reason : "Policy denied")));
+        return explainResult(policy.allowed, policy.allowed ? "allowed" : "policy_deny", steps);
+    }
+
+    /**
+     * Point-in-time effective permissions (L0–L1 reconstruction from
+     * assignment history). Live deny rules and policies are not versioned,
+     * so this reflects role/scope grants as they stood at the instant.
+     */
+    public EffectivePermissionsResponse getEffectivePermissionsAsOf(String subject, UUID scopeId, Instant asOf) {
+        if (subject == null || subject.isBlank()) {
+            throw new IllegalArgumentException("subject is required");
+        }
+        if (scopeId == null) {
+            throw new IllegalArgumentException("scopeId is required");
+        }
+
+        List<Assignment> assignments = assignmentRepository.findAssignmentsAsOf(
+                subjectKeys(subject), asOf);
+
+        AuthorizationRequest probe = AuthorizationRequest.builder()
+                .subject(subject).permission("*.*.*")
+                .resource(AuthorizationRequest.ResourceContext.builder().scopeId(scopeId).build())
+                .build();
+
+        PermissionsResult pr = computePermissions(assignments, null, scopeId, probe);
+        return EffectivePermissionsResponse.builder()
+                .subject(subject)
+                .scopeId(scopeId)
+                .permissions(pr.permissions)
+                .build();
+    }
+
+    /**
+     * Reverse lookup: which subjects hold the permission at the scope.
+     * Reflects L0–L2 truth (roles + scope + deny); entries whose grant carries
+     * conditions or matching policies are flagged conditional (context-dependent).
+     */
+    public List<AccessListEntry> accessList(String permission, UUID scopeId) {
+        List<String> candidates = assignmentRepository.findSubjectsWithAssignmentCoveringScope(scopeId);
+        boolean hasPolicies = !policyService.getApplicablePolicies(permission, null).isEmpty();
+
+        List<AccessListEntry> result = new ArrayList<>();
+        for (String subject : candidates) {
+            AuthorizationRequest probe = AuthorizationRequest.builder()
+                    .subject(subject).permission(permission)
+                    .resource(AuthorizationRequest.ResourceContext.builder().scopeId(scopeId).build())
+                    .build();
+
+            Set<CacheService.CachedDenyRule> denies = fetchDenyRules(subject);
+            if (matchesDenyRule(denies, permission, scopeId)) {
+                continue;
+            }
+            PermissionsResult pr = fetchUserPermissions(subject, permission, scopeId, probe);
+            boolean holds = pr.permissions.contains(permission) || pr.permissionBlockedByConditions;
+            if (holds) {
+                result.add(AccessListEntry.builder()
+                        .subjectId(subject)
+                        .conditional(pr.permissionBlockedByConditions || hasPolicies)
+                        .build());
+            }
+        }
+        return result;
+    }
+
+    // Lean decision without audit or metrics — for filter/simulate.
+    private boolean decideNoAudit(AuthorizationRequest request) {
+        UUID resourceScopeId = request.getResource().getScopeId();
+        if (!isScopeActive(resourceScopeId)) {
+            return false;
+        }
+        if (matchesDenyRule(fetchDenyRules(request.getSubject()),
+                request.getPermission(), resourceScopeId)) {
+            return false;
+        }
+        PermissionsResult pr = fetchUserPermissions(
+                request.getSubject(), request.getPermission(), resourceScopeId, request);
+        boolean permitted = pr.permissions.contains(request.getPermission());
+        if (!permitted && resourceGrantsEnabled && resourceGrantAllows(request)) {
+            permitted = true;
+        }
+        if (!permitted) {
+            return false;
+        }
+        return evaluatePolicies(request).allowed;
+    }
+
+    private ExplainResponse.Step step(String name, String outcome, String detail) {
+        return ExplainResponse.Step.builder().name(name).outcome(outcome).detail(detail).build();
+    }
+
+    private ExplainResponse explainResult(boolean allowed, String reason, List<ExplainResponse.Step> steps) {
+        return ExplainResponse.builder().allowed(allowed).reason(reason).steps(steps).build();
     }
 
     private AuthorizationResponse doAuthorize(AuthorizationRequest request) {
@@ -454,6 +673,14 @@ public class AuthorizationService {
         List<Assignment> assignments = assignmentRepository.findActiveAssignmentsForSubjects(
                 subjectKeys(subjectId), Instant.now());
 
+        return computePermissions(assignments, permissionKey, resourceScopeId, request);
+    }
+
+    // Shared by the live path and by /simulate (which passes a hypothetical set).
+    private PermissionsResult computePermissions(List<Assignment> assignments,
+                                                 String permissionKey,
+                                                 UUID resourceScopeId,
+                                                 AuthorizationRequest request) {
         if (assignments.isEmpty()) {
             return PermissionsResult.empty();
         }

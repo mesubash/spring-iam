@@ -5,6 +5,15 @@
 
 ---
 
+## Phase 5 — PDP extras, AuthN extras, integrity, registry
+
+| Date | Block | What was done | Commit |
+|------|-------|---------------|--------|
+| 2026-07-04 | PDP | `POST /authorize/explain` (dry-run pipeline trace, no audit), `POST /authorize/simulate` (hypothetical assignment set), `POST /filter-resources` (≤500 ids → allowed subset), `GET /access-list` (reverse lookup via closure), `?asOf=` on effective-permissions (assignment-history reconstruction). `fetchUserPermissions` refactored into reusable `computePermissions`; `decideNoAudit` shared by filter/simulate | Phase 5 commit |
+| 2026-07-04 | AuthN | Client ip/ua threaded into password-login sessions; email-change flow (`change-email` + `verify-email-change`, re-auth + verify-new + notify, EMAIL_CHANGE token type); introspection endpoint (flag, INTERNAL-only); break-glass endpoint (flag, `AssignmentService.createBreakGlass`, ≤4h cap, origin BREAK_GLASS). SecurityEventType enum synced with V1 (SESSION_EVICTED/REUSE_DETECTED/OAUTH_LINKED/EMAIL_CHANGED) | Phase 5 commit |
+| 2026-07-04 | Registry/guards | `context_attributes` entity+repo+CRUD; PolicyService save-time validation rejects unregistered `context.additional.*` fields; PolicyEvaluator runtime whitelist widened by the registry (60s cache, optional dep so unit tests keep no-arg ctor). Startup `IntegrityValidator` (one root, no dangling refs, non-hollow system roles, closure ≥ scope count; `iam.integrity.fail-on-error` refuses boot). Feature flags + meta extended (break-glass, introspection) | Phase 5 commit |
+| 2026-07-04 | tests | Decision suite → 32 (explain trace, filter-resources). Suite 45/45. **Backend complete except pagination** (deferred: broad list pagination conflicts with the array UI contract; add as opt-in later) | Phase 5 commit |
+
 ## Phase 4 — Hardening
 
 | Date | Block | What was done | Commit |

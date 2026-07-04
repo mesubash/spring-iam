@@ -29,6 +29,15 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
     List<Assignment> findActiveAssignmentsForSubjects(@Param("subjectIds") Collection<String> subjectIds,
                                                       @Param("now") Instant now);
 
+    // Point-in-time reconstruction: assignments whose validity interval covers :asOf.
+    @Query("SELECT a FROM Assignment a " +
+            "WHERE a.subjectId IN :subjectIds " +
+            "AND a.grantedAt <= :asOf " +
+            "AND (a.revokedAt IS NULL OR a.revokedAt > :asOf) " +
+            "AND (a.expiresAt IS NULL OR a.expiresAt > :asOf)")
+    List<Assignment> findAssignmentsAsOf(@Param("subjectIds") Collection<String> subjectIds,
+                                         @Param("asOf") Instant asOf);
+
     @Query("SELECT a FROM Assignment a " +
             "WHERE a.subjectId = :subjectId " +
             "AND a.roleId = :roleId " +
@@ -41,6 +50,14 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
     @Query("SELECT COUNT(a) FROM Assignment a " +
             "WHERE a.subjectId = :subjectId AND a.active = true")
     long countActiveAssignmentsBySubject(@Param("subjectId") String subjectId);
+
+    // Subjects whose assignment scope contains the given scope (ancestor-or-self).
+    @Query(value = "SELECT DISTINCT a.subject_id FROM assignments a " +
+            "JOIN scope_closure c ON c.ancestor_id = a.scope_id " +
+            "WHERE c.descendant_id = :scopeId AND a.active = true " +
+            "AND (a.expires_at IS NULL OR a.expires_at > NOW())",
+            nativeQuery = true)
+    List<String> findSubjectsWithAssignmentCoveringScope(@Param("scopeId") UUID scopeId);
 
     @Query(value = "SELECT EXISTS (" +
             "SELECT 1 FROM assignments a " +

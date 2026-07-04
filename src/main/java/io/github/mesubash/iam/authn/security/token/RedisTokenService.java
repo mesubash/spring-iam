@@ -59,7 +59,7 @@ public class RedisTokenService implements TokenService {
     private long ttlFor(TokenType type) {
         return switch (type) {
             case PASSWORD_RESET -> PASSWORD_RESET_TTL_MS;
-            case EMAIL_VERIFICATION -> EMAIL_VERIFICATION_TTL_MS;
+            case EMAIL_VERIFICATION, EMAIL_CHANGE -> EMAIL_VERIFICATION_TTL_MS;
             case ACCOUNT_REACTIVATION -> ACCOUNT_REACTIVATION_TTL_MS;
             case REFRESH -> throw new IllegalArgumentException(
                     "Refresh tokens are managed by SessionService");

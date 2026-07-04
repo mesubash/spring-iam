@@ -23,5 +23,10 @@ public enum TokenType {
     /**
      * Token for account reactivation
      */
-    ACCOUNT_REACTIVATION
+    ACCOUNT_REACTIVATION,
+
+    /**
+     * Token for confirming a change of the login email
+     */
+    EMAIL_CHANGE
 }

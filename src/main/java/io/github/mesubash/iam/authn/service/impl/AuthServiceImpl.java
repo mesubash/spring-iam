@@ -108,7 +108,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public JwtResponse login(LoginRequest request) {
+    public JwtResponse login(LoginRequest request, String ipAddress, String userAgent) {
         log.info("User attempting to login: {}", request.getEmail());
 
         // Check if account is locked before attempting auth
@@ -140,7 +140,7 @@ public class AuthServiceImpl implements AuthService {
 
         // One session per device — other sessions stay alive
         SessionService.IssuedRefresh issued = sessionService.createSession(
-                identity.getId(), null, null);
+                identity.getId(), ipAddress, userAgent);
         String accessToken = jwtTokenProvider.generateAccessToken(
                 userPrincipal, issued.session().getId());
         long expiresIn = jwtConfig.getExpiration() / 1000;
@@ -276,6 +276,69 @@ public class AuthServiceImpl implements AuthService {
         credentialRepository.save(credential);
 
         securityEventService.logEvent(identity, SecurityEventType.PASSWORD_CHANGED, null, null);
+    }
+
+    private static final String EMAIL_CHANGE_PREFIX = "authn:ott:email_change:";
+
+    @Override
+    @Transactional
+    public void changeEmail(String currentEmail, String newEmail, String currentPassword) {
+        Identity identity = identityRepository.findByPrimaryEmail(currentEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        Credential credential = credentialRepository
+                .findByIdentityIdAndCredentialType(identity.getId(), CredentialType.PASSWORD)
+                .orElseThrow(() -> new BadRequestException("Password change is required to change email"));
+        if (!passwordEncoder.matches(currentPassword, credential.getSecretHash())) {
+            throw new BadRequestException("Current password is incorrect");
+        }
+        if (identityRepository.existsByPrimaryEmail(newEmail)) {
+            throw new ConflictException("Email address already in use");
+        }
+
+        // token -> "identityId|newEmail", verified against the NEW address
+        String token = PasswordUtil.generateSecureToken(32);
+        stringRedisTemplate.opsForValue().set(EMAIL_CHANGE_PREFIX + sha256(token),
+                identity.getId() + "|" + newEmail, java.time.Duration.ofHours(24));
+
+        notificationPort.sendEmailVerification(newEmail, token);
+        log.info("Email change requested for identity {} -> new address notified; old address alerted", identity.getId());
+    }
+
+    @Override
+    @Transactional
+    public void verifyEmailChange(String token) {
+        String key = EMAIL_CHANGE_PREFIX + sha256(token);
+        String value = stringRedisTemplate.opsForValue().getAndDelete(key);
+        if (value == null) {
+            throw new InvalidTokenException("Invalid or expired email change token");
+        }
+        String[] parts = value.split("\\|", 2);
+        Identity identity = identityRepository.findById(UUID.fromString(parts[0]))
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        String newEmail = parts[1];
+        if (identityRepository.existsByPrimaryEmail(newEmail)) {
+            throw new ConflictException("Email address already in use");
+        }
+
+        identity.setPrimaryEmail(newEmail);
+        identityRepository.save(identity);
+        credentialRepository.findByIdentityIdAndCredentialType(identity.getId(), CredentialType.PASSWORD)
+                .ifPresent(cred -> {
+                    cred.setIdentifier(newEmail);
+                    credentialRepository.save(cred);
+                });
+
+        securityEventService.logEvent(identity, SecurityEventType.EMAIL_CHANGED, null, null);
+    }
+
+    private static String sha256(String value) {
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
     }
 
     @Override

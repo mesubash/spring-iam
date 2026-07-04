@@ -1,7 +1,11 @@
 package io.github.mesubash.iam.authz.controller;
 
+import io.github.mesubash.iam.authz.dto.AccessListEntry;
 import io.github.mesubash.iam.authz.dto.AuthorizationRequest;
 import io.github.mesubash.iam.authz.dto.AuthorizationResponse;
+import io.github.mesubash.iam.authz.dto.ExplainResponse;
+import io.github.mesubash.iam.authz.dto.FilterResourcesRequest;
+import io.github.mesubash.iam.authz.dto.SimulateRequest;
 import io.github.mesubash.iam.authz.service.AuthorizationService;
 import io.github.mesubash.iam.authz.dto.EffectivePermissionsRequest;
 import io.github.mesubash.iam.authz.dto.EffectivePermissionsResponse;
@@ -12,11 +16,14 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 
 @Slf4j
@@ -95,12 +102,57 @@ public class AuthorizationController {
      * Useful for UI capability loading or service-side caching.
      */
     @PostMapping("/effective-permissions")
-    @Operation(summary = "Get effective permissions for a subject/scope")
+    @Operation(summary = "Get effective permissions for a subject/scope",
+            description = "Pass ?asOf=<ISO-8601> for point-in-time reconstruction from assignment history")
     public ResponseEntity<EffectivePermissionsResponse> effectivePermissions(
-            @RequestBody EffectivePermissionsRequest request) {
+            @RequestBody EffectivePermissionsRequest request,
+            @RequestParam(required = false) Instant asOf) {
 
-        EffectivePermissionsResponse response = authorizationService.getEffectivePermissions(request);
-        return ResponseEntity.ok(response);
+        if (asOf != null) {
+            UUID scopeId = request.getScopeId() != null ? request.getScopeId()
+                    : (request.getResource() != null ? request.getResource().getScopeId() : null);
+            return ResponseEntity.ok(authorizationService.getEffectivePermissionsAsOf(
+                    request.getSubject(), scopeId, asOf));
+        }
+        return ResponseEntity.ok(authorizationService.getEffectivePermissions(request));
+    }
+
+    @PostMapping("/authorize/explain")
+    @PreAuthorize("hasAnyRole('SuperAdmin','CountryAdmin','AccessAdmin','SecurityAdmin','AuditViewer')")
+    @Operation(summary = "Explain a decision",
+            description = "Dry-run trace of the pipeline; writes no audit record")
+    public ResponseEntity<ExplainResponse> explain(
+            @Valid @RequestBody AuthorizationRequest request,
+            HttpServletRequest httpRequest) {
+        enrichRequestContext(request, httpRequest);
+        return ResponseEntity.ok(authorizationService.explain(request));
+    }
+
+    @PostMapping("/authorize/simulate")
+    @PreAuthorize("hasAnyRole('SuperAdmin','CountryAdmin','AccessAdmin')")
+    @Operation(summary = "Simulate a decision with a hypothetical assignment set")
+    public ResponseEntity<ExplainResponse> simulate(@Valid @RequestBody SimulateRequest request) {
+        return ResponseEntity.ok(authorizationService.simulate(request));
+    }
+
+    @PostMapping("/filter-resources")
+    @Operation(summary = "Filter a list of resource ids to the subset the subject may act on")
+    public ResponseEntity<Map<String, Object>> filterResources(
+            @Valid @RequestBody FilterResourcesRequest request) {
+        if (request.getResourceIds().size() > 500) {
+            throw new IllegalArgumentException("resourceIds exceeds maximum of 500");
+        }
+        List<String> allowed = authorizationService.filterResources(request);
+        return ResponseEntity.ok(Map.of("allowed", allowed));
+    }
+
+    @GetMapping("/access-list")
+    @PreAuthorize("hasAnyRole('SuperAdmin','CountryAdmin','AccessAdmin','SecurityAdmin','AuditViewer')")
+    @Operation(summary = "Reverse lookup: who holds permission P at scope S")
+    public ResponseEntity<List<AccessListEntry>> accessList(
+            @RequestParam String permission,
+            @RequestParam UUID scopeId) {
+        return ResponseEntity.ok(authorizationService.accessList(permission, scopeId));
     }
 
     /**

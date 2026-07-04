@@ -153,6 +153,31 @@ public class PolicyEvaluator {
             "deviceType", "channel"
     );
 
+    // Registry (optional — null in pure unit tests). Registered names widen the
+    // static default set so deployment-defined attributes resolve at runtime.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private io.github.mesubash.iam.authz.repository.ContextAttributeRepository contextAttributeRepository;
+
+    private volatile Set<String> cachedAllowed;
+    private volatile long cachedAt;
+
+    private boolean isAllowedContextField(String key) {
+        if (ALLOWED_ADDITIONAL_CONTEXT_FIELDS.contains(key)) {
+            return true;
+        }
+        if (contextAttributeRepository == null) {
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        Set<String> snapshot = cachedAllowed;
+        if (snapshot == null || now - cachedAt > 60_000) {
+            snapshot = new java.util.HashSet<>(contextAttributeRepository.findAllNames());
+            cachedAllowed = snapshot;
+            cachedAt = now;
+        }
+        return snapshot.contains(key);
+    }
+
     private Object resolveContextField(String path, AuthorizationRequest request) {
         AuthorizationRequest.RequestContext context = request.getContext();
         if (context == null) {
@@ -167,7 +192,7 @@ public class PolicyEvaluator {
             default -> {
                 // Only resolve whitelisted fields from additionalContext
                 String key = path.startsWith("additional.") ? path.substring("additional.".length()) : path;
-                if (!ALLOWED_ADDITIONAL_CONTEXT_FIELDS.contains(key)) {
+                if (!isAllowedContextField(key)) {
                     log.warn("Policy references non-whitelisted context field: {}", key);
                     yield null;
                 }

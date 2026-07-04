@@ -22,6 +22,7 @@ public class PolicyService {
     private final PolicyRepository policyRepository;
     private final CacheService cacheService;
     private final PermissionRepository permissionRepository;
+    private final io.github.mesubash.iam.authz.repository.ContextAttributeRepository contextAttributeRepository;
 
     @Transactional(readOnly = true)
     public List<Policy> getAll() {
@@ -135,6 +136,45 @@ public class PolicyService {
                 permissionRepository.findByKey(key)
                         .orElseThrow(() -> new IllegalArgumentException(
                                 "Permission not found: " + key));
+            }
+        }
+
+        validateConditionFields(policy.getConditions());
+    }
+
+    // Fail-fast: reject conditions referencing context.additional.<k> attributes
+    // that aren't registered — a typo'd policy dies at authoring, not at runtime.
+    private void validateConditionFields(java.util.Map<String, Object> conditions) {
+        if (conditions == null || conditions.isEmpty()) {
+            return;
+        }
+        java.util.Set<String> registered = new java.util.HashSet<>(contextAttributeRepository.findAllNames());
+        java.util.List<String> unknown = new java.util.ArrayList<>();
+        collectUnknownContextFields(conditions, registered, unknown);
+        if (!unknown.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Unknown context attribute(s) in policy conditions: " + String.join(", ", unknown)
+                            + ". Register them under /api/v1/context-attributes first.");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void collectUnknownContextFields(Object node, java.util.Set<String> registered,
+                                             java.util.List<String> unknown) {
+        if (node instanceof java.util.Map<?, ?> map) {
+            Object field = map.get("field");
+            if (field instanceof String f && f.startsWith("context.additional.")) {
+                String attr = f.substring("context.additional.".length());
+                if (!registered.contains(attr) && !unknown.contains(attr)) {
+                    unknown.add(attr);
+                }
+            }
+            for (Object child : map.values()) {
+                collectUnknownContextFields(child, registered, unknown);
+            }
+        } else if (node instanceof java.util.List<?> list) {
+            for (Object child : list) {
+                collectUnknownContextFields(child, registered, unknown);
             }
         }
     }

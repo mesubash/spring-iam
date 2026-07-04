@@ -146,14 +146,24 @@ public class SecurityConfig {
                                 "/api/auth/reset-password",
                                 "/api/auth/request-reactivation",
                                 "/api/auth/verify-reactivation",
+                                "/api/auth/verify-email-change",
                                 "/oauth2/**",
                                 "/login/oauth2/**"
                         ).permitAll()
 
+                        // Admin-facing decision tooling — method security refines the roles
+                        .requestMatchers(
+                                "/api/v1/authorize/explain",
+                                "/api/v1/authorize/simulate",
+                                "/api/v1/access-list"
+                        ).authenticated()
+
                         // AuthZ runtime endpoints — API key (INTERNAL) or system JWT
                         .requestMatchers(
-                                "/api/v1/authorize/**",
-                                "/api/v1/effective-permissions"
+                                "/api/v1/authorize",
+                                "/api/v1/authorize/batch",
+                                "/api/v1/effective-permissions",
+                                "/api/v1/filter-resources"
                         ).hasAnyRole("INTERNAL", "SuperAdmin", "CountryAdmin")
 
                         // Permissions, scopes, and structural data: SuperAdmin only.
@@ -171,6 +181,11 @@ public class SecurityConfig {
                                 "/api/v1/audit/**"
                         ).hasAnyRole("SuperAdmin", "CountryAdmin", "AccessAdmin", "SecurityAdmin", "AuditViewer")
 
+                        // Token introspection: internal/service callers only
+                        .requestMatchers(
+                                "/api/v1/token/**"
+                        ).hasAnyRole("INTERNAL", "SuperAdmin")
+
                         // Manifest sync: the service's own API key or an admin token
                         .requestMatchers(
                                 "/api/v1/services/*/permissions"
@@ -185,6 +200,7 @@ public class SecurityConfig {
                                 "/api/v1/resource-grants/**",
                                 "/api/v1/groups/**",
                                 "/api/v1/services/**",
+                                "/api/v1/break-glass/**",
                                 "/api/v1/meta/**"
                         ).authenticated()
 

@@ -135,6 +135,8 @@ iam:
     groups: false             # subject groups
     service-registry: false   # per-service API keys + manifest sync
     oauth2: false             # informational — social login wiring
+    break-glass: false        # emergency time-boxed elevation
+    introspection: false      # POST /api/v1/token/introspect
 
   authn:
     session:

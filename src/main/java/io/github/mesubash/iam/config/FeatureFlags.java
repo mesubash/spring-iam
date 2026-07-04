@@ -19,12 +19,16 @@ public class FeatureFlags {
     private boolean groups = false;           // subject groups
     private boolean serviceRegistry = false;  // per-service API keys + manifest sync
     private boolean oauth2 = false;           // social login (informational for now)
+    private boolean breakGlass = false;       // emergency time-boxed elevation
+    private boolean introspection = false;    // token introspection endpoint
 
     public Map<String, Boolean> asMap() {
         return Map.of(
                 "resource-grants", resourceGrants,
                 "groups", groups,
                 "service-registry", serviceRegistry,
-                "oauth2", oauth2);
+                "oauth2", oauth2,
+                "break-glass", breakGlass,
+                "introspection", introspection);
     }
 }
