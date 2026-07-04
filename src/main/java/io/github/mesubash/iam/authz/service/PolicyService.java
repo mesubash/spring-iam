@@ -33,6 +33,21 @@ public class PolicyService {
         return policyRepository.findById(id);
     }
 
+    /** All active policies, cached — for bulk evaluations over many permissions. */
+    @Transactional(readOnly = true)
+    public List<Policy> getAllActiveOrdered() {
+        List<CacheService.PolicySnapshot> cached = cacheService.getCachedPolicies("_all");
+        if (cached != null) {
+            return cached.stream().map(CacheService.PolicySnapshot::toPolicy).collect(Collectors.toList());
+        }
+        List<Policy> ordered = policyRepository.findAllActive().stream()
+                .sorted(Comparator.comparing(Policy::getPriority).reversed())
+                .collect(Collectors.toList());
+        cacheService.cachePolicies("_all", ordered.stream()
+                .map(CacheService.PolicySnapshot::fromPolicy).collect(Collectors.toList()));
+        return ordered;
+    }
+
     @Transactional(readOnly = true)
     public List<Policy> getApplicablePolicies(String permissionKey, String resourceType) {
         String cacheKey = cacheKey(permissionKey, resourceType);

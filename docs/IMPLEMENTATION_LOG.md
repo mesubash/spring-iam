@@ -5,6 +5,12 @@
 
 ---
 
+## Phase 4 — Hardening
+
+| Date | Block | What was done | Commit |
+|------|-------|---------------|--------|
+| 2026-07-04 | all | Audit writes moved to dedicated `AuditWriter` bean — `@Async` now actually fires (self-invocation made it a silent no-op on the hot path). CacheService rewritten to versioned key prefixes: invalidation = one INCR, zero `KEYS`/`SCAN`; per-subject counters + global epoch/role/scope/policy counters; bug found & fixed — cached `PolicySnapshot` dropped `enforcement_mode`, turning SHADOW policies into ENFORCE on cache hits. `getEffectivePermissions` policy loop now evaluates against one cached all-active fetch. `GlobalExceptionHandler` no longer returns raw DB messages (logs + generic); dead scope-depth mapping removed. One-time tokens stored SHA-256-hashed, single-purpose slim `TokenService`, in-memory Redis fallback deleted (fail loud). `NotificationPort` + dev log adapter wired into register/reset/resend/reactivation — all notification TODOs gone. Suite 42/42 green | Phase 4 commit |
+
 ## Phase 3 — Feature flags & fleet
 
 | Date | Block | What was done | Commit |

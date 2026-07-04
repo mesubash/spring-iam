@@ -7,7 +7,6 @@ import io.github.mesubash.iam.authz.entity.DenyRule;
 import io.github.mesubash.iam.authz.entity.Policy;
 import io.github.mesubash.iam.authz.entity.ResourceGrant;
 import io.github.mesubash.iam.authz.repository.AssignmentRepository;
-import io.github.mesubash.iam.authz.repository.AuthorizationAuditRepository;
 import io.github.mesubash.iam.authz.repository.DenyRuleRepository;
 import io.github.mesubash.iam.authz.repository.ResourceGrantRepository;
 import io.github.mesubash.iam.authz.repository.RoleHierarchyRepository;
@@ -56,7 +55,7 @@ class AuthorizationServiceDecisionTest {
     @Mock private ScopeRepository scopeRepository;
     @Mock private RolePermissionRepository rolePermissionRepository;
     @Mock private RoleHierarchyRepository roleHierarchyRepository;
-    @Mock private AuthorizationAuditRepository auditRepository;
+    @Mock private AuditWriter auditWriter;
     @Mock private CacheService cacheService;
     @Mock private PolicyService policyService;
     @Mock private ResourceGrantRepository resourceGrantRepository;
@@ -76,7 +75,7 @@ class AuthorizationServiceDecisionTest {
 
         // cache always misses; scopes active; policies neutral by default
         when(cacheService.getCachedDenyRules(anyString())).thenReturn(null);
-        when(cacheService.getCachedUserPermissions(anyString())).thenReturn(null);
+        when(cacheService.getCachedUserPermissions(anyString(), any())).thenReturn(null);
         when(cacheService.getCachedRolePermissions(anyString())).thenReturn(null);
         when(cacheService.getCachedScopeContainment(any(), any())).thenReturn(null);
         when(cacheService.getCachedScopeActive(any())).thenReturn(null);
@@ -94,7 +93,7 @@ class AuthorizationServiceDecisionTest {
         return new AuthorizationService(
                 assignmentRepository, denyRuleRepository, scopeClosureRepository,
                 scopeRepository, rolePermissionRepository, roleHierarchyRepository,
-                auditRepository, cacheService, new SimpleMeterRegistry(),
+                auditWriter, cacheService, new SimpleMeterRegistry(),
                 policyService, new PolicyEvaluator(),
                 resourceGrantRepository, subjectGroupMemberRepository,
                 policyMode, grants, groups);

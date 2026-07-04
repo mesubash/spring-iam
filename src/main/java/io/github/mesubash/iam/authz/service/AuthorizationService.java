@@ -2,7 +2,6 @@ package io.github.mesubash.iam.authz.service;
 
 import io.github.mesubash.iam.authz.entity.*;
 import io.github.mesubash.iam.authz.repository.AssignmentRepository;
-import io.github.mesubash.iam.authz.repository.AuthorizationAuditRepository;
 import io.github.mesubash.iam.authz.repository.DenyRuleRepository;
 import io.github.mesubash.iam.authz.repository.ResourceGrantRepository;
 import io.github.mesubash.iam.authz.repository.RoleHierarchyRepository;
@@ -21,9 +20,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DateTimeException;
 import java.time.Duration;
@@ -44,7 +41,7 @@ public class AuthorizationService {
     private final ScopeRepository scopeRepository;
     private final RolePermissionRepository rolePermissionRepository;
     private final RoleHierarchyRepository roleHierarchyRepository;
-    private final AuthorizationAuditRepository auditRepository;
+    private final AuditWriter auditWriter;
     private final CacheService cacheService;
     private final MeterRegistry meterRegistry;
     private final PolicyService policyService;
@@ -74,7 +71,7 @@ public class AuthorizationService {
             ScopeRepository scopeRepository,
             RolePermissionRepository rolePermissionRepository,
             RoleHierarchyRepository roleHierarchyRepository,
-            AuthorizationAuditRepository auditRepository,
+            AuditWriter auditWriter,
             CacheService cacheService,
             MeterRegistry meterRegistry,
             PolicyService policyService,
@@ -91,7 +88,7 @@ public class AuthorizationService {
         this.scopeRepository = scopeRepository;
         this.rolePermissionRepository = rolePermissionRepository;
         this.roleHierarchyRepository = roleHierarchyRepository;
-        this.auditRepository = auditRepository;
+        this.auditWriter = auditWriter;
         this.cacheService = cacheService;
         this.meterRegistry = meterRegistry;
         this.policyService = policyService;
@@ -186,6 +183,7 @@ public class AuthorizationService {
             }
         }
 
+        List<Policy> allPolicies = policyService.getAllActiveOrdered();
         for (String permission : new HashSet<>(allowedPermissions)) {
             AuthorizationRequest policyRequest = AuthorizationRequest.builder()
                     .subject(subject)
@@ -194,7 +192,7 @@ public class AuthorizationService {
                     .context(context)
                     .build();
 
-            PolicyDecision policyDecision = evaluatePolicies(policyRequest);
+            PolicyDecision policyDecision = evaluatePolicies(policyRequest, allPolicies);
             if (!policyDecision.allowed) {
                 allowedPermissions.remove(permission);
                 if (request.isIncludeDenied()) {
@@ -229,7 +227,7 @@ public class AuthorizationService {
             if (!isScopeActive(resourceScopeId)) {
                 String reason = "DENY: Scope inactive or not found";
                 UUID auditId = UUID.randomUUID();
-                logAuditAsync(auditId, request, false, reason, null);
+                auditWriter.write(auditId, request, false, reason, null);
                 denyCounter.increment();
                 return buildResponse(false, reason, startTime, Collections.emptySet(), auditId);
             }
@@ -255,7 +253,7 @@ public class AuthorizationService {
             if (matchesDenyRule(deniedPermissions, permissionKey, resourceScopeId)) {
                 String reason = "DENY: Explicit deny rule exists";
                 UUID auditId = UUID.randomUUID();
-                logAuditAsync(auditId, request, false, reason, null);
+                auditWriter.write(auditId, request, false, reason, null);
                 denyCounter.increment();
 
                 return buildResponse(false, reason, startTime, Collections.emptySet(), auditId);
@@ -265,8 +263,6 @@ public class AuthorizationService {
             // STEP 2: CHECK PERMISSIONS
             // ================================================================
 
-            // Build cache key with scope for more accurate caching
-            String cacheKey = subject + ":" + resourceScopeId;
             Set<String> cachedPermissions = null;
             Set<String> userPermissions;
             PermissionsResult permissionsResult = null;
@@ -277,7 +273,7 @@ public class AuthorizationService {
                     .existsActiveConditionalAssignments(subject, Instant.now());
 
             if (!hasConditionalAssignments) {
-                cachedPermissions = cacheService.getCachedUserPermissions(cacheKey);
+                cachedPermissions = cacheService.getCachedUserPermissions(subject, resourceScopeId);
             }
 
             if (cachedPermissions != null) {
@@ -290,7 +286,7 @@ public class AuthorizationService {
                         resourceScopeId, request);
                 userPermissions = permissionsResult.permissions;
                 if (permissionsResult.cacheable && !hasConditionalAssignments) {
-                    cacheService.cacheUserPermissions(cacheKey, userPermissions);
+                    cacheService.cacheUserPermissions(subject, resourceScopeId, userPermissions);
                 }
                 log.debug("Permission cache MISS for subject: {}", subject);
             }
@@ -320,7 +316,7 @@ public class AuthorizationService {
                     reason = "DENY: Permission not granted by any role";
                 }
                 UUID auditId = UUID.randomUUID();
-                logAuditAsync(auditId, request, false, reason, null);
+                auditWriter.write(auditId, request, false, reason, null);
                 denyCounter.increment();
 
                 return buildResponse(false, reason, startTime, Collections.emptySet(), auditId);
@@ -336,7 +332,7 @@ public class AuthorizationService {
                 String reason = policyDecision.reason != null
                         ? policyDecision.reason
                         : "DENY: Policy evaluation failed";
-                logAuditAsync(auditId, request, false, reason, policyDecision.shadowResults);
+                auditWriter.write(auditId, request, false, reason, policyDecision.shadowResults);
                 denyCounter.increment();
 
                 return buildResponse(false, reason, startTime, Collections.emptySet(), auditId);
@@ -350,7 +346,7 @@ public class AuthorizationService {
                     ? "ALLOW: Permission granted via resource grant"
                     : "ALLOW: Permission granted via role assignment";
             UUID auditId = UUID.randomUUID();
-            logAuditAsync(auditId, request, true, reason, policyDecision.shadowResults);
+            auditWriter.write(auditId, request, true, reason, policyDecision.shadowResults);
             allowCounter.increment();
 
             return buildResponse(true, reason, startTime, userPermissions, auditId);
@@ -360,7 +356,7 @@ public class AuthorizationService {
             log.warn("Authorization check failed due to bad input: {}", e.getMessage());
             String reason = "DENY: Invalid request - " + e.getMessage();
             UUID auditId = UUID.randomUUID();
-            logAuditAsync(auditId, request, false, reason, null);
+            auditWriter.write(auditId, request, false, reason, null);
             denyCounter.increment();
             return buildResponse(false, reason, startTime, Collections.emptySet(), auditId);
         } catch (Exception e) {
@@ -584,8 +580,14 @@ public class AuthorizationService {
         String resourceType = request.getResource() != null ? request.getResource().getType() : null;
         UUID resourceScopeId = request.getResource() != null ? request.getResource().getScopeId() : null;
 
-        List<Policy> candidates =
-                policyService.getApplicablePolicies(permissionKey, resourceType);
+        return evaluatePolicies(request,
+                policyService.getApplicablePolicies(permissionKey, resourceType));
+    }
+
+    private PolicyDecision evaluatePolicies(AuthorizationRequest request, List<Policy> candidates) {
+        String permissionKey = request.getPermission();
+        String resourceType = request.getResource() != null ? request.getResource().getType() : null;
+        UUID resourceScopeId = request.getResource() != null ? request.getResource().getScopeId() : null;
 
         if (candidates.isEmpty()) {
             return PolicyDecision.allow(null);
@@ -967,51 +969,6 @@ public class AuthorizationService {
         }
 
         return resolved;
-    }
-
-    /**
-     * Log audit entry asynchronously
-     */
-    @Async("auditExecutor")
-    @Transactional
-    protected void logAuditAsync(UUID auditId,
-                                 AuthorizationRequest request,
-                                 boolean decision,
-                                 String reason,
-                                 List<Map<String, Object>> shadowResults) {
-
-        try {
-            Instant now = Instant.now();
-            Map<String, Object> context = new HashMap<>();
-            if (request.getContext() != null && request.getContext().getAdditionalContext() != null) {
-                context.putAll(request.getContext().getAdditionalContext());
-            }
-            if (shadowResults != null) {
-                context.put("shadowResults", shadowResults);
-            }
-            AuthorizationAudit audit = AuthorizationAudit.builder()
-                    .id(auditId)
-                    .subjectId(request.getSubject())
-                    .permissionKey(request.getPermission())
-                    .resourceType(request.getResource().getType())
-                    .resourceId(request.getResource().getId())
-                    .scopeId(request.getResource().getScopeId())
-                    .decision(decision)
-                    .reason(reason)
-                    .context(context)
-                    .requestId(request.getContext() != null ?
-                            request.getContext().getRequestId() : null)
-                    .ipAddress(request.getContext() != null ?
-                            request.getContext().getIpAddress() : null)
-                    .userAgent(request.getContext() != null ?
-                            request.getContext().getUserAgent() : null)
-                    .timestamp(now)
-                    .build();
-
-            auditRepository.save(audit);
-        } catch (Exception e) {
-            log.error("Failed to save audit log", e);
-        }
     }
 
     private AuthorizationResponse buildResponse(boolean authorized,

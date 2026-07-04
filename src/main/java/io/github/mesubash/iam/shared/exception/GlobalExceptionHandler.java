@@ -310,18 +310,6 @@ public class GlobalExceptionHandler {
             return "Database operation failed.";
         }
 
-        Pattern scopeDepthPattern = Pattern.compile(
-                "Scope depth (\\d+) does not match type (\\w+)\\. Expected depth: (\\d+)");
-        Matcher matcher = scopeDepthPattern.matcher(raw);
-        if (matcher.find()) {
-            String actual = matcher.group(1);
-            String type = matcher.group(2);
-            String expected = matcher.group(3);
-            return "Invalid scope hierarchy: type " + type + " must be at depth " + expected
-                    + ", but depth " + actual + " was provided. "
-                    + "Required hierarchy is GLOBAL -> REGION -> COUNTRY -> ORG -> DEPT -> TEAM -> PROJECT.";
-        }
-
         Pattern duplicatePattern = Pattern.compile(
                 "duplicate key value violates unique constraint \"([^\"]+)\"");
         Matcher duplicateMatcher = duplicatePattern.matcher(raw);
@@ -383,7 +371,9 @@ public class GlobalExceptionHandler {
             return "Database schema is missing required tables. Ensure Flyway migrations ran.";
         }
 
-        return raw;
+        // Unmapped database errors must not leak SQL details to clients
+        log.error("Unmapped data access error: {}", raw);
+        return "Database operation failed.";
     }
 
     private String mapCheckConstraint(String constraint) {

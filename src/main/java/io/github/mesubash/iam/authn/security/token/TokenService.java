@@ -1,26 +1,18 @@
 package io.github.mesubash.iam.authn.security.token;
 
 import io.github.mesubash.iam.authn.entity.enums.TokenType;
-import io.github.mesubash.iam.shared.exception.TokenReuseException;
 
 /**
- * Service interface for managing authentication tokens (refresh, password reset, email verification).
+ * One-time tokens (email verification, password reset, reactivation).
+ * Refresh tokens live in SessionService; access-token revocation in
+ * TokenBlacklistService.
  */
 public interface TokenService {
 
-    void store(String userId, String token, TokenType tokenType) throws TokenReuseException;
+    void store(String userId, String token, TokenType tokenType);
 
-    void rotate(String userId, String oldToken, String newToken, TokenType tokenType) throws TokenReuseException;
-
-    boolean validate(String userId, String token, TokenType tokenType);
-
-    void revokeAll(String userId, TokenType tokenType);
-
-    void revoke(String userId, String token, TokenType tokenType);
-
+    /** Returns the owning user id, or null if unknown/expired. */
     String getTokenUserId(String token, TokenType tokenType);
 
-    void blacklistToken(String token, long durationMs);
-
-    boolean isTokenBlacklisted(String token);
+    void revoke(String userId, String token, TokenType tokenType);
 }

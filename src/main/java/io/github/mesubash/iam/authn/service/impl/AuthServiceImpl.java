@@ -21,6 +21,7 @@ import io.github.mesubash.iam.authn.security.token.SessionService;
 import io.github.mesubash.iam.authn.security.token.TokenBlacklistService;
 import io.github.mesubash.iam.authn.security.token.TokenService;
 import io.github.mesubash.iam.authn.service.AuthService;
+import io.github.mesubash.iam.authn.service.NotificationPort;
 import io.github.mesubash.iam.authn.service.SecurityEventService;
 import io.jsonwebtoken.Claims;
 import io.github.mesubash.iam.shared.dto.RoleClaimsDto;
@@ -63,6 +64,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtConfig jwtConfig;
     private final AuthzQueryService authzQueryService;
     private final SecurityEventService securityEventService;
+    private final NotificationPort notificationPort;
 
     @Value("${iam.account.lockout.max-attempts:5}")
     private int maxLoginAttempts;
@@ -99,9 +101,9 @@ public class AuthServiceImpl implements AuthService {
         // Generate verification token
         String verificationToken = PasswordUtil.generateSecureToken(32);
         tokenService.store(identity.getId().toString(), verificationToken, TokenType.EMAIL_VERIFICATION);
+        notificationPort.sendEmailVerification(request.getEmail(), verificationToken);
 
-        // TODO: Send verification email via event/notification service
-        log.info("User registered successfully: {}. Verification token generated.", request.getEmail());
+        log.info("User registered successfully: {}", request.getEmail());
     }
 
     @Override
@@ -231,9 +233,7 @@ public class AuthServiceImpl implements AuthService {
 
         String resetToken = PasswordUtil.generateSecureToken(32);
         tokenService.store(identity.getId().toString(), resetToken, TokenType.PASSWORD_RESET);
-
-        // TODO: Send password reset email via notification service
-        log.info("Password reset token generated for: {}", email);
+        notificationPort.sendPasswordReset(email, resetToken);
     }
 
     @Override
@@ -335,9 +335,7 @@ public class AuthServiceImpl implements AuthService {
 
         String verificationToken = PasswordUtil.generateSecureToken(32);
         tokenService.store(identity.getId().toString(), verificationToken, TokenType.EMAIL_VERIFICATION);
-
-        // TODO: Send verification email via notification service
-        log.info("Verification token regenerated for: {}", email);
+        notificationPort.sendEmailVerification(email, verificationToken);
     }
 
     @Override
@@ -364,9 +362,7 @@ public class AuthServiceImpl implements AuthService {
 
         String reactivationToken = PasswordUtil.generateSecureToken(32);
         tokenService.store(identity.getId().toString(), reactivationToken, TokenType.ACCOUNT_REACTIVATION);
-
-        // TODO: Send reactivation email via notification service
-        log.info("Reactivation token generated for: {}", email);
+        notificationPort.sendReactivation(email, reactivationToken);
     }
 
     @Override
