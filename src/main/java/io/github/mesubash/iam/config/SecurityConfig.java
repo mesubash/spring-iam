@@ -208,6 +208,7 @@ public class SecurityConfig {
                                 "/api/v1/groups/**",
                                 "/api/v1/services/**",
                                 "/api/v1/break-glass/**",
+                                "/api/v1/identities/**",
                                 "/api/v1/meta/**"
                         ).authenticated()
 
