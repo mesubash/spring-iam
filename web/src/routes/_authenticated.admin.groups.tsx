@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { groupsApi } from "@/api/resources";
 import type { GroupMember, SubjectGroup } from "@/api/types";
 import { PageHeader } from "@/components/iam/PageHeader";
+import { PermissionGuardedPage } from "@/components/iam/PermissionGuardedPage";
+import { Can } from "@/components/iam/Can";
 import { DataTable, type Column } from "@/components/iam/DataTable";
 import { ConfirmDialog } from "@/components/iam/ConfirmDialog";
 import { SubjectPicker } from "@/components/iam/SubjectPicker";
@@ -22,7 +24,11 @@ import { useAuthz } from "@/context/AuthzContext";
 import { formatDate } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/admin/groups")({
-  component: GroupsPage,
+  component: () => (
+    <PermissionGuardedPage permission="platform.group.read">
+      <GroupsPage />
+    </PermissionGuardedPage>
+  ),
 });
 
 function GroupsPage() {
@@ -68,7 +74,11 @@ function GroupsPage() {
       <PageHeader
         title="Groups"
         description="Subject groups — assign a role to a group once and every member inherits it."
-        actions={<Button onClick={() => setCreating(true)}>New group</Button>}
+        actions={
+          <Can permission="platform.group.manage">
+            <Button onClick={() => setCreating(true)}>New group</Button>
+          </Can>
+        }
       />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px]">
         <div>
@@ -147,27 +157,29 @@ function MembersPanel({ group, onClose }: { group: SubjectGroup; onClose: () => 
           Close
         </button>
       </div>
-      <form
-        className="mb-3 space-y-1.5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (subjectId.trim()) add.mutate();
-        }}
-      >
-        <Label htmlFor="gm-subject">Add member</Label>
-        <div className="flex gap-2">
-          <SubjectPicker
-            id="gm-subject"
-            className="flex-1"
-            placeholder="Select a user…"
-            value={subjectId}
-            onChange={setSubjectId}
-          />
-          <Button type="submit" size="sm" disabled={!subjectId.trim() || add.isPending}>
-            {add.isPending ? "Adding…" : "Add"}
-          </Button>
-        </div>
-      </form>
+      <Can permission="platform.group.manage">
+        <form
+          className="mb-3 space-y-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (subjectId.trim()) add.mutate();
+          }}
+        >
+          <Label htmlFor="gm-subject">Add member</Label>
+          <div className="flex gap-2">
+            <SubjectPicker
+              id="gm-subject"
+              className="flex-1"
+              placeholder="Select a user…"
+              value={subjectId}
+              onChange={setSubjectId}
+            />
+            <Button type="submit" size="sm" disabled={!subjectId.trim() || add.isPending}>
+              {add.isPending ? "Adding…" : "Add"}
+            </Button>
+          </div>
+        </form>
+      </Can>
       <div className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
         Members
       </div>
@@ -185,12 +197,14 @@ function MembersPanel({ group, onClose }: { group: SubjectGroup; onClose: () => 
                   Added {formatDate(m.addedAt)}
                 </div>
               </div>
-              <button
-                className="shrink-0 text-xs text-[var(--destructive)] hover:underline"
-                onClick={() => setToRemove(m)}
-              >
-                Remove
-              </button>
+              <Can permission="platform.group.manage">
+                <button
+                  className="shrink-0 text-xs text-[var(--destructive)] hover:underline"
+                  onClick={() => setToRemove(m)}
+                >
+                  Remove
+                </button>
+              </Can>
             </li>
           ))}
         </ul>

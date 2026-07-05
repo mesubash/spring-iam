@@ -217,11 +217,31 @@ add their own keys; the pattern is the same.
 | `platform.policy.read` | Policies, Context Attributes |
 | `platform.permission.read` | Permissions catalog |
 | `platform.audit.read` | Audit, Explain |
+| `platform.resource_grant.read` | Resource Grants *(+ `resource-grants` flag)* |
+| `platform.group.read` | Groups *(+ `groups` flag)* |
+| `platform.service.read` | Services *(+ `service-registry` flag)* |
 
-Create/update/delete variants (`.create`, `.update`, `.delete`, `.revoke`,
-`.move`) gate the corresponding action buttons. See
-[AUTHZ_DESIGN.md](AUTHZ_DESIGN.md) for the full key catalog and the seed role
-grants.
+Create/update/delete variants gate the action buttons: `.create/.update/.delete/
+.revoke/.move`, and for the feature-flagged areas a coarser `.manage`
+(`platform.group.manage`, `platform.resource_grant.manage`,
+`platform.service.manage`). See [AUTHZ_DESIGN.md](AUTHZ_DESIGN.md) for the full
+key catalog and the seed role grants.
+
+> **Rule, no exceptions:** every nav item gates on a `.read` permission (plus a
+> feature flag where one applies) — never on a flag alone. A flag-only nav item
+> shows the page to users who then `403` on load; that is a bug. The three
+> feature-flagged areas above each have a real `.read`/`.manage` key precisely so
+> they follow this rule like everything else.
+
+**Note on enforcement layers.** This IAM enforces coarse method-level access by
+**role** (`hasRole`/`hasAnyRole`) and fine-grained decisions through the **PDP**
+(`/api/v1/authorize`) and service-layer guards. The `platform.*` permission keys
+are what the PDP and the console consume; they are resolved from a subject's
+roles per scope via `GET /api/authz/me/permissions`. So the console gates UI on
+permission keys, while the endpoint behind a button may be role-gated — the seed
+keeps the two aligned (the roles that hold a key are the roles the endpoint
+admits). When you add a new gated area, grant its `.read`/`.manage` keys to the
+same roles its controller allows.
 
 ---
 

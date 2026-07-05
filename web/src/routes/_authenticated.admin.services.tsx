@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { servicesApi } from "@/api/resources";
 import type { ServiceClient } from "@/api/types";
 import { PageHeader } from "@/components/iam/PageHeader";
+import { PermissionGuardedPage } from "@/components/iam/PermissionGuardedPage";
+import { Can } from "@/components/iam/Can";
 import { DataTable, type Column } from "@/components/iam/DataTable";
 import { Tag } from "@/components/iam/badges";
 import { Button } from "@/components/ui/button";
@@ -21,7 +23,11 @@ import { useAuthz } from "@/context/AuthzContext";
 import { formatDate } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/admin/services")({
-  component: ServicesPage,
+  component: () => (
+    <PermissionGuardedPage permission="platform.service.read">
+      <ServicesPage />
+    </PermissionGuardedPage>
+  ),
 });
 
 function ServicesPage() {
@@ -83,7 +89,11 @@ function ServicesPage() {
       <PageHeader
         title="Services"
         description="Registered service clients that call the IAM API with an API key and own permission domains."
-        actions={<Button onClick={() => setCreating(true)}>Register service</Button>}
+        actions={
+          <Can permission="platform.service.manage">
+            <Button onClick={() => setCreating(true)}>Register service</Button>
+          </Can>
+        }
       />
       <Input
         className="mb-3 max-w-xs"

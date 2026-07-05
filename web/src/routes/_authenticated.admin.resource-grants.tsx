@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { resourceGrantsApi } from "@/api/resources";
 import type { ResourceGrant } from "@/api/types";
 import { PageHeader } from "@/components/iam/PageHeader";
+import { PermissionGuardedPage } from "@/components/iam/PermissionGuardedPage";
+import { Can } from "@/components/iam/Can";
 import { DataTable, type Column } from "@/components/iam/DataTable";
 import { ConfirmDialog } from "@/components/iam/ConfirmDialog";
 import { SubjectPicker } from "@/components/iam/SubjectPicker";
@@ -23,7 +25,11 @@ import { useAuthz } from "@/context/AuthzContext";
 import { formatDate, isExpiring } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/admin/resource-grants")({
-  component: ResourceGrantsPage,
+  component: () => (
+    <PermissionGuardedPage permission="platform.resource_grant.read">
+      <ResourceGrantsPage />
+    </PermissionGuardedPage>
+  ),
 });
 
 function ResourceGrantsPage() {
@@ -108,14 +114,16 @@ function ResourceGrantsPage() {
         r.revokedAt ? (
           <Tag tone="neutral">Revoked</Tag>
         ) : (
-          <Button
-            variant="ghost"
-            size="sm"
-            style={{ color: "var(--destructive)" }}
-            onClick={() => setToDelete(r)}
-          >
-            Delete
-          </Button>
+          <Can permission="platform.resource_grant.manage">
+            <Button
+              variant="ghost"
+              size="sm"
+              style={{ color: "var(--destructive)" }}
+              onClick={() => setToDelete(r)}
+            >
+              Delete
+            </Button>
+          </Can>
         ),
     },
   ];
@@ -125,7 +133,11 @@ function ResourceGrantsPage() {
       <PageHeader
         title="Resource Grants"
         description="Per-resource permission grants that bypass role assignment for a single object."
-        actions={<Button onClick={() => setCreating(true)}>New grant</Button>}
+        actions={
+          <Can permission="platform.resource_grant.manage">
+            <Button onClick={() => setCreating(true)}>New grant</Button>
+          </Can>
+        }
       />
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <SubjectPicker
