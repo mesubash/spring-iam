@@ -183,6 +183,18 @@ These are non-obvious contracts that a frontend will get wrong without warning:
   as a proxy, or accept the 403-toast.
 - **Key rotation** — `POST /api/v1/keys/rotate` is `SuperAdmin`-only (role-gated),
   same proxy-gating caveat as above.
+- **Subjects are UUIDs, not emails** — assignments, deny-rules, grants, groups,
+  audit and explain all key on the identity UUID (`sub`). Don't make operators
+  type it: resolve users by email through `GET /api/v1/identities?query=` (needs
+  `platform.identity.read`) and store the id. Raw-UUID paste must still work so
+  service/group subjects stay addressable. The console's `SubjectPicker`
+  component does exactly this (with a plain-input fallback when the caller lacks
+  identity read).
+- **Admin user management** — `POST /api/v1/identities` creates a user and
+  returns `{ identity, temporaryPassword }`; `temporaryPassword` is non-null
+  only when the server generated one — show it once, it is never retrievable
+  again. Same one-time-secret pattern on `PUT /{id}/password`. Status changes
+  (`PUT /{id}/status`) revoke sessions on SUSPEND/DEACTIVATE.
 - **CORS** — dev origins are set via `cors.allowed-origins`
   (`CORS_ALLOWED_ORIGINS`); it already includes `http://localhost:5173` (Vite) and
   `3000`. `credentials: include` requires an explicit origin match — a wildcard
@@ -197,6 +209,7 @@ add their own keys; the pattern is the same.
 
 | Permission (read) | Console area |
 |---|---|
+| `platform.identity.read` | Users (+ the subject picker everywhere) |
 | `platform.scope.read` | Scopes |
 | `platform.role.read` | Roles |
 | `platform.assignment.read` | Assignments |
