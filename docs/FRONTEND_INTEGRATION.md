@@ -51,21 +51,45 @@ function unwrap<T>(body: unknown): T {
 
 - **Access token** — RS256 JWT, 15 min. Keep it **in memory only** (never
   `localStorage`). Send as `Authorization: Bearer <token>`.
-- **Refresh token** — opaque, delivered as a `__Host-Refresh` **HttpOnly cookie**.
-  The browser sends it automatically; JS never reads it. All requests use
-  `credentials: "include"`.
-- **Identity** — `/api/auth/login` and `/api/auth/refresh` both return
-  `data.identity` (`{ id, email, displayName, emailVerified }`). The JWT itself
-  carries only `sub`, `roles`, `email_verified` — **not** email/displayName — so
-  the refresh response is how the UI restores the header (email) on reload
-  without a separate `/me` call. This is intentional; don't strip it.
+- **Refresh token** — opaque, **cookie-only** for browsers: a `__Host-Refresh`
+  **HttpOnly** cookie. The browser sends it automatically; JS never reads it and
+  it is **never** in a response body (that would defeat HttpOnly — XSS could steal
+  it). All requests use `credentials: "include"`. `/api/auth/refresh` takes no
+  body; it reads the cookie. (A native mobile/CLI client is the only case that
+  would carry the token in the body, stored in the OS keychain — not applicable
+  to the web console.)
+- **Login / refresh are token-only.** Their body is `{ accessToken, expiresIn,
+  tokenType }` — **no identity, no refresh token**. Auth endpoints mint tokens;
+  they don't describe the user.
+- **Identity + everything else comes from `GET /api/authz/me/bootstrap`** — see §2a.
+
+### 2a. One-call bootstrap
+
+After login (and after the silent refresh on reload), make **one** call:
+
+```
+GET /api/authz/me/bootstrap[?scopeId=<remembered>]  →
+{ identity:    { id, email, displayName, emailVerified },
+  scopeId:     "<active scope>",          // the requested one if valid, else the first
+  scopes:      [ … ],                     // for the scope switcher
+  permissions: [ "platform.role.read", … ],   // FOR scopeId
+  features:    { groups: true, … } }
+```
+
+This replaces the old four load requests (identity-in-refresh + `/me/scopes` +
+`/me/permissions` + `/meta/features`). The console seeds its query cache from this
+payload so the scope/permission/feature hooks resolve without extra network. On a
+**scope switch**, refetch only `GET /api/authz/me/permissions?scopeId=…` for the
+new scope — scopes and features don't change. The JWT carries only
+`sub`/`roles`/`email_verified`, so bootstrap is also how the header gets the
+user's email on reload.
 
 ### The refresh flow (and the one rule that bites)
 
 ```
-login → access token in memory + refresh cookie set
-any 401 (token expired) → POST /api/auth/refresh → new access token → retry once
-on reload → POST /api/auth/refresh with the cookie → silent session restore
+login    → POST /api/auth/login → access token in memory + refresh cookie set → GET /me/bootstrap
+any 401  → POST /api/auth/refresh (cookie) → new access token → retry once
+on reload→ POST /api/auth/refresh (cookie) → token → GET /me/bootstrap → session restored
 ```
 
 **Refresh tokens rotate on every use.** The backend detects reuse: if a rotated

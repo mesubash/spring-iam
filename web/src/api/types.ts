@@ -13,7 +13,8 @@ export type LoginResponse = {
   accessToken: string;
   expiresIn: number;
   tokenType?: string;
-  identity: Identity;
+  /** No longer returned by login/refresh — identity comes from /me/bootstrap. */
+  identity?: Identity;
 };
 
 export type Scope = {
@@ -207,6 +208,15 @@ export type Session = {
   createdIp?: string | null;
   createdAt: string;
   lastUsedAt?: string;
+};
+
+/** One-shot session bootstrap from /api/authz/me/bootstrap */
+export type MeBootstrap = {
+  identity: Identity;
+  scopeId: string | null;
+  scopes: ScopeSummary[];
+  permissions: string[];
+  features: FeatureFlags;
 };
 
 export type FeatureFlags = {

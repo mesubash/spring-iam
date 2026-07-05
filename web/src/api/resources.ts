@@ -15,6 +15,7 @@ import type {
   GroupMember,
   IdentityAdmin,
   LoginResponse,
+  MeBootstrap,
   ManifestSyncResult,
   Permission,
   PermissionGroup,
@@ -58,6 +59,8 @@ export const authApi = {
 /* --------------------------------- Authz -------------------------------- */
 
 export const authzApi = {
+  bootstrap: (scopeId?: string) =>
+    api.get<MeBootstrap>("/api/authz/me/bootstrap", scopeId ? { scopeId } : undefined),
   myScopes: () => api.get<ScopeSummary[]>("/api/authz/me/scopes"),
   myPermissions: (scopeId: string) =>
     api.get<string[]>("/api/authz/me/permissions", { scopeId }),

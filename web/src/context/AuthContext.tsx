@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { setAccessToken, setUnauthorizedHandler, refreshAccessToken } from "@/api/client";
-import { authApi } from "@/api/resources";
-import type { Identity } from "@/api/types";
+import { authApi, authzApi } from "@/api/resources";
+import type { Identity, MeBootstrap } from "@/api/types";
 
 type AuthState = {
   identity: Identity | null;
@@ -13,22 +14,41 @@ type AuthState = {
 };
 
 const AuthContext = createContext<AuthState | null>(null);
+const SCOPE_KEY = "iam.scopeId";
+
+/**
+ * Seed the query cache from the bootstrap payload so AuthzContext's scopes /
+ * features / permissions queries resolve from cache instead of firing their own
+ * requests — one /bootstrap call replaces the old three-to-four on load.
+ * Query keys must match AuthzContext exactly.
+ */
+function primeFromBootstrap(qc: QueryClient, b: MeBootstrap) {
+  qc.setQueryData(["authz", "scopes"], b.scopes);
+  qc.setQueryData(["meta", "features"], b.features);
+  if (b.scopeId) qc.setQueryData(["authz", "perms", b.scopeId], b.permissions);
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const qc = useQueryClient();
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
 
   useEffect(() => {
-    // Silent session restore on load. The refresh cookie lets /refresh mint a
-    // fresh access token AND return the identity, so we can populate the user
-    // (email shown in the header) without a separate /me round-trip — the JWT
-    // itself carries only id/roles, not email/displayName. Shared in-flight
-    // refresh dedupes StrictMode's double-invoke into one network call.
+    // Silent session restore on load: the refresh cookie mints a fresh access
+    // token, then one /bootstrap call returns identity + scopes + permissions +
+    // features. The shared in-flight refresh dedupes StrictMode's double-invoke.
     let cancelled = false;
     (async () => {
       try {
-        const { ok, identity } = await refreshAccessToken();
-        if (ok && identity && !cancelled) setIdentity(identity as Identity);
+        const { ok } = await refreshAccessToken();
+        if (!ok || cancelled) return;
+        const stored = sessionStorage.getItem(SCOPE_KEY) ?? undefined;
+        const b = await authzApi.bootstrap(stored);
+        if (cancelled) return;
+        primeFromBootstrap(qc, b);
+        setIdentity(b.identity);
+      } catch {
+        /* not signed in — fall through to the login redirect */
       } finally {
         if (!cancelled) setIsBootstrapping(false);
       }
@@ -36,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [qc]);
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
@@ -55,7 +75,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login: async (email, password) => {
         const env = await authApi.login(email, password);
         setAccessToken(env.data.accessToken);
-        setIdentity(env.data.identity);
+        const stored = sessionStorage.getItem(SCOPE_KEY) ?? undefined;
+        const b = await authzApi.bootstrap(stored);
+        primeFromBootstrap(qc, b);
+        setIdentity(b.identity);
         return { message: env.message };
       },
       logout: async () => {
@@ -68,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIdentity(null);
       },
     }),
-    [identity, isBootstrapping],
+    [identity, isBootstrapping, qc],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
