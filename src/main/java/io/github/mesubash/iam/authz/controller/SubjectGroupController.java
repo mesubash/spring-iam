@@ -31,7 +31,6 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/groups")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('SuperAdmin')")
 @Tag(name = "Groups", description = "Subject groups: one assignment or deny rule covers every member")
 public class SubjectGroupController {
 
@@ -40,12 +39,14 @@ public class SubjectGroupController {
     private final FeatureFlags featureFlags;
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('SuperAdmin','AccessAdmin')")
     public ResponseEntity<List<SubjectGroup>> list() {
         requireEnabled();
         return ResponseEntity.ok(groupRepository.findAll());
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('SuperAdmin','AccessAdmin')")
     public ResponseEntity<SubjectGroup> create(
             @AuthenticationPrincipal UserPrincipal caller,
             @Valid @RequestBody CreateGroupRequest request) {
@@ -60,12 +61,14 @@ public class SubjectGroupController {
     }
 
     @GetMapping("/{id}/members")
+    @PreAuthorize("hasAnyRole('SuperAdmin','AccessAdmin')")
     public ResponseEntity<List<SubjectGroupMember>> members(@PathVariable UUID id) {
         requireEnabled();
         return ResponseEntity.ok(memberRepository.findByGroupId(id));
     }
 
     @PostMapping("/{id}/members")
+    @PreAuthorize("hasAnyRole('SuperAdmin','AccessAdmin')")
     public ResponseEntity<Void> addMember(
             @AuthenticationPrincipal UserPrincipal caller,
             @PathVariable UUID id,
@@ -83,6 +86,7 @@ public class SubjectGroupController {
     }
 
     @DeleteMapping("/{id}/members/{subjectId}")
+    @PreAuthorize("hasAnyRole('SuperAdmin','AccessAdmin')")
     public ResponseEntity<Void> removeMember(@PathVariable UUID id, @PathVariable String subjectId) {
         requireEnabled();
         memberRepository.deleteById(new SubjectGroupMember.Key(id, subjectId));

@@ -52,7 +52,7 @@ public class ServiceRegistryController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('SuperAdmin')")
+    @PreAuthorize("hasAnyRole('SuperAdmin','AccessAdmin')")
     public ResponseEntity<List<ServiceClient>> list() {
         requireEnabled();
         return ResponseEntity.ok(registryService.listAll());

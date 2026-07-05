@@ -17,6 +17,7 @@ import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,6 +44,7 @@ public class ResourceGrantController {
     private final FeatureFlags featureFlags;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('SuperAdmin','AccessAdmin')")
     @Operation(summary = "Create grant",
             description = "Grantor must hold the granted permission (ceiling); wildcard-action grants need SuperAdmin")
     public ResponseEntity<ResourceGrant> create(
@@ -81,6 +83,7 @@ public class ResourceGrantController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('SuperAdmin','AccessAdmin')")
     public ResponseEntity<List<ResourceGrant>> list(
             @RequestParam(required = false) String subjectId,
             @RequestParam(required = false) String resourceType,
@@ -97,6 +100,7 @@ public class ResourceGrantController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SuperAdmin','AccessAdmin')")
     public ResponseEntity<Void> revoke(
             @AuthenticationPrincipal UserPrincipal caller,
             @PathVariable UUID id) {
