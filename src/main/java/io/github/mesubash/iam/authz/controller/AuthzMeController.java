@@ -1,7 +1,12 @@
 package io.github.mesubash.iam.authz.controller;
 
+import io.github.mesubash.iam.authn.entity.Identity;
+import io.github.mesubash.iam.authn.repository.IdentityRepository;
+import io.github.mesubash.iam.authz.dto.MeBootstrapResponse;
+import io.github.mesubash.iam.config.FeatureFlags;
 import io.github.mesubash.iam.shared.dto.ApiResponse;
 import io.github.mesubash.iam.shared.dto.ScopeSummaryDto;
+import io.github.mesubash.iam.shared.exception.ResourceNotFoundException;
 import io.github.mesubash.iam.shared.service.AuthzQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,6 +30,46 @@ import java.util.UUID;
 public class AuthzMeController {
 
     private final AuthzQueryService authzQueryService;
+    private final IdentityRepository identityRepository;
+    private final FeatureFlags featureFlags;
+
+    @GetMapping("/bootstrap")
+    @Operation(summary = "Bootstrap the session",
+            description = "One call for a freshly-loaded client: identity, scopes, permissions at the "
+                    + "active scope, and feature flags. Pass scopeId to target a remembered scope.")
+    public ResponseEntity<ApiResponse<MeBootstrapResponse>> bootstrap(
+            @AuthenticationPrincipal Object principal,
+            @RequestParam(required = false) UUID scopeId) {
+        UUID identityId = extractIdentityId(principal);
+        Identity identity = identityRepository.findById(identityId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        List<ScopeSummaryDto> scopes = authzQueryService.getScopesForIdentity(identityId);
+
+        // Resolve the active scope: a valid requested scope, else the first one.
+        UUID active = null;
+        if (scopeId != null && scopes.stream().anyMatch(s -> scopeId.equals(s.getId()))) {
+            active = scopeId;
+        } else if (!scopes.isEmpty()) {
+            active = scopes.get(0).getId();
+        }
+
+        List<String> permissions = active != null
+                ? authzQueryService.getEffectivePermissions(identityId, active)
+                : List.of();
+
+        MeBootstrapResponse body = new MeBootstrapResponse(
+                new MeBootstrapResponse.Identity(
+                        identity.getId(),
+                        identity.getPrimaryEmail(),
+                        null,
+                        identity.getEmailVerified()),
+                active,
+                scopes,
+                permissions,
+                featureFlags.asMap());
+        return ResponseEntity.ok(ApiResponse.success("Bootstrap", body));
+    }
 
     @GetMapping("/scopes")
     @Operation(summary = "List my scopes", description = "Returns the scopes (orgs/teams) where the current user has active role assignments. Used for the org-switcher UI.")

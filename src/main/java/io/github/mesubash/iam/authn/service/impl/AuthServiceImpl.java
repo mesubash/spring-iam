@@ -146,7 +146,7 @@ public class AuthServiceImpl implements AuthService {
         securityEventService.logEvent(identity, SecurityEventType.LOGIN_SUCCESS, null, null);
         log.info("User logged in successfully: {}", request.getEmail());
 
-        return new JwtResponse(accessToken, issued.rawToken(), expiresIn, toIdentityInfo(identity));
+        return new JwtResponse(accessToken, issued.rawToken(), expiresIn, null); // identity comes from GET /api/authz/me/bootstrap
     }
 
     @Override
@@ -170,7 +170,7 @@ public class AuthServiceImpl implements AuthService {
                 userPrincipal, rotation.session().getId());
         long expiresIn = jwtConfig.getExpiration() / 1000;
 
-        return new JwtResponse(newAccessToken, rotation.rawToken(), expiresIn, toIdentityInfo(identity));
+        return new JwtResponse(newAccessToken, rotation.rawToken(), expiresIn, null); // identity comes from GET /api/authz/me/bootstrap
     }
 
     @Override
@@ -201,7 +201,7 @@ public class AuthServiceImpl implements AuthService {
         String accessToken = jwtTokenProvider.generateAccessToken(userPrincipal, sessionId);
         long expiresIn = jwtConfig.getExpiration() / 1000;
 
-        return new JwtResponse(accessToken, rawRefresh, expiresIn, toIdentityInfo(identity));
+        return new JwtResponse(accessToken, rawRefresh, expiresIn, null); // identity comes from GET /api/authz/me/bootstrap
     }
 
     @Override
@@ -476,13 +476,4 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
-    private JwtResponse.IdentityInfo toIdentityInfo(Identity identity) {
-        JwtResponse.IdentityInfo info = JwtResponse.IdentityInfo.builder()
-                .id(identity.getId())
-                .email(identity.getPrimaryEmail())
-                .emailVerified(identity.getEmailVerified())
-                .build();
-
-        return info;
-    }
 }
