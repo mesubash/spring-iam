@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/iam/PageHeader";
 import { PermissionGuardedPage } from "@/components/iam/PermissionGuardedPage";
 import { DataTable, type Column } from "@/components/iam/DataTable";
 import { DecisionBadge } from "@/components/iam/badges";
+import { SubjectPicker } from "@/components/iam/SubjectPicker";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDate } from "@/lib/format";
@@ -102,12 +103,12 @@ function BySubjectTab() {
   return (
     <div>
       <div className="mb-3 flex flex-wrap gap-2">
-        <Input
-          className="max-w-xs font-mono text-xs"
-          placeholder="Subject ID (required)"
+        <SubjectPicker
+          className="w-full max-w-xs"
+          placeholder="Select a user…"
           value={subjectId}
-          onChange={(e) => {
-            setSubjectId(e.target.value);
+          onChange={(id) => {
+            setSubjectId(id);
             setExpanded(null);
           }}
         />
@@ -208,11 +209,11 @@ function StatisticsTab() {
   return (
     <div>
       <div className="mb-3 flex flex-wrap gap-2">
-        <Input
-          className="max-w-xs font-mono text-xs"
-          placeholder="Subject ID (required)"
+        <SubjectPicker
+          className="w-full max-w-xs"
+          placeholder="Select a user…"
           value={subjectId}
-          onChange={(e) => setSubjectId(e.target.value)}
+          onChange={setSubjectId}
         />
         <Input
           className="w-28"

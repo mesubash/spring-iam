@@ -179,6 +179,28 @@ export type AuditStatistics = {
   byPermission?: Record<string, number>;
 };
 
+/** Admin projection from /api/v1/identities */
+export type IdentityAdmin = {
+  id: string;
+  email: string;
+  emailVerified: boolean;
+  accountStatus: "ACTIVE" | "LOCKED" | "SUSPENDED" | "DEACTIVATED";
+  mfaEnabled: boolean;
+  lastLoginAt?: string | null;
+  createdAt: string;
+};
+
+export type CreatedIdentity = {
+  identity: IdentityAdmin;
+  /** Present only when the server generated the password; shown once. */
+  temporaryPassword: string | null;
+};
+
+export type AdminPasswordSet = {
+  temporaryPassword: string | null;
+  sessionsRevoked: boolean;
+};
+
 export type Session = {
   id: string;
   deviceLabel?: string | null;

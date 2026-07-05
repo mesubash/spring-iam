@@ -7,6 +7,7 @@ import type { Assignment } from "@/api/types";
 import { PageHeader } from "@/components/iam/PageHeader";
 import { PermissionGuardedPage } from "@/components/iam/PermissionGuardedPage";
 import { Can } from "@/components/iam/Can";
+import { SubjectPicker } from "@/components/iam/SubjectPicker";
 import { useAuthz } from "@/context/AuthzContext";
 import { DataTable, type Column } from "@/components/iam/DataTable";
 import { Tag } from "@/components/iam/badges";
@@ -170,12 +171,11 @@ function AssignmentsPage() {
           </Can>
         }
       />
-      <div className="mb-3">
-        <Input
-          placeholder="Filter by subject id..."
+      <div className="mb-3 max-w-sm">
+        <SubjectPicker
           value={subjectFilter}
-          onChange={(e) => setSubjectFilter(e.target.value)}
-          className="max-w-xs font-mono text-xs"
+          onChange={setSubjectFilter}
+          placeholder="Filter by user…"
         />
       </div>
       <DataTable
@@ -284,13 +284,8 @@ function GrantDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="a-sub">Subject ID</Label>
-            <Input
-              id="a-sub"
-              value={subjectId}
-              onChange={(e) => setSubjectId(e.target.value)}
-              className="font-mono text-xs"
-            />
+            <Label htmlFor="a-sub">Subject</Label>
+            <SubjectPicker id="a-sub" value={subjectId} onChange={setSubjectId} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="a-st">Subject type</Label>
@@ -429,13 +424,8 @@ function BreakGlassDialog({
         </div>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="bg-sub">Subject ID</Label>
-            <Input
-              id="bg-sub"
-              value={subjectId}
-              onChange={(e) => setSubjectId(e.target.value)}
-              className="font-mono text-xs"
-            />
+            <Label htmlFor="bg-sub">Subject</Label>
+            <SubjectPicker id="bg-sub" value={subjectId} onChange={setSubjectId} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="bg-role">Role</Label>

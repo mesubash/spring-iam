@@ -17,6 +17,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedMeSessionsRouteImport } from './routes/_authenticated.me.sessions'
 import { Route as AuthenticatedMeSecurityRouteImport } from './routes/_authenticated.me.security'
 import { Route as AuthenticatedMeAccessRouteImport } from './routes/_authenticated.me.access'
+import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated.admin.users'
 import { Route as AuthenticatedAdminServicesRouteImport } from './routes/_authenticated.admin.services'
 import { Route as AuthenticatedAdminScopesRouteImport } from './routes/_authenticated.admin.scopes'
 import { Route as AuthenticatedAdminRolesRouteImport } from './routes/_authenticated.admin.roles'
@@ -68,6 +69,11 @@ const AuthenticatedMeSecurityRoute = AuthenticatedMeSecurityRouteImport.update({
 const AuthenticatedMeAccessRoute = AuthenticatedMeAccessRouteImport.update({
   id: '/me/access',
   path: '/me/access',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedAdminUsersRoute = AuthenticatedAdminUsersRouteImport.update({
+  id: '/admin/users',
+  path: '/admin/users',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedAdminServicesRoute =
@@ -165,6 +171,7 @@ export interface FileRoutesByFullPath {
   '/admin/roles': typeof AuthenticatedAdminRolesRoute
   '/admin/scopes': typeof AuthenticatedAdminScopesRoute
   '/admin/services': typeof AuthenticatedAdminServicesRoute
+  '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/me/access': typeof AuthenticatedMeAccessRoute
   '/me/security': typeof AuthenticatedMeSecurityRoute
   '/me/sessions': typeof AuthenticatedMeSessionsRoute
@@ -187,6 +194,7 @@ export interface FileRoutesByTo {
   '/admin/roles': typeof AuthenticatedAdminRolesRoute
   '/admin/scopes': typeof AuthenticatedAdminScopesRoute
   '/admin/services': typeof AuthenticatedAdminServicesRoute
+  '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/me/access': typeof AuthenticatedMeAccessRoute
   '/me/security': typeof AuthenticatedMeSecurityRoute
   '/me/sessions': typeof AuthenticatedMeSessionsRoute
@@ -211,6 +219,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/roles': typeof AuthenticatedAdminRolesRoute
   '/_authenticated/admin/scopes': typeof AuthenticatedAdminScopesRoute
   '/_authenticated/admin/services': typeof AuthenticatedAdminServicesRoute
+  '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
   '/_authenticated/me/access': typeof AuthenticatedMeAccessRoute
   '/_authenticated/me/security': typeof AuthenticatedMeSecurityRoute
   '/_authenticated/me/sessions': typeof AuthenticatedMeSessionsRoute
@@ -235,6 +244,7 @@ export interface FileRouteTypes {
     | '/admin/roles'
     | '/admin/scopes'
     | '/admin/services'
+    | '/admin/users'
     | '/me/access'
     | '/me/security'
     | '/me/sessions'
@@ -257,6 +267,7 @@ export interface FileRouteTypes {
     | '/admin/roles'
     | '/admin/scopes'
     | '/admin/services'
+    | '/admin/users'
     | '/me/access'
     | '/me/security'
     | '/me/sessions'
@@ -280,6 +291,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/roles'
     | '/_authenticated/admin/scopes'
     | '/_authenticated/admin/services'
+    | '/_authenticated/admin/users'
     | '/_authenticated/me/access'
     | '/_authenticated/me/security'
     | '/_authenticated/me/sessions'
@@ -349,6 +361,13 @@ declare module '@tanstack/react-router' {
       path: '/me/access'
       fullPath: '/me/access'
       preLoaderRoute: typeof AuthenticatedMeAccessRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/admin/users': {
+      id: '/_authenticated/admin/users'
+      path: '/admin/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AuthenticatedAdminUsersRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/admin/services': {
@@ -459,6 +478,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedAdminRolesRoute: typeof AuthenticatedAdminRolesRoute
   AuthenticatedAdminScopesRoute: typeof AuthenticatedAdminScopesRoute
   AuthenticatedAdminServicesRoute: typeof AuthenticatedAdminServicesRoute
+  AuthenticatedAdminUsersRoute: typeof AuthenticatedAdminUsersRoute
   AuthenticatedMeAccessRoute: typeof AuthenticatedMeAccessRoute
   AuthenticatedMeSecurityRoute: typeof AuthenticatedMeSecurityRoute
   AuthenticatedMeSessionsRoute: typeof AuthenticatedMeSessionsRoute
@@ -479,6 +499,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAdminRolesRoute: AuthenticatedAdminRolesRoute,
   AuthenticatedAdminScopesRoute: AuthenticatedAdminScopesRoute,
   AuthenticatedAdminServicesRoute: AuthenticatedAdminServicesRoute,
+  AuthenticatedAdminUsersRoute: AuthenticatedAdminUsersRoute,
   AuthenticatedMeAccessRoute: AuthenticatedMeAccessRoute,
   AuthenticatedMeSecurityRoute: AuthenticatedMeSecurityRoute,
   AuthenticatedMeSessionsRoute: AuthenticatedMeSessionsRoute,

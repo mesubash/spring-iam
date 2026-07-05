@@ -1,16 +1,19 @@
 import { api, requestEnvelope } from "./client";
 import type {
   AccessListEntry,
+  AdminPasswordSet,
   Assignment,
   AuditEntry,
   AuditStatistics,
   AuthorizeResult,
   ContextAttribute,
+  CreatedIdentity,
   DenyRule,
   EffectivePermissions,
   ExplainResult,
   FeatureFlags,
   GroupMember,
+  IdentityAdmin,
   LoginResponse,
   ManifestSyncResult,
   Permission,
@@ -92,6 +95,20 @@ export const pdpApi = {
 
 export const metaApi = {
   features: () => api.get<FeatureFlags>("/api/v1/meta/features"),
+};
+
+/* ------------------------------ Identities ------------------------------ */
+
+export const identitiesApi = {
+  list: (params?: { query?: string; status?: string; limit?: number }) =>
+    api.get<IdentityAdmin[]>("/api/v1/identities", params),
+  get: (id: string) => api.get<IdentityAdmin>(`/api/v1/identities/${id}`),
+  create: (input: { email: string; password?: string; emailVerified?: boolean }) =>
+    api.post<CreatedIdentity>("/api/v1/identities", input),
+  setPassword: (id: string, input: { newPassword?: string; revokeSessions?: boolean }) =>
+    api.put<AdminPasswordSet>(`/api/v1/identities/${id}/password`, input),
+  setStatus: (id: string, status: string, reason?: string) =>
+    api.put<IdentityAdmin>(`/api/v1/identities/${id}/status`, { status, reason }),
 };
 
 /* -------------------------------- Scopes -------------------------------- */

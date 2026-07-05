@@ -7,6 +7,7 @@ import type { ResourceGrant } from "@/api/types";
 import { PageHeader } from "@/components/iam/PageHeader";
 import { DataTable, type Column } from "@/components/iam/DataTable";
 import { ConfirmDialog } from "@/components/iam/ConfirmDialog";
+import { SubjectPicker } from "@/components/iam/SubjectPicker";
 import { Tag } from "@/components/iam/badges";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -127,11 +128,11 @@ function ResourceGrantsPage() {
         actions={<Button onClick={() => setCreating(true)}>New grant</Button>}
       />
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Input
-          className="max-w-xs font-mono text-xs"
-          placeholder="Subject ID"
+        <SubjectPicker
+          className="w-full max-w-xs"
+          placeholder="Select a user…"
           value={subjectId}
-          onChange={(e) => setSubjectId(e.target.value)}
+          onChange={setSubjectId}
         />
         <span className="text-xs text-[var(--muted-foreground)]">or</span>
         <Input
@@ -222,12 +223,10 @@ function CreateGrantDialog({
         </DialogHeader>
         <div className="space-y-2">
           <div>
-            <Label>Subject ID</Label>
-            <Input
-              className="mt-1 font-mono text-xs"
-              value={subjectId}
-              onChange={(e) => setSubjectId(e.target.value)}
-            />
+            <Label>Subject</Label>
+            <div className="mt-1">
+              <SubjectPicker value={subjectId} onChange={setSubjectId} />
+            </div>
           </div>
           <div>
             <Label>Permission key</Label>

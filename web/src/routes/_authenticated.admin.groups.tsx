@@ -7,6 +7,7 @@ import type { GroupMember, SubjectGroup } from "@/api/types";
 import { PageHeader } from "@/components/iam/PageHeader";
 import { DataTable, type Column } from "@/components/iam/DataTable";
 import { ConfirmDialog } from "@/components/iam/ConfirmDialog";
+import { SubjectPicker } from "@/components/iam/SubjectPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -155,12 +156,12 @@ function MembersPanel({ group, onClose }: { group: SubjectGroup; onClose: () => 
       >
         <Label htmlFor="gm-subject">Add member</Label>
         <div className="flex gap-2">
-          <Input
+          <SubjectPicker
             id="gm-subject"
-            className="font-mono text-xs"
-            placeholder="Subject ID"
+            className="flex-1"
+            placeholder="Select a user…"
             value={subjectId}
-            onChange={(e) => setSubjectId(e.target.value)}
+            onChange={setSubjectId}
           />
           <Button type="submit" size="sm" disabled={!subjectId.trim() || add.isPending}>
             {add.isPending ? "Adding…" : "Add"}

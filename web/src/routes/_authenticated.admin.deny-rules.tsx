@@ -7,6 +7,7 @@ import type { DenyRule } from "@/api/types";
 import { PageHeader } from "@/components/iam/PageHeader";
 import { PermissionGuardedPage } from "@/components/iam/PermissionGuardedPage";
 import { Can } from "@/components/iam/Can";
+import { SubjectPicker } from "@/components/iam/SubjectPicker";
 import { DataTable, type Column } from "@/components/iam/DataTable";
 import { Tag } from "@/components/iam/badges";
 import { Button } from "@/components/ui/button";
@@ -135,11 +136,10 @@ function DenyRulesPage() {
         }
       />
       <div className="mb-3 max-w-md">
-        <Input
-          placeholder="Filter by subject id (required)…"
+        <SubjectPicker
           value={subjectId}
-          onChange={(e) => setSubjectId(e.target.value)}
-          className="font-mono"
+          onChange={setSubjectId}
+          placeholder="Select a user to view their deny rules…"
         />
       </div>
       <DataTable
@@ -149,7 +149,7 @@ function DenyRulesPage() {
         empty={
           trimmedSubject
             ? "No deny rules for this subject."
-            : "Enter a subject id to view its deny rules."
+            : "Select a user to view their deny rules."
         }
         rowKey={(r) => r.id}
       />
@@ -221,13 +221,8 @@ function CreateDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
-          <Label htmlFor="d-sub">Subject ID</Label>
-          <Input
-            id="d-sub"
-            className="font-mono"
-            value={subjectId}
-            onChange={(e) => setSubjectId(e.target.value)}
-          />
+          <Label htmlFor="d-sub">Subject</Label>
+          <SubjectPicker id="d-sub" value={subjectId} onChange={setSubjectId} />
           <Label htmlFor="d-st">Subject type</Label>
           <select
             id="d-st"

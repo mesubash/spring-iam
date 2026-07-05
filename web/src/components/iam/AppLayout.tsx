@@ -15,6 +15,7 @@ const meItems: NavItem[] = [
 
 const adminItems: NavItem[] = [
   { to: "/admin/dashboard", label: "Dashboard" },
+  { to: "/admin/users", label: "Users", permission: "platform.identity.read" },
   { to: "/admin/scopes", label: "Scopes", permission: "platform.scope.read" },
   { to: "/admin/roles", label: "Roles", permission: "platform.role.read" },
   { to: "/admin/assignments", label: "Assignments", permission: "platform.assignment.read" },

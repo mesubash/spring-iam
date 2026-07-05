@@ -7,6 +7,7 @@ import type { ExplainResult, ExplainStep } from "@/api/types";
 import { PageHeader } from "@/components/iam/PageHeader";
 import { PermissionGuardedPage } from "@/components/iam/PermissionGuardedPage";
 import { DecisionBadge, Tag } from "@/components/iam/badges";
+import { SubjectPicker } from "@/components/iam/SubjectPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -100,13 +101,10 @@ function RequestFields({
   return (
     <div className="space-y-2">
       <div>
-        <Label>Subject ID</Label>
-        <Input
-          className="mt-1 font-mono text-xs"
-          placeholder="Subject UUID"
-          value={form.subjectId}
-          onChange={(e) => set("subjectId")(e.target.value)}
-        />
+        <Label>Subject</Label>
+        <div className="mt-1">
+          <SubjectPicker value={form.subjectId} onChange={set("subjectId")} />
+        </div>
       </div>
       <div>
         <Label>Permission</Label>
