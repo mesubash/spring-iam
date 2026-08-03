@@ -1,68 +1,143 @@
 # iam-console
 
-Standalone web console for the Spring IAM service — a single React app that
-serves **both** audiences from one build:
+Standalone web console for the Spring IAM service — one React app serving **both**
+audiences from a single build:
 
-- **Administrators** manage scopes, roles, assignments, deny rules, policies,
-  grants, groups, services, and audit.
+- **Administrators** manage users, scopes, roles, assignments, deny rules,
+  policies, context attributes, grants, groups, services, and audit.
 - **Regular users** see their own access, sessions, and security settings.
 
-There is no separate admin build. What a user can see is decided entirely by
-their **permissions** (bootstrapped from the API), never by role-name branching.
+No separate admin build. What a user sees is decided entirely by their
+**permissions** (from the API), never by role-name branching.
+
+> **This README is the app cookbook** (how it's wired, how to add things). The
+> cross-client **contract** — response envelopes, token rules, the permission
+> model spec — lives in [`../docs/FRONTEND_INTEGRATION.md`](../docs/FRONTEND_INTEGRATION.md).
+> Read that once; use this to build.
 
 ---
 
-## Hard boundary: this app is a black-box REST consumer
+## Hard boundary: black-box REST consumer
 
-- It talks to IAM **only** over the public HTTP API (`VITE_API_BASE_URL`).
-- It never imports Java code, never touches the database, and holds no secrets.
-- It is **not** part of the Spring Boot / Maven build and is **not** served from
-  the jar. It builds and deploys on its own (see below). The root
-  `.dockerignore` keeps it out of the Java image.
-
----
+- Talks to IAM **only** over the public HTTP API (`VITE_API_BASE_URL`).
+- Never imports Java, never touches the DB, holds no secrets.
+- **Not** part of the Maven build, **not** served from the jar. Builds and
+  deploys on its own; the root `.dockerignore` keeps it out of the Java image.
 
 ## Stack
 
-React 19 + TypeScript · Vite · TanStack Query/Router/Table · Tailwind + shadcn/ui ·
-react-hook-form + zod · Playwright (e2e). See [`../docs/UI_PLAN.md`](../docs/UI_PLAN.md).
-
----
+React 19 + TypeScript · Vite · TanStack Router (file-based) + Query · Tailwind v4
++ shadcn/ui · react-hook-form + zod · sonner. Package manager: **bun**.
 
 ## Develop
 
 ```bash
-cp .env.example .env        # set VITE_API_BASE_URL (default http://localhost:8080)
-npm install
-npm run dev                 # Vite dev server on http://localhost:5173
+cp .env.example .env        # VITE_API_BASE_URL (default http://localhost:8080)
+bun install
+bun run dev                 # Vite on http://localhost:5173
 ```
 
-The Java service must be running (see the repo README). CORS on the API already
-allows `http://localhost:3000` and `:8080`; add your dev origin
-(`http://localhost:5173`) to `CORS_ALLOWED_ORIGINS` if needed.
-
-## Build & run standalone (separate from the Java stack)
+The Java service must be running. Its CORS already allows `http://localhost:5173`.
 
 ```bash
-# Static build
-npm run build               # → dist/
-
-# Or containerized (nginx serving the static build), on its own:
-docker build -t iam-console web/
-docker run -p 3000:80 -e API_BASE_URL=http://localhost:8080 iam-console
-
-# Or via the dedicated compose file (does NOT start Postgres/Redis/IAM):
-docker compose -f web/docker-compose.web.yml up
+bun run build               # → dist/ (static; regenerates src/routeTree.gen.ts)
 ```
 
-The main `docker-compose.yml` at the repo root intentionally does **not**
-include this app — the backend and frontend deploy independently.
+Deploy `dist/` on any static host. The repo's `docker-compose.yml` intentionally
+excludes this app — backend and frontend deploy independently.
 
 ---
 
-## Generating the app
+## Architecture map
 
-The initial app is scaffolded from the prompt in the project chat (Lovable /
-any React generator). Drop the generated Vite project into this directory,
-keeping `package.json`, `src/`, and `index.html` here. Then wire the API client
-to `import.meta.env.VITE_API_BASE_URL`.
+```
+src/
+  api/
+    client.ts        fetch wrapper: envelope unwrap, in-memory token,
+                     single-flight refresh, 401→refresh→retry, 403 handler
+    resources.ts     one object per domain (authApi, authzApi, rolesApi, …)
+    types.ts         REST types, mirror the backend exactly
+  context/
+    AuthContext      identity, login/logout, silent bootstrap on load
+    AuthzContext     can()/canAny(), permissions, features, scopes, scopeId
+  components/iam/
+    Can                  gate a button/action on a permission
+    PermissionGuardedPage gate a whole page (deep-link safe)
+    SubjectPicker        pick a user by email, store the subject UUID
+    AppLayout            sidebar nav (permission/feature gated) + scope switcher
+    DataTable, PageHeader, ConfirmDialog, badges
+  routes/            file-based routes; _authenticated.* require a session
+```
+
+## How the client works (`api/client.ts`)
+
+- **Access token** in memory only. `Authorization: Bearer` added automatically.
+- **Envelope unwrap** — `{ success|status, message, data }` is unwrapped to
+  `data`; raw `/api/v1/*` entities pass through.
+- **Refresh** — a single shared in-flight promise (refresh tokens rotate; two
+  concurrent refreshes = reuse → session revoked). A `401` triggers one
+  refresh-then-retry.
+- **Bootstrap** — on login/reload, `authzApi.bootstrap()` returns identity +
+  scopes + permissions + features in one call and **primes the query cache**, so
+  the AuthzContext hooks resolve without extra requests.
+- **403** — `setForbiddenHandler` shows a quiet toast; never crash the page. A
+  403 is expected (the server is the real guard; client checks are UX only).
+
+## Permission model (how gating works here)
+
+`const { can, canAny, permissions, features, scopeId, setScopeId } = useAuthz()`
+
+```tsx
+can("platform.role.create")            // does the user hold this key at scopeId?
+canAny(["a.b.read", "a.b.manage"])     // any of
+
+<Can permission="platform.role.create">      // gate a button/action
+  <Button>New role</Button>
+</Can>
+
+<PermissionGuardedPage permission="platform.role.read">  // gate a page (route)
+  <RolesPage />
+</PermissionGuardedPage>
+```
+
+**The rule, no exceptions:**
+
+| UI thing | Gate |
+|---|---|
+| nav item | `.read` **AND** its feature flag (if any) — never flag alone |
+| page route | `.read` (via `PermissionGuardedPage`) |
+| action button | the exact `.action` (`.create/.update/.delete/.revoke/.manage`) |
+
+Nav is data in `AppLayout.tsx` → `adminItems[]`: `{ to, label, permission?, featureFlag? }`. Both must pass to render.
+
+## Scopes
+
+A user can be admin at one scope, read-only at another. The header scope switcher
+(`setScopeId`) drives a **per-scope** permission refetch. `SubjectPicker` resolves
+a user by email and stores their subject **UUID** (what assignments/grants/deny
+rules key on) — with a raw-UUID fallback so service/group subjects still work.
+
+---
+
+## Recipe: add an admin page
+
+1. **Route** — `src/routes/_authenticated.admin.<name>.tsx`:
+   ```tsx
+   export const Route = createFileRoute("/_authenticated/admin/<name>")({
+     component: () => (
+       <PermissionGuardedPage permission="platform.<res>.read">
+         <ThingPage />
+       </PermissionGuardedPage>
+     ),
+   });
+   ```
+2. **API** — add a module in `api/resources.ts` (`thingApi = { list, create, … }`)
+   and its types in `api/types.ts` (match the backend response exactly).
+3. **Nav** — one line in `AppLayout.tsx` `adminItems[]` with its `permission`
+   (and `featureFlag` if the backend gates it behind one).
+4. **Page** — `PageHeader` + `DataTable`; wrap every mutator in
+   `<Can permission="platform.<res>.<action>">`.
+5. **Build** — `bun run build` regenerates `routeTree.gen.ts` (commit it).
+
+That's the whole loop. Everything else (auth, refresh, scope, 403) is already
+handled by the client + contexts.
