@@ -119,6 +119,75 @@ rules key on) — with a raw-UUID fallback so service/group subjects still work.
 
 ---
 
+## Worked example: from API to a rendered button
+
+End to end — how a permission key becomes (or doesn't become) a visible button.
+
+**1. Backend produces the list.** `GET /api/authz/me/permissions?scopeId=<ROOT>`
+resolves the caller's role assignments effective at that scope and returns the
+union of those roles' permission keys (see [`../docs/AUTHZ_DESIGN.md`](../docs/AUTHZ_DESIGN.md)
+for the deny/grant pipeline). On load it's folded into `/me/bootstrap`.
+
+```jsonc
+// SuperAdmin at ROOT
+{ "success": true, "data": ["platform.role.read","platform.role.create",
+                            "platform.role.update","platform.role.delete", …] }
+// AuditViewer at ROOT
+{ "success": true, "data": ["platform.role.read", …only .read keys] }
+```
+
+**2. Context turns the list into `can()`.** `AuthzContext` keeps the array as a
+`Set` and re-fetches it per scope:
+
+```ts
+const permsQ = useQuery({ queryKey: ["authz", "perms", scopeId],
+                          queryFn: () => authzApi.myPermissions(scopeId!),
+                          enabled: isAuthenticated && !!scopeId });
+const permissions = new Set(permsQ.data ?? []);
+const can = (key: string) => permissions.has(key);   // O(1) membership test
+```
+
+**3. `<Can>` reads `can()`.** The whole component is this — render children or a
+fallback:
+
+```tsx
+export function Can({ permission, anyOf, children, fallback = null }) {
+  const { can, canAny } = useAuthz();
+  const ok = permission ? can(permission) : anyOf ? canAny(anyOf) : false;
+  return <>{ok ? children : fallback}</>;
+}
+```
+
+**4. A page uses it.** Same JSX for everyone:
+
+```tsx
+<PageHeader title="Roles"
+  actions={<Can permission="platform.role.create"><Button>New role</Button></Can>}
+/>
+<DataTable columns={cols} rows={roles} />   // rows visible to anyone with .read
+```
+
+**5. What each user renders** — identical code, different output because the
+`Set` differs:
+
+```
+SuperAdmin  →  Roles page + [New role] button + row [edit][delete]
+AuditViewer →  Roles page, read-only        (New role hidden: no .create key)
+plain user  →  no "Roles" in the sidebar     (no .read key → nav item filtered)
+```
+
+**Why it's dynamic (reactive):** `permissions` is a React Query result. When it
+changes — scope switch (`setScopeId` → refetch for the new scope) or a `403`
+(handler invalidates `["authz","perms"]` → refetch) — the `Set` changes, context
+re-renders, and every `<Can>` / nav item / `PermissionGuardedPage` re-evaluates
+automatically. You never manually toggle a button; you change the data and the UI
+follows.
+
+> `<Can>` is **UX, not security.** A user who un-hides the button still gets a
+> `403` from the server. Client gating only decides what to *show*.
+
+---
+
 ## Recipe: add an admin page
 
 1. **Route** — `src/routes/_authenticated.admin.<name>.tsx`:
