@@ -101,4 +101,4 @@ Flyway · RS256 JWT + JWKS · OpenAPI/Swagger · Micrometer/Prometheus · Maven.
 
 ## License
 
-Private / internal use.
+[MIT](LICENSE) © Subash Singh Dhami
