@@ -1,5 +1,6 @@
 package io.github.mesubash.iam.authn.security.oauth2;
 
+import io.github.mesubash.iam.util.ClientIpResolver;
 import io.github.mesubash.iam.authn.entity.enums.AccountStatus;
 import io.github.mesubash.iam.authn.security.TokenEncryptionUtil;
 import io.github.mesubash.iam.authn.security.UserPrincipal;
@@ -74,7 +75,7 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         }
 
         SessionService.IssuedRefresh issued = sessionService.createSession(
-                userPrincipal.getId(), request.getRemoteAddr(), request.getHeader("User-Agent"));
+                userPrincipal.getId(), ClientIpResolver.resolve(request), request.getHeader("User-Agent"));
 
         // Single-use exchange code -> encrypted (identity, session, refresh) bundle
         byte[] codeBytes = new byte[16];

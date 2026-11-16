@@ -1,5 +1,6 @@
 package io.github.mesubash.iam.authz.controller;
 
+import io.github.mesubash.iam.util.ClientIpResolver;
 import io.github.mesubash.iam.authz.dto.AccessListEntry;
 import io.github.mesubash.iam.authz.dto.AuthorizationRequest;
 import io.github.mesubash.iam.authz.dto.AuthorizationResponse;
@@ -169,12 +170,7 @@ public class AuthorizationController {
 
         // Server-side IP extraction (prefer X-Forwarded-For for proxied requests)
         if (ctx.getIpAddress() == null || ctx.getIpAddress().isBlank()) {
-            String forwarded = httpRequest.getHeader("X-Forwarded-For");
-            if (forwarded != null && !forwarded.isBlank()) {
-                ctx.setIpAddress(forwarded.split(",")[0].trim());
-            } else {
-                ctx.setIpAddress(httpRequest.getRemoteAddr());
-            }
+            ctx.setIpAddress(ClientIpResolver.resolve(httpRequest));
         }
 
         // Server-side User-Agent extraction

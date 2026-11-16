@@ -1,5 +1,6 @@
 package io.github.mesubash.iam.config;
 
+import io.github.mesubash.iam.util.ClientIpResolver;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -57,7 +58,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
-        String clientIp = getClientIp(request);
+        String clientIp = ClientIpResolver.resolve(request);
         String key = RATE_LIMIT_PREFIX + path + ":" + clientIp;
 
         try {
@@ -97,11 +98,4 @@ public class RateLimitFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private String getClientIp(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isBlank()) {
-            return xForwardedFor.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
-    }
 }

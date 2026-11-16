@@ -1,5 +1,6 @@
 package io.github.mesubash.iam.authz.service;
 
+import io.github.mesubash.iam.util.ClientIpResolver;
 import io.github.mesubash.iam.authz.dto.AuthorizationRequest;
 import io.github.mesubash.iam.authz.entity.AuthorizationAudit;
 import io.github.mesubash.iam.authz.repository.AuthorizationAuditRepository;
@@ -50,7 +51,7 @@ public class AuditWriter {
                     .reason(reason)
                     .context(context)
                     .requestId(request.getContext() != null ? request.getContext().getRequestId() : null)
-                    .ipAddress(request.getContext() != null ? request.getContext().getIpAddress() : null)
+                    .ipAddress(request.getContext() != null ? ClientIpResolver.normalize(request.getContext().getIpAddress()) : null)
                     .userAgent(request.getContext() != null ? request.getContext().getUserAgent() : null)
                     .timestamp(Instant.now())
                     .build());

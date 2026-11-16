@@ -1,5 +1,6 @@
 package io.github.mesubash.iam.authn.service;
 
+import io.github.mesubash.iam.util.ClientIpResolver;
 import io.github.mesubash.iam.authn.entity.Identity;
 import io.github.mesubash.iam.authn.entity.SecurityEvent;
 import io.github.mesubash.iam.authn.entity.enums.SecurityEventType;
@@ -30,7 +31,7 @@ public class SecurityEventService {
             SecurityEvent event = SecurityEvent.builder()
                     .identity(identity)
                     .eventType(eventType)
-                    .ipAddress(ipAddress)
+                    .ipAddress(ClientIpResolver.normalize(ipAddress))
                     .userAgent(userAgent)
                     .metadata(metadata)
                     .build();

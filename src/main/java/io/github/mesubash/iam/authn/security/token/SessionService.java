@@ -1,5 +1,6 @@
 package io.github.mesubash.iam.authn.security.token;
 
+import io.github.mesubash.iam.util.ClientIpResolver;
 import io.github.mesubash.iam.authn.config.JwtConfig;
 import io.github.mesubash.iam.authn.entity.RefreshToken;
 import io.github.mesubash.iam.authn.entity.Session;
@@ -74,7 +75,7 @@ public class SessionService {
         Instant now = Instant.now();
         Session session = sessionRepository.save(Session.builder()
                 .identityId(identityId)
-                .createdIp(ipAddress)
+                .createdIp(ClientIpResolver.normalize(ipAddress))
                 .userAgent(userAgent)
                 .deviceLabel(deviceLabel(userAgent))
                 .createdAt(now)
