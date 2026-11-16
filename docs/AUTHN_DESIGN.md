@@ -584,6 +584,8 @@ notification:
 
 `NotificationPort`: `sendEmailVerification / sendPasswordReset / sendReactivation`. Adapters: `log` (dev default), `smtp`, `webhook` (POST to deployment's own notification service — zero code changes for custom channels).
 
+Every `NotificationPort` call is `@Async` on `notificationExecutor` (declared on the interface, so any adapter gets it): register and the other senders call it inside their transaction, and a slow provider must not stall the request or time it out after the account row is written. Failures never reach the caller, so adapters log them and still set their own client timeouts.
+
 ---
 
 ## 13. Migration Diff Summary (Current → Proposed)

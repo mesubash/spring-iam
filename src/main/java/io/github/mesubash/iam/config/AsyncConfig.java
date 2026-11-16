@@ -52,6 +52,22 @@ public class AsyncConfig {
         return executor;
     }
 
+    /** Runs every NotificationPort call, so mail delivery never blocks a request. */
+    @Bean(name = "notificationExecutor")
+    public Executor notificationExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(500);
+        executor.setThreadNamePrefix("notify-");
+        // Full queue means the provider is badly behind: send inline rather than drop a reset email.
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        executor.initialize();
+        return executor;
+    }
+
     /**
      * Executor for cache warming and maintenance tasks
      */
