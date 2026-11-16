@@ -85,6 +85,7 @@ public class AuthServiceImpl implements AuthService {
         if (identityRepository.existsByPrimaryEmail(request.getEmail())) {
             throw new ConflictException("Email address already in use");
         }
+        assertAcceptablePassword(request.getPassword());
 
         // Create identity
         Identity identity = Identity.builder()
@@ -297,6 +298,7 @@ public class AuthServiceImpl implements AuthService {
         if (userId == null) {
             throw new InvalidTokenException("Invalid or expired reset token");
         }
+        assertAcceptablePassword(newPassword);
 
         Identity identity = identityRepository.findById(UUID.fromString(userId))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -325,6 +327,10 @@ public class AuthServiceImpl implements AuthService {
         if (!passwordEncoder.matches(request.getCurrentPassword(), credential.getSecretHash())) {
             throw new BadRequestException("Current password is incorrect");
         }
+        if (!request.getNewPassword().equals(request.getConfirmPassword())) {
+            throw new BadRequestException("New password and confirmation do not match");
+        }
+        assertAcceptablePassword(request.getNewPassword());
 
         credential.setSecretHash(passwordEncoder.encode(request.getNewPassword()));
         credentialRepository.save(credential);
@@ -386,6 +392,13 @@ public class AuthServiceImpl implements AuthService {
         securityEventService.logEvent(identity, SecurityEventType.EMAIL_CHANGED, null, null);
     }
 
+    private static void assertAcceptablePassword(String password) {
+        String violation = PasswordUtil.policyViolation(password);
+        if (violation != null) {
+            throw new BadRequestException(violation);
+        }
+    }
+
     private static String sha256(String value) {
         try {
             return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
@@ -419,6 +432,7 @@ public class AuthServiceImpl implements AuthService {
         if (userId == null) {
             throw new InvalidTokenException("Invalid or expired verification token");
         }
+        assertAcceptablePassword(newPassword);
 
         Identity identity = identityRepository.findById(UUID.fromString(userId))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));

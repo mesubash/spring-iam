@@ -115,8 +115,10 @@ TOTP (RFC 6238, 6 digits, 30 s) plus ten single-use recovery codes.
 - `reset-password` — query params `token`, `newPassword`.
 - `verify-reactivation`, `verify-email-change` — query param `token`.
 - `verify-email-and-setup-password` — body `VerifyEmailAndPasswordRequest`: `{ "token": string, "newPassword": string }`
-- `change-password` — body `PasswordChangeRequest`: `{ "currentPassword": string, "newPassword": string(min 8), "confirmPassword": string }`
+- `change-password` — body `PasswordChangeRequest`: `{ "currentPassword": string, "newPassword": string(min 8), "confirmPassword": string }`; `confirmPassword` must equal `newPassword`.
 - `change-email` — body `{ "newEmail": string, "currentPassword": string }`
+
+**Password policy.** Every path where a user sets their own password (`register`, `reset-password`, `change-password`, `verify-email-and-setup-password`) also enforces 6–72 characters with at least one letter and one digit; a violation is a `400` naming the rule. The 72 cap is BCrypt's input limit.
 
 **`POST /api/auth/login` — example**
 ```json
