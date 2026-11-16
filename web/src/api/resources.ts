@@ -55,7 +55,7 @@ export const authApi = {
   forgotPassword: (email: string) =>
     requestEnvelope("/api/auth/forgot-password", { method: "POST", query: { email } }),
   resetPassword: (token: string, newPassword: string) =>
-    requestEnvelope("/api/auth/reset-password", { method: "POST", query: { token, newPassword } }),
+    requestEnvelope("/api/auth/reset-password", { method: "POST", body: { token, newPassword } }),
   resendVerification: (email: string) =>
     requestEnvelope("/api/auth/resend-verification", { method: "POST", query: { email } }),
   sessions: () => api.get<Session[]>("/api/auth/sessions"),

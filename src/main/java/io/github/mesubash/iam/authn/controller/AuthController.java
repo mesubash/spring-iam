@@ -6,6 +6,7 @@ import io.github.mesubash.iam.authn.security.TokenEncryptionUtil;
 import io.github.mesubash.iam.authn.service.AuthService;
 import io.github.mesubash.iam.shared.dto.ApiResponse;
 import io.github.mesubash.iam.shared.dto.SuccessResponse;
+import io.github.mesubash.iam.shared.exception.BadRequestException;
 import io.github.mesubash.iam.shared.exception.UnauthorizedException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -196,12 +197,22 @@ public class AuthController {
                 SuccessResponse.of("If the email exists, you will receive password reset instructions")));
     }
 
+    /** token + newPassword as a JSON body; query params still work for older callers. */
+    public record ResetPasswordRequest(String token, String newPassword) {}
+
     @PostMapping("/reset-password")
     @Operation(summary = "Reset password", description = "Reset password using reset token")
     public ResponseEntity<ApiResponse<SuccessResponse>> resetPassword(
-            @RequestParam String token,
-            @RequestParam String newPassword) {
-        authService.resetPassword(token, newPassword);
+            @RequestParam(required = false) String token,
+            @RequestParam(required = false) String newPassword,
+            @RequestBody(required = false) ResetPasswordRequest body) {
+        // A password in a query string lands in every access log on the way, so prefer the body.
+        String resetToken = token != null ? token : body != null ? body.token() : null;
+        String password = newPassword != null ? newPassword : body != null ? body.newPassword() : null;
+        if (resetToken == null || resetToken.isBlank() || password == null || password.isBlank()) {
+            throw new BadRequestException("token and newPassword are required");
+        }
+        authService.resetPassword(resetToken, password);
         return ResponseEntity.ok(ApiResponse.success("Password reset successful",
                 SuccessResponse.of("Your password has been reset successfully")));
     }

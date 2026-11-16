@@ -112,7 +112,7 @@ TOTP (RFC 6238, 6 digits, 30 s) plus ten single-use recovery codes.
 - `oauth/exchange` — body `{ "code": string }`
 - `logout` — no body; requires `Authorization` header.
 - `verify-email`, `resend-verification`, `forgot-password`, `request-reactivation` — query param `email` or `token` as applicable.
-- `reset-password` — query params `token`, `newPassword`.
+- `reset-password` — body `{ "token": string, "newPassword": string }`. The query params `token`, `newPassword` are still accepted (and win if both are sent) but put the password in URLs and access logs; use the body.
 - `verify-reactivation`, `verify-email-change` — query param `token`.
 - `verify-email-and-setup-password` — body `VerifyEmailAndPasswordRequest`: `{ "token": string, "newPassword": string }`
 - `change-password` — body `PasswordChangeRequest`: `{ "currentPassword": string, "newPassword": string(min 8), "confirmPassword": string }`; `confirmPassword` must equal `newPassword`.
