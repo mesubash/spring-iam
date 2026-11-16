@@ -295,26 +295,9 @@ public class AuthServiceImpl implements AuthService {
     public String beginSso(String refreshToken, String redirectOrigin, boolean askConsent, String audience) {
         // Checked first: an app asking for an audience it may not have is an error, session or not.
         String resolvedAudience = jwtTokenProvider.resolveAudience(audience);
-        if (refreshToken == null || refreshToken.isBlank()) {
-            throw new UnauthorizedException("No session");
-        }
-        io.github.mesubash.iam.authn.entity.Session session;
-        try {
-            session = sessionService.findLiveSession(refreshToken);
-        } catch (InvalidTokenException e) {
-            throw new UnauthorizedException("No session");
-        }
-        Identity identity = identityRepository.findById(session.getIdentityId())
-                .orElseThrow(() -> new UnauthorizedException("No session"));
-        ensureAccountActive(identity);
-
-        // Every session was made after the MFA gate, but the gate may have tightened since
-        // (MFA turned on, a required role granted). Such a session cannot sign apps in.
-        List<String> amr = session.getAmr() == null ? List.of() : List.of(session.getAmr().split(","));
-        if (!amr.contains("mfa") && (mfaService.isEnabled(identity.getId())
-                || mfaRequiredForRoles(getRolesForIdentity(identity.getId())))) {
-            throw new UnauthorizedException("Session does not meet the MFA requirement");
-        }
+        LiveSession live = liveSession(refreshToken);
+        Identity identity = live.identity();
+        List<String> amr = live.amr();
 
         if (askConsent && !Boolean.TRUE.equals(
                 stringRedisTemplate.hasKey(SSO_CONSENT_PREFIX + identity.getId() + ":" + redirectOrigin))) {
@@ -328,6 +311,42 @@ public class AuthServiceImpl implements AuthService {
                 tokenEncryptionUtil.encrypt(identity.getId() + " " + String.join(",", amr)
                         + (resolvedAudience == null ? "" : " " + resolvedAudience)), SSO_CODE_TTL);
         return code;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserPrincipal sessionPrincipal(String refreshToken) {
+        Identity identity = liveSession(refreshToken).identity();
+        return UserPrincipal.create(identity, null, getRolesForIdentity(identity.getId()));
+    }
+
+    private record LiveSession(Identity identity, List<String> amr) {}
+
+    /**
+     * The person behind a refresh token, read without rotating it. Every session was made after
+     * the MFA gate, but the gate may have tightened since (MFA turned on, a required role
+     * granted); such a session counts as no session here.
+     */
+    private LiveSession liveSession(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            throw new UnauthorizedException("No session");
+        }
+        io.github.mesubash.iam.authn.entity.Session session;
+        try {
+            session = sessionService.findLiveSession(refreshToken);
+        } catch (InvalidTokenException e) {
+            throw new UnauthorizedException("No session");
+        }
+        Identity identity = identityRepository.findById(session.getIdentityId())
+                .orElseThrow(() -> new UnauthorizedException("No session"));
+        ensureAccountActive(identity);
+
+        List<String> amr = session.getAmr() == null ? List.of() : List.of(session.getAmr().split(","));
+        if (!amr.contains("mfa") && (mfaService.isEnabled(identity.getId())
+                || mfaRequiredForRoles(getRolesForIdentity(identity.getId())))) {
+            throw new UnauthorizedException("Session does not meet the MFA requirement");
+        }
+        return new LiveSession(identity, amr);
     }
 
     @Override

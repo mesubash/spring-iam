@@ -72,6 +72,7 @@ Controller: `AuthController` (envelope responses). Public endpoints per `Securit
 | POST | `/api/auth/login` | Public | Authenticate; returns access token + sets refresh cookie, or an MFA step (see below). |
 | POST | `/api/auth/mfa/verify` | Public (needs a challenge) | Second login step: TOTP or recovery code → tokens. |
 | POST | `/api/auth/refresh` | Public (needs refresh cookie) | Rotate access token using the `__Host-Refresh` cookie. |
+| GET | `/api/auth/whoami` | Public (needs refresh cookie) | Who is signed in, read **without rotating** the cookie (see § Cookie-authenticated endpoints). |
 | POST | `/api/auth/logout` | Bearer (authenticated) | Revoke current access token + clear refresh cookie. |
 | POST | `/api/auth/logout-all` | Bearer (authenticated) | Revoke all refresh tokens/sessions for the user and set the sign-out cutoff, so every access token already issued is rejected here and by resource servers that read it (INTEGRATION_GUIDE §3.1). |
 | POST | `/api/auth/oauth/exchange` | Public | Exchange the one-time OAuth or SSO redirect `code` for tokens, or an MFA step (same as `login`). |
@@ -87,6 +88,20 @@ Controller: `AuthController` (envelope responses). Public endpoints per `Securit
 | POST | `/api/auth/verify-email-change` | Public | Confirm the email change via `token`. |
 | POST | `/api/auth/request-reactivation` | Public | Request reactivation email for a deactivated account. |
 | POST | `/api/auth/verify-reactivation` | Public | Reactivate an account via `token`. |
+
+### Cookie-authenticated endpoints — `/api/auth/whoami`, `/api/auth/self/*`
+
+For a backend-for-frontend that holds the browser's `__Host-Refresh` cookie and forwards it. The
+cookie is read, never rotated, so a BFF can check it on every page load without racing `/refresh`.
+A session counts only while it is the session's current (not yet rotated) token, the account is
+`ACTIVE`, and the session still meets the MFA requirement (it passed a second factor if MFA is now
+on for the account or required for one of its roles); otherwise **401**, as with SSO.
+
+**`GET /api/auth/whoami`** → envelope `data`:
+```json
+{ "id": "…", "email": "ada@example.com", "displayName": "Ada", "emailVerified": true,
+  "mfaEnabled": false, "roles": ["User"] }
+```
 
 ### MFA — `/api/auth/mfa/*` (`MfaController`)
 

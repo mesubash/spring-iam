@@ -225,6 +225,21 @@ public class AuthController {
         return out.toString();
     }
 
+    public record WhoAmI(java.util.UUID id, String email, String displayName, boolean emailVerified,
+                         boolean mfaEnabled, List<String> roles) {}
+
+    @GetMapping("/whoami")
+    @Operation(summary = "Who is signed in (read-only)",
+            description = "Resolves the person behind the session cookie WITHOUT rotating it, for "
+                    + "backend-for-frontend session checks. 401 when there is no usable session.")
+    public ResponseEntity<ApiResponse<WhoAmI>> whoami(HttpServletRequest request) {
+        UserPrincipal me = authService.sessionPrincipal(getRefreshTokenFromCookie(request));
+        var identity = me.getIdentity();
+        return ResponseEntity.ok(ApiResponse.success("ok", new WhoAmI(identity.getId(), identity.getPrimaryEmail(),
+                identity.getDisplayName(), Boolean.TRUE.equals(identity.getEmailVerified()),
+                Boolean.TRUE.equals(identity.getMfaEnabled()), me.getRoles())));
+    }
+
     @PostMapping("/logout")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "User logout", description = "Logout user and invalidate tokens")

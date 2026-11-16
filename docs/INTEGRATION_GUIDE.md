@@ -214,6 +214,12 @@ the login body, `&audience=billing` on the OAuth start URL or on
 the session. Register each app in the service registry under the same name with
 its `ownedDomains`, and `/api/authz/me/permissions` returns only that app's keys.
 
+**Backend-for-frontend.** A server that forwards the browser's refresh cookie
+can ask who is signed in with `GET /api/auth/whoami` → `{ data: { id, email,
+displayName, emailVerified, mfaEnabled, roles } }`, or 401. It never rotates
+the cookie, so it is safe on every request; mint access tokens with
+`/api/auth/refresh` only when you need one.
+
 See [`UI_PLAN.md`](UI_PLAN.md) for the admin-console and permission-driven-UI
 design.
 

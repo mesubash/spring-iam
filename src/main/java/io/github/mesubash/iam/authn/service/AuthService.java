@@ -28,6 +28,13 @@ public interface AuthService {
      */
     String beginSso(String refreshToken, String redirectOrigin, boolean askConsent, String audience);
 
+    /**
+     * The person behind a refresh token, read without rotating it, with fresh roles. Same
+     * checks as {@link #beginSso}: throws {@code UnauthorizedException} when there is no live
+     * session, the account is not active, or the session does not meet the MFA requirement.
+     */
+    io.github.mesubash.iam.authn.security.UserPrincipal sessionPrincipal(String refreshToken);
+
     /** Remember that the person agreed to SSO into the app at {@code redirectOrigin}. */
     void grantSsoConsent(java.util.UUID identityId, String redirectOrigin);
 
