@@ -7,6 +7,7 @@ import io.github.mesubash.iam.authn.security.JwtAuthenticationFilter;
 import io.github.mesubash.iam.authn.security.oauth2.HttpCookieOAuth2AuthorizationRequestRepository;
 import io.github.mesubash.iam.authn.security.oauth2.OAuth2AuthenticationFailureHandler;
 import io.github.mesubash.iam.authn.security.oauth2.OAuth2AuthenticationSuccessHandler;
+import io.github.mesubash.iam.authz.service.AdminAuditService;
 import io.github.mesubash.iam.shared.security.ApiKeyAuthFilter;
 import io.github.mesubash.iam.shared.security.JwtAuthFilter;
 import lombok.RequiredArgsConstructor;
@@ -68,6 +69,7 @@ public class SecurityConfig {
 
     // Infrastructure
     private final RateLimitFilter rateLimitFilter;
+    private final AdminAuditService adminAuditService;
 
     @Value("${cors.allowed-origins:http://localhost:3000,http://localhost:5173,http://localhost:8080}")
     private String allowedOrigins;
@@ -243,11 +245,12 @@ public class SecurityConfig {
 
         http.authenticationProvider(buildAuthenticationProvider());
 
-        // Filter chain order: RateLimit → ApiKey → Service JWT → User JWT
+        // Filter chain order: RateLimit → ApiKey → Service JWT → User JWT → AdminAudit
         http.addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class);
         http.addFilterAfter(apiKeyAuthFilter, RateLimitFilter.class);
         http.addFilterAfter(jwtAuthFilter, ApiKeyAuthFilter.class);
         http.addFilterAfter(jwtAuthenticationFilter, JwtAuthFilter.class);
+        http.addFilterAfter(new AdminAuditFilter(adminAuditService), JwtAuthenticationFilter.class);
 
         return http.build();
     }

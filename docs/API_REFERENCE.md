@@ -459,6 +459,18 @@ Path falls under `anyRequest().authenticated()`; method security narrows.
 | GET | `/api/v1/audit/subject/{subjectId}?limit=100&page=0` | (above roles) | Audit records for a subject, newest first. `limit` is the page size (max 1000), `page` is 0-based. |
 | GET | `/api/v1/audit/resource/{resourceType}/{resourceId}?limit=100&page=0` | (above roles) | Audit records for a resource, newest first; paged like the subject read. |
 | GET | `/api/v1/audit/statistics/{subjectId}?sinceDaysAgo=7` | (above roles) | Decision statistics for a subject (default window 7 days). Returns a `Map`. |
+| GET | `/api/v1/audit/admin-actions?actorId=&page=0&size=50` | (above roles) | Admin action trail (`PageResponse<AdminAuditLog>`, newest first, size max 200). |
+| GET | `/api/v1/audit/security-events?identityId=&eventType=&since=&page=0&size=20` | (above roles) | Authentication event log (`PageResponse<SecurityEventView>`, newest first, size max 100). `since` is ISO-8601; an unknown `eventType` returns an empty page. |
+
+**Admin action trail.** Every successful (status < 400) `POST`/`PUT`/`PATCH`/`DELETE` under `/api/v1/*` is
+recorded asynchronously, except the decision calls that use `POST` to read (`/authorize*`,
+`/effective-permissions`, `/filter-resources`, `/access-list`, `/token/*`). The user's own flows under
+`/api/auth/*` (login, MFA, sessions) are not recorded here; they are security events. The request body is
+not stored. `AdminAuditLog`:
+`{ id, actorId: uuid|null, actorEmail: string|null, method, path, status: int, ip, userAgent, createdAt }`
+(`actorId` is null for API-key and service-token callers).
+
+`SecurityEventView`: `{ id, identityId, eventType, ipAddress, userAgent, metadata: object, createdAt }`.
 
 ### Resource grants — `ResourceGrantController` (`/api/v1/resource-grants`) — **Authenticated** · flag `resource-grants`
 
