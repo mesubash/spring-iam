@@ -1,18 +1,23 @@
 /**
  * Where to go after sign-in when the login page was opened with `?continue=`.
- * Only two shapes are followed: a same-site path ("/x", not "//x" or "/\x",
- * which browsers treat as another host) or an absolute URL on the IAM's own
- * origin (the SSO authorize URL). Anything else is dropped to avoid an open redirect.
+ * The value is resolved the way the browser would (which also strips tabs and
+ * newlines, so "/\t/evil.example" cannot sneak through as "//evil.example") and
+ * followed only when it lands on this console's origin or on the IAM's own origin
+ * (the SSO authorize URL). Anything else is dropped to avoid an open redirect.
  */
-export function safeContinueUrl(raw: string | null, apiOrigin: string): string | null {
+export function safeContinueUrl(
+  raw: string | null,
+  apiOrigin: string,
+  selfOrigin: string = window.location.origin,
+): string | null {
   if (!raw) return null;
-  if (raw.startsWith("/")) {
-    return raw[1] === "/" || raw[1] === "\\" ? null : raw;
-  }
+  let url: URL;
   try {
-    const url = new URL(raw);
-    return url.origin === new URL(apiOrigin).origin ? url.href : null;
+    url = new URL(raw, selfOrigin);
   } catch {
     return null;
   }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  const allowed = [selfOrigin, new URL(apiOrigin, selfOrigin).origin];
+  return allowed.includes(url.origin) ? url.href : null;
 }
