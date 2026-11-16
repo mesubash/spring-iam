@@ -4,6 +4,49 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/) (pre-1.0: minor versions may change behaviour).
 
+## [0.4.0] - 2026-11-16
+
+Multi-app and service-integration features.
+
+### Upgrade notes
+
+- **API docs moved to `/docs`.** Swagger UI is at `/docs` (redirects to
+  `/docs/swagger-ui/index.html`) and the spec at `/docs/openapi.json`. The old
+  `/swagger-ui/**`, `/api-docs/**` and `/v3/api-docs/**` paths are gone.
+- **`/api/auth/refresh` is rate limited** per refresh token
+  (`iam.rate-limit.refresh-max-requests`, default 60 per window); it had no
+  limit before.
+- **Sign-out everywhere reaches other services.** Whole-account revocations now
+  write `auth:revoked-before:<identityId>` to Redis, and the IAM's own endpoints
+  enforce it. Resource servers that share the Redis can enforce it too (see the
+  integration guide).
+- **New migrations:** `V13__session_audience.sql`,
+  `V14__assignment_origin_provisioned.sql`.
+
+### Added
+
+- **Per-app token audiences:** list apps in `APP_JWT_ALLOWED_AUDIENCES`; login,
+  OAuth start and SSO authorize accept an optional `audience`, the session keeps
+  it across refresh, MFA and SSO, and `/api/authz/me/permissions` is trimmed to
+  the domains the app owns in the service registry. Empty list = unchanged
+  single-audience behaviour.
+- **Internal service APIs** under `/api/v1/internal/*` (API key or SuperAdmin):
+  account lookup and creation, discard an unfinished account, resend or mint a
+  verification token, set a password hash, verify, deactivate, confirm a
+  password, and idempotent role provisioning. Platform-admin targets, ROOT,
+  SuperAdmin and system roles are refused.
+- **Backend-for-frontend endpoints:** `GET /api/auth/whoami` (reads the session
+  cookie without rotating it) and cookie-authenticated `/api/auth/self/*`
+  (change password, MFA setup/enable/disable, display name, sign out this
+  session). They accept JSON only, so a cross-site form post cannot reach them.
+- One log line per request (method, path, status, duration, client IP; no
+  query strings, bodies, headers or cookies).
+
+### Fixed
+
+- A sign-in completed in the same second as a revoke-all is not rejected by the
+  new cutoff.
+
 ## [0.3.1] - 2026-11-16
 
 ### Security
@@ -172,6 +215,7 @@ A security release. Upgrading is recommended for every deployment.
 
 First public release.
 
+[0.4.0]: https://github.com/mesubash/spring-iam/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/mesubash/spring-iam/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/mesubash/spring-iam/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mesubash/spring-iam/compare/v0.1.0...v0.2.0
