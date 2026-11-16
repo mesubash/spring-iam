@@ -32,6 +32,7 @@ migrations create them.
 | `APP_JWT_SECRET` | *(random per boot)* | Signs OAuth state cookies and feeds the cookie-key fallback. Access tokens are RS256 from `signing_keys`, not this secret. Unset = a random secret per boot (logged): fine for one instance, set it when running several. |
 | `APP_JWT_ISSUER` | `spring-iam` | `iss` claim on issued access tokens; tokens from any other issuer are rejected |
 | `APP_JWT_AUDIENCE` | *(empty)* | optional `aud` claim; when set, tokens without it are rejected |
+| `APP_JWT_ALLOWED_AUDIENCES` | *(empty)* | per-app audiences, comma list (e.g. `portal,billing`). Clients pick one with `audience` on login, OAuth start or SSO authorize; the session keeps it across refreshes; an unknown value is a `400`. Default when none is named: `APP_JWT_AUDIENCE`, else the first entry. The IAM accepts tokens for any of them (plus `APP_JWT_AUDIENCE`). Empty = off: tokens behave as with `APP_JWT_AUDIENCE` alone. |
 | `IAM_KEY_ENCRYPTION_KEY` | *(empty)* | AES-GCM-encrypts signing private keys at rest. **Set in production** — unset stores them plaintext (logged loudly). |
 | `IAM_COOKIE_KEY` | *(derived from `APP_JWT_SECRET`)* | Independent key for refresh-cookie encryption. Set it to decouple from the JWT secret. |
 | `app.jwt.expiration` | `900000` (15 min) | access-token TTL (ms) |

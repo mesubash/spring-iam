@@ -49,6 +49,9 @@ Verify each incoming `Authorization: Bearer <token>`:
 1. Resolve the key by the token header `kid`.
 2. Verify RS256 signature, `exp`, and `typ == "access"`.
 3. Read `sub` (subject id), `sid` (session), and `roles` / `perms` per your mode.
+4. If the IAM issues per-app audiences (`APP_JWT_ALLOWED_AUDIENCES`), require
+   `aud` to contain **your** app's audience, so a token minted for another app
+   is refused here.
 
 Any standard JWT library does this — no IAM SDK required, no shared secret.
 Set `APP_JWT_CLAIMS_MODE=permissions` on IAM if you want `perms` embedded and
@@ -168,6 +171,13 @@ The end-user login flow:
 
 OAuth login (when enabled) redirects back with `?code=…`; exchange it once:
 `POST /api/auth/oauth/exchange { code }` → tokens. Tokens never appear in a URL.
+
+**Several apps, one IAM.** List them in `APP_JWT_ALLOWED_AUDIENCES` (e.g.
+`portal,billing`) and have each app ask for its own: `"audience": "billing"` in
+the login body, `&audience=billing` on the OAuth start URL or on
+`/api/auth/sso/authorize`. The token's `aud` is then `billing` for the life of
+the session. Register each app in the service registry under the same name with
+its `ownedDomains`, and `/api/authz/me/permissions` returns only that app's keys.
 
 See [`UI_PLAN.md`](UI_PLAN.md) for the admin-console and permission-driven-UI
 design.

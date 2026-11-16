@@ -114,12 +114,22 @@ TOTP (RFC 6238, 6 digits, 30 s) plus ten single-use recovery codes.
   who have not enrolled. After `enable`, sign in again.
 - Access tokens carry `amr` (RFC 8176): `["pwd"]`, the OAuth provider (e.g. `["google"]`), or
   `[<first factor>, "otp", "mfa"]` after a second factor. Refreshed tokens keep it.
+- The audience a login asked for (below) rides through the MFA challenge: the session opened by
+  `mfa/verify` has the same `aud`.
+
+**Audiences.** With `app.jwt.allowed-audiences` set (e.g. `portal,billing`), a client names the
+app it signs in to with `audience`: in the `login` body, as `?audience=` on the OAuth start URL,
+or as `?audience=` on `sso/authorize`. The session stores it, and its access tokens (refreshed
+ones too) carry it as `aud`. Omitted → the default (`app.jwt.audience`, else the first allowed
+one), so clients that never send it are unaffected. A value not on the list is always a **400**:
+on `login` and `sso/authorize` directly, on OAuth at `POST /api/auth/oauth/exchange` (the value
+is only checked there). With the list empty, only `app.jwt.audience` (if set) is accepted.
 
 > Note: there is **no `/api/auth/me`** endpoint in the code. Login/refresh responses carry the identity summary; use `/api/authz/me/*` (§6) for scopes/permissions.
 
 **Request shapes**
 - `register` — body `RegisterRequest`: `{ "email": string, "password": string(8–72, a letter and a digit), "name"?: string(max 150) }` (`name` becomes the identity's display name, returned by `/api/authz/me/bootstrap` as `identity.displayName`; null when not given)
-- `login` — body `LoginRequest`: `{ "email": string, "password": string }`
+- `login` — body `LoginRequest`: `{ "email": string, "password": string, "audience"?: string }`
 - `refresh` — no body; refresh token read from `__Host-Refresh` cookie.
 - `oauth/exchange` — body `{ "code": string }`
 - `logout` — no body; requires `Authorization` header.
@@ -177,6 +187,9 @@ Present **only when `oauth2=true`** (`@ConditionalOnProperty`); otherwise the pa
 | GET | `/api/auth/oauth/login/google` | Public | Begin Google OAuth; requires `?redirectUri=` (or `?redirectUrl=`). Redirects to the provider. |
 | GET | `/api/auth/oauth/login/{provider}` | Public | Generic provider login initiation; requires `?redirectUri=`. Redirects (400 for unsupported provider or missing redirect). |
 
+Both take an optional `?audience=` (see § Audiences). It is kept in a signed cookie for the
+flow and validated at `oauth/exchange` (unknown → 400).
+
 ### Single sign-on — `/api/auth/sso/*`
 
 Lets one sign-in cover several apps. The IAM's own session cookie (`__Host-Refresh`) is the
@@ -185,8 +198,9 @@ a one-time code for a **new, separate** session (its own refresh token, revoked 
 Always on; no feature flag.
 
 **`GET /api/auth/sso/authorize`** — query: `redirect_uri` (required), `state` (echoed back,
-recommended), `prompt` (`none` for a silent check). Other OIDC parameters such as `client_id`
-are ignored.
+recommended), `prompt` (`none` for a silent check), `audience` (optional, see § Audiences: the
+app's session and tokens get this `aud`, independent of the hub session's; unknown → **400**
+before any session check). Other OIDC parameters such as `client_id` are ignored.
 
 1. `redirect_uri` must pass the same allowlist as OAuth (`app.frontend.allowed-redirect-uris` +
    `cors.allowed-origins`: exact scheme and host, whole normalized path segments). Otherwise
@@ -584,6 +598,10 @@ Controller: `AuthzMeController`, class-level `@PreAuthorize("isAuthenticated()")
 
 - `scopes` `data`: list of `ScopeSummaryDto` `{ id, type, name, code }`.
 - `permissions` `data`: `string[]` of permission keys.
+- Audience scoping: with `app.jwt.allowed-audiences` set, `permissions` (and `bootstrap`'s
+  `permissions`) for a token whose `aud` names an active registered service (§ Service registry)
+  list only keys in that service's `ownedDomains`. No `aud`, no such service, or no owned domains
+  → unfiltered.
 
 ---
 
