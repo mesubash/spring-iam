@@ -20,5 +20,6 @@ public record MeBootstrapResponse(
         List<String> permissions,
         Map<String, Boolean> features
 ) {
-    public record Identity(UUID id, String email, String displayName, Boolean emailVerified) {}
+    public record Identity(UUID id, String email, String displayName, Boolean emailVerified,
+                           Boolean mfaEnabled) {}
 }
