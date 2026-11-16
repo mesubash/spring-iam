@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { assignmentsApi, permissionsApi, rolesApi } from "@/api/resources";
 import { PermissionGuardedPage } from "@/components/iam/PermissionGuardedPage";
 import { PermissionTree } from "@/components/iam/PermissionTree";
+import { ConfirmDialog } from "@/components/iam/ConfirmDialog";
 import { Tag } from "@/components/iam/badges";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
@@ -34,6 +35,7 @@ function RoleDetailPage() {
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [dirty, setDirty] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (rolePermsQ.data) {
@@ -65,6 +67,18 @@ function RoleDetailPage() {
       setDirty(false);
       qc.invalidateQueries({ queryKey: ["role-permissions", roleId] });
       qc.invalidateQueries({ queryKey: ["roles"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // The server refuses a role still held by an active assignment (409); show its message.
+  const remove = useMutation({
+    mutationFn: () => rolesApi.del(roleId),
+    onSuccess: () => {
+      toast.success("Role deleted");
+      setDeleting(false);
+      qc.invalidateQueries({ queryKey: ["roles"] });
+      navigate({ to: "/admin/roles" });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -116,6 +130,15 @@ function RoleDetailPage() {
           ) : null}
         </div>
         <div className="ml-auto flex items-center gap-2">
+          {can("platform.role.delete") && !role.isSystemRole ? (
+            <Button
+              variant="outline"
+              style={{ color: "var(--destructive)" }}
+              onClick={() => setDeleting(true)}
+            >
+              Delete
+            </Button>
+          ) : null}
           <Button variant="outline" onClick={() => navigate({ to: "/admin/roles" })}>
             {readOnly ? "Back" : "Cancel"}
           </Button>
@@ -134,6 +157,18 @@ function RoleDetailPage() {
         selected={selected}
         onSetMany={setMany}
         readOnly={readOnly}
+      />
+
+      <ConfirmDialog
+        open={deleting}
+        onOpenChange={setDeleting}
+        title="Delete role"
+        description="Removes the role, its permission grants and its place in the hierarchy. A role still assigned to anyone cannot be deleted; revoke those assignments first."
+        target={role.name}
+        confirmLabel="Delete role"
+        destructive
+        pending={remove.isPending}
+        onConfirm={() => remove.mutate()}
       />
     </div>
   );

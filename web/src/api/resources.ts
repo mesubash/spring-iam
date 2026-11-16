@@ -154,6 +154,7 @@ export const rolesApi = {
   }) => api.post<Role>("/api/v1/roles", input),
   updatePermissions: (id: string, permissionIds: string[]) =>
     api.put(`/api/v1/roles/${id}/permissions`, permissionIds),
+  del: (id: string) => api.del(`/api/v1/roles/${id}`),
 };
 
 export const roleHierarchyApi = {
