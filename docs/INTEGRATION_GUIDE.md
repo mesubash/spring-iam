@@ -58,6 +58,37 @@ want to skip PDP calls entirely for simple apps.
 (≤ 15 min). If you need tighter revocation, call introspection (§6) or poll the
 revocation feed on sensitive paths.
 
+### 3.1 Sign-out cutoff (shared Redis)
+
+If your service can read the IAM's Redis, you can close that window for
+whole-account events without any HTTP call. Whenever the IAM ends **all** of an
+identity's sessions — logout-all, password reset or change, admin set-password
+(with session revocation), admin suspend/deactivate — it writes:
+
+| Key | Value | TTL | Written by |
+|---|---|---|---|
+| `auth:revoked-before:<identityId>` | epoch millis | access-token lifetime + 5 min | the IAM only |
+
+Reject an access token when `iat * 1000 <= value` for its `sub`. A missing key
+means no cutoff. The IAM applies the same rule to its own endpoints.
+
+```java
+boolean revoked(Claims c) {
+    String cutoff = redis.opsForValue().get("auth:revoked-before:" + c.getSubject());
+    return cutoff != null && c.getIssuedAt().getTime() <= Long.parseLong(cutoff);
+}
+```
+
+Rules:
+
+- **Read it, never write it.** The shared key signs the person out of every
+  service. A service that wants to end only its own tokens for someone (its own
+  ban, deletion, membership change) writes its own key, e.g.
+  `auth:revoked-before:<service>:<identityId>`, and checks both.
+- **Fail closed.** If Redis can't be read, treat the token as revoked.
+- Single-session logout is not covered here — it blacklists the session id
+  (`sid`); use introspection or the revocation feed (§6) for that.
+
 ---
 
 ## 4. PDP calls (fine-grained decisions)

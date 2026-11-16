@@ -73,7 +73,7 @@ Controller: `AuthController` (envelope responses). Public endpoints per `Securit
 | POST | `/api/auth/mfa/verify` | Public (needs a challenge) | Second login step: TOTP or recovery code → tokens. |
 | POST | `/api/auth/refresh` | Public (needs refresh cookie) | Rotate access token using the `__Host-Refresh` cookie. |
 | POST | `/api/auth/logout` | Bearer (authenticated) | Revoke current access token + clear refresh cookie. |
-| POST | `/api/auth/logout-all` | Bearer (authenticated) | Revoke all refresh tokens/sessions for the user. |
+| POST | `/api/auth/logout-all` | Bearer (authenticated) | Revoke all refresh tokens/sessions for the user and set the sign-out cutoff, so every access token already issued is rejected here and by resource servers that read it (INTEGRATION_GUIDE §3.1). |
 | POST | `/api/auth/oauth/exchange` | Public | Exchange the one-time OAuth or SSO redirect `code` for tokens, or an MFA step (same as `login`). |
 | GET | `/api/auth/sso/authorize` | Public (reads the session cookie) | Single sign-on into an allowlisted app (see § Single sign-on). |
 | POST | `/api/auth/sso/consent` | Bearer (authenticated) | Record that the user agreed to SSO into the app at `redirect_uri`. |

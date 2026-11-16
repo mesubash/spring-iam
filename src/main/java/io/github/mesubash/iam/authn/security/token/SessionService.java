@@ -46,6 +46,7 @@ public class SessionService {
     private final StringRedisTemplate redisTemplate;
     private final JwtConfig jwtConfig;
     private final SecurityEventService securityEventService;
+    private final RevocationService revocationService;
     private final Duration rotationGrace;
     private final int maxSessionsPerIdentity;
     private final SecureRandom secureRandom = new SecureRandom();
@@ -57,6 +58,7 @@ public class SessionService {
                           StringRedisTemplate redisTemplate,
                           JwtConfig jwtConfig,
                           SecurityEventService securityEventService,
+                          RevocationService revocationService,
                           @Value("${iam.authn.session.rotation-grace-seconds:60}") long rotationGraceSeconds,
                           @Value("${iam.authn.session.max-per-identity:10}") int maxSessionsPerIdentity) {
         this.sessionRepository = sessionRepository;
@@ -66,6 +68,7 @@ public class SessionService {
         this.redisTemplate = redisTemplate;
         this.jwtConfig = jwtConfig;
         this.securityEventService = securityEventService;
+        this.revocationService = revocationService;
         this.rotationGrace = Duration.ofSeconds(rotationGraceSeconds);
         this.maxSessionsPerIdentity = maxSessionsPerIdentity;
     }
@@ -187,6 +190,9 @@ public class SessionService {
     public void revokeAll(UUID identityId, String reason) {
         sessionRepository.findActiveByIdentity(identityId, Instant.now())
                 .forEach(session -> revokeSession(session.getId(), reason));
+        // Resource servers check access tokens by signature, not against our session store:
+        // the cutoff is what ends this identity's live tokens there too.
+        revocationService.revokeAllBefore(identityId);
     }
 
     @Transactional(readOnly = true)

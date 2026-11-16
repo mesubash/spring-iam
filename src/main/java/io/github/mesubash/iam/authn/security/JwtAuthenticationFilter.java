@@ -1,5 +1,6 @@
 package io.github.mesubash.iam.authn.security;
 
+import io.github.mesubash.iam.authn.security.token.RevocationService;
 import io.github.mesubash.iam.authn.security.token.TokenBlacklistService;
 import io.github.mesubash.iam.shared.exception.InvalidTokenException;
 import io.jsonwebtoken.Claims;
@@ -29,6 +30,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtTokenProvider jwtTokenProvider;
     private final CustomUserDetailsService customUserDetailsService;
     private final TokenBlacklistService tokenBlacklistService;
+    private final RevocationService revocationService;
 
     @Override
     protected void doFilterInternal(
@@ -54,6 +56,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     } else if (tokenBlacklistService.isBlacklisted(
                             claims.getId(), jwtTokenProvider.getSid(claims))) {
                         log.warn("Rejected revoked token for path: {}", request.getRequestURI());
+                        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token has been revoked");
+                        return;
+                    } else if (claims.getIssuedAt() != null && revocationService.isRevoked(
+                            UUID.fromString(claims.getSubject()), claims.getIssuedAt().getTime())) {
+                        log.warn("Rejected token issued before revocation cutoff: {}", request.getRequestURI());
                         response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token has been revoked");
                         return;
                     } else {

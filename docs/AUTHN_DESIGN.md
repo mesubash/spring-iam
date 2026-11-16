@@ -326,6 +326,7 @@ Redis is cache + ephemeral store — **never the source of truth for sessions**.
 | `authn:ott:{type}:{sha256}` | identityId | typed (15 m / 24 h / 7 d) | one-time tokens, `GETDEL` on consume |
 | `authn:oauth:xchg:{code}` | `{identityId, sid}` | 60 s | OAuth one-time exchange code (§8.2) |
 | `authn:rt:retry:{oldSha256}` | AES-GCM-encrypted successor pair (access + refresh) | `rotation-grace` (60 s) | idempotent retry response for the grace window (§4.3) — encrypted with the cookie key, single-window lifetime |
+| `auth:revoked-before:{identityId}` | epoch millis | access-token TTL + 5 min | sign-out cutoff: access tokens with `iat` at or before it are rejected, here and by resource servers that read it (written on every revoke-all; see INTEGRATION_GUIDE §3.1) |
 | `authn:rl:{path}:{ip}` | counter | window (60 s) | rate-limit windows (existing filter) |
 
 Failure mode: Redis down ⇒ **fail closed** for blacklist-dependent operations (introspection, logout) and fall through to DB for refresh (correctness preserved, latency degrades); no in-memory fallback anywhere. `authn.fail-mode` config mirrors AuthZ's (§12).
