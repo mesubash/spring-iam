@@ -31,6 +31,7 @@ import { Route as AuthenticatedAdminDashboardRouteImport } from './routes/_authe
 import { Route as AuthenticatedAdminContextAttributesRouteImport } from './routes/_authenticated.admin.context-attributes'
 import { Route as AuthenticatedAdminAuditRouteImport } from './routes/_authenticated.admin.audit'
 import { Route as AuthenticatedAdminAssignmentsRouteImport } from './routes/_authenticated.admin.assignments'
+import { Route as AuthenticatedAdminUsersUserIdRouteImport } from './routes/_authenticated.admin.users_.$userId'
 import { Route as AuthenticatedAdminRolesRoleIdRouteImport } from './routes/_authenticated.admin.roles_.$roleId'
 
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -153,6 +154,12 @@ const AuthenticatedAdminAssignmentsRoute =
     path: '/admin/assignments',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedAdminUsersUserIdRoute =
+  AuthenticatedAdminUsersUserIdRouteImport.update({
+    id: '/admin/users_/$userId',
+    path: '/admin/users/$userId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedAdminRolesRoleIdRoute =
   AuthenticatedAdminRolesRoleIdRouteImport.update({
     id: '/admin/roles_/$roleId',
@@ -183,6 +190,7 @@ export interface FileRoutesByFullPath {
   '/me/security': typeof AuthenticatedMeSecurityRoute
   '/me/sessions': typeof AuthenticatedMeSessionsRoute
   '/admin/roles/$roleId': typeof AuthenticatedAdminRolesRoleIdRoute
+  '/admin/users/$userId': typeof AuthenticatedAdminUsersUserIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -207,6 +215,7 @@ export interface FileRoutesByTo {
   '/me/security': typeof AuthenticatedMeSecurityRoute
   '/me/sessions': typeof AuthenticatedMeSessionsRoute
   '/admin/roles/$roleId': typeof AuthenticatedAdminRolesRoleIdRoute
+  '/admin/users/$userId': typeof AuthenticatedAdminUsersUserIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -233,6 +242,7 @@ export interface FileRoutesById {
   '/_authenticated/me/security': typeof AuthenticatedMeSecurityRoute
   '/_authenticated/me/sessions': typeof AuthenticatedMeSessionsRoute
   '/_authenticated/admin/roles_/$roleId': typeof AuthenticatedAdminRolesRoleIdRoute
+  '/_authenticated/admin/users_/$userId': typeof AuthenticatedAdminUsersUserIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -259,6 +269,7 @@ export interface FileRouteTypes {
     | '/me/security'
     | '/me/sessions'
     | '/admin/roles/$roleId'
+    | '/admin/users/$userId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -283,6 +294,7 @@ export interface FileRouteTypes {
     | '/me/security'
     | '/me/sessions'
     | '/admin/roles/$roleId'
+    | '/admin/users/$userId'
   id:
     | '__root__'
     | '/'
@@ -308,6 +320,7 @@ export interface FileRouteTypes {
     | '/_authenticated/me/security'
     | '/_authenticated/me/sessions'
     | '/_authenticated/admin/roles_/$roleId'
+    | '/_authenticated/admin/users_/$userId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -474,6 +487,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAssignmentsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/admin/users_/$userId': {
+      id: '/_authenticated/admin/users_/$userId'
+      path: '/admin/users/$userId'
+      fullPath: '/admin/users/$userId'
+      preLoaderRoute: typeof AuthenticatedAdminUsersUserIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/admin/roles_/$roleId': {
       id: '/_authenticated/admin/roles_/$roleId'
       path: '/admin/roles/$roleId'
@@ -503,6 +523,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedMeSecurityRoute: typeof AuthenticatedMeSecurityRoute
   AuthenticatedMeSessionsRoute: typeof AuthenticatedMeSessionsRoute
   AuthenticatedAdminRolesRoleIdRoute: typeof AuthenticatedAdminRolesRoleIdRoute
+  AuthenticatedAdminUsersUserIdRoute: typeof AuthenticatedAdminUsersUserIdRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -525,6 +546,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedMeSecurityRoute: AuthenticatedMeSecurityRoute,
   AuthenticatedMeSessionsRoute: AuthenticatedMeSessionsRoute,
   AuthenticatedAdminRolesRoleIdRoute: AuthenticatedAdminRolesRoleIdRoute,
+  AuthenticatedAdminUsersUserIdRoute: AuthenticatedAdminUsersUserIdRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
