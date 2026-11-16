@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/) (pre-1.0: minor versions may change behaviour).
 
+## [0.3.1] - 2026-11-16
+
+### Security
+
+- A global role created after install (no owner scope, not a system role)
+  could be shadowed by a tenant role with the same name, which then carried the
+  same `ROLE_<name>` authority. A global role's name now only counts when it
+  comes from that global role.
+- A redirect allowlist entry without a port accepted the same host on any port.
+  It now means the scheme's default port (443 / 80).
+
 ## [0.3.0] - 2026-11-16
 
 Multi-factor authentication, single sign-on across apps, admin audit and a
@@ -161,6 +172,7 @@ A security release. Upgrading is recommended for every deployment.
 
 First public release.
 
+[0.3.1]: https://github.com/mesubash/spring-iam/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/mesubash/spring-iam/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mesubash/spring-iam/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mesubash/spring-iam/releases/tag/v0.1.0
