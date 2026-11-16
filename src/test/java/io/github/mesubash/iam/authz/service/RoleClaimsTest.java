@@ -34,7 +34,7 @@ class RoleClaimsTest {
     void setUp() {
         assignments = mock(AssignmentRepository.class);
         roles = mock(RoleRepository.class);
-        when(roles.findByIsSystemRoleTrue()).thenReturn(List.of(SUPER_ADMIN, SECURITY_ADMIN));
+        when(roles.findByOwnerScopeIdIsNull()).thenReturn(List.of(SUPER_ADMIN, SECURITY_ADMIN));
         service = new AuthzQueryServiceImpl(assignments, roles, mock(ScopeRepository.class),
                 mock(AuthorizationService.class));
     }
@@ -64,6 +64,14 @@ class RoleClaimsTest {
     void tenantRoleNamedLikeBuiltInIsNotClaimed() {
         assertThat(claimsFor(role(UUID.randomUUID().toString(), "SuperAdmin", false, TENANT), TENANT)).isEmpty();
         assertThat(claimsFor(role(UUID.randomUUID().toString(), "SecurityAdmin", false, TENANT), TENANT)).isEmpty();
+    }
+
+    @Test
+    void tenantRoleNamedLikeAnyGlobalRoleIsNotClaimed() {
+        Role globalCustom = role(UUID.randomUUID().toString(), "Auditor", false, null);
+        when(roles.findByOwnerScopeIdIsNull()).thenReturn(List.of(SUPER_ADMIN, SECURITY_ADMIN, globalCustom));
+        assertThat(claimsFor(role(UUID.randomUUID().toString(), "Auditor", false, TENANT), TENANT)).isEmpty();
+        assertThat(claimsFor(globalCustom, ROOT)).containsExactly("Auditor");
     }
 
     @Test

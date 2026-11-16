@@ -88,12 +88,12 @@ public class AuthzQueryServiceImpl implements AuthzQueryService {
         // are only unique per owner scope. A tenant role named like a built-in one ("SuperAdmin",
         // "SecurityAdmin", ...) would otherwise pass every check gated on the built-in role.
         List<Role> held = roleRepository.findAllById(roleIds);
-        Set<String> builtInNames = roleRepository.findByIsSystemRoleTrue().stream()
+        Set<String> globalNames = roleRepository.findByOwnerScopeIdIsNull().stream()
                 .map(Role::getName)
                 .collect(Collectors.toSet());
         List<String> roleNames = held.stream()
                 .filter(Role::getActive)
-                .filter(r -> Boolean.TRUE.equals(r.getIsSystemRole()) || !builtInNames.contains(r.getName()))
+                .filter(r -> r.getOwnerScopeId() == null || !globalNames.contains(r.getName()))
                 .map(Role::getName)
                 .distinct()
                 .collect(Collectors.toList());
