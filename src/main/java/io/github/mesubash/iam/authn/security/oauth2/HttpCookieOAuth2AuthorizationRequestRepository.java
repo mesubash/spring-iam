@@ -35,10 +35,12 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
     public static final String REDIRECT_URL_PARAM_NAME = "redirectUrl";
     private static final int COOKIE_EXPIRE_SECONDS = 180;
 
-    @Value("${app.auth.cookie-domain:localhost}")
+    @Value("${app.cookie.domain:}")
     private String cookieDomain;
 
-    @Value("${app.auth.secure-cookie:false}")
+    // Same cookie settings as the refresh cookie. These used to read app.auth.* keys that
+    // never existed, so the OAuth state cookies were never Secure.
+    @Value("${app.cookie.secure:true}")
     private boolean secureCookie;
 
     @Value("${app.frontend.allowed-redirect-uris:}")
@@ -210,8 +212,10 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
         }
         String allowedPath = allowed.getPath();
         if (StringUtils.hasText(allowedPath) && !"/".equals(allowedPath)) {
-            String candidatePath = candidate.getPath() == null ? "" : candidate.getPath();
-            if (!candidatePath.startsWith(allowedPath)) {
+            // Normalize first ("/cb/../admin") and match whole segments ("/cb" must not allow "/cb-x").
+            String candidatePath = candidate.normalize().getPath() == null ? "" : candidate.normalize().getPath();
+            String base = allowedPath.endsWith("/") ? allowedPath.substring(0, allowedPath.length() - 1) : allowedPath;
+            if (!candidatePath.equals(base) && !candidatePath.startsWith(base + "/")) {
                 return false;
             }
         }
