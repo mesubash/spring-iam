@@ -66,6 +66,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     } else {
                         UUID userId = UUID.fromString(claims.getSubject());
                         UserDetails userDetails = customUserDetailsService.loadUserById(userId);
+                        if (userDetails instanceof UserPrincipal principal
+                                && claims.getAudience() != null && !claims.getAudience().isEmpty()) {
+                            principal.setAudience(claims.getAudience().iterator().next());
+                        }
 
                         UsernamePasswordAuthenticationToken authentication =
                                 new UsernamePasswordAuthenticationToken(

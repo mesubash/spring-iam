@@ -1,8 +1,11 @@
 package io.github.mesubash.iam.authz.controller;
 
+import io.github.mesubash.iam.authn.config.JwtConfig;
 import io.github.mesubash.iam.authn.entity.Identity;
+import io.github.mesubash.iam.authn.security.UserPrincipal;
 import io.github.mesubash.iam.authn.repository.IdentityRepository;
 import io.github.mesubash.iam.authz.dto.MeBootstrapResponse;
+import io.github.mesubash.iam.authz.service.ServiceRegistryService;
 import io.github.mesubash.iam.config.FeatureFlags;
 import io.github.mesubash.iam.shared.dto.ApiResponse;
 import io.github.mesubash.iam.shared.dto.ScopeSummaryDto;
@@ -32,6 +35,8 @@ public class AuthzMeController {
     private final AuthzQueryService authzQueryService;
     private final IdentityRepository identityRepository;
     private final FeatureFlags featureFlags;
+    private final ServiceRegistryService serviceRegistryService;
+    private final JwtConfig jwtConfig;
 
     @GetMapping("/bootstrap")
     @Operation(summary = "Bootstrap the session",
@@ -55,7 +60,7 @@ public class AuthzMeController {
         }
 
         List<String> permissions = active != null
-                ? authzQueryService.getEffectivePermissions(identityId, active)
+                ? scopeToAudience(principal, authzQueryService.getEffectivePermissions(identityId, active))
                 : List.of();
 
         MeBootstrapResponse body = new MeBootstrapResponse(
@@ -87,15 +92,35 @@ public class AuthzMeController {
             @AuthenticationPrincipal Object principal,
             @RequestParam UUID scopeId) {
         UUID identityId = extractIdentityId(principal);
-        List<String> permissions = authzQueryService.getEffectivePermissions(identityId, scopeId);
+        List<String> permissions = scopeToAudience(principal,
+                authzQueryService.getEffectivePermissions(identityId, scopeId));
         return ResponseEntity.ok(ApiResponse.success("Permissions retrieved", permissions));
     }
 
     private UUID extractIdentityId(Object principal) {
-        if (principal instanceof io.github.mesubash.iam.authn.security.UserPrincipal userPrincipal) {
+        if (principal instanceof UserPrincipal userPrincipal) {
             return userPrincipal.getId();
         }
         // Fallback for string-based principals (e.g., from service JWT)
         return UUID.fromString(principal.toString());
+    }
+
+    /**
+     * With per-app audiences on, an app sees only the permissions in the domains owned by the
+     * service registered under its audience name: the portal's token does not list billing.*.
+     * No audience, no such service, or a service owning no domains → unfiltered.
+     */
+    private List<String> scopeToAudience(Object principal, List<String> permissions) {
+        if (jwtConfig.getAllowedAudiences().isEmpty()
+                || !(principal instanceof UserPrincipal p) || p.getAudience() == null) {
+            return permissions;
+        }
+        List<String> domains = serviceRegistryService.ownedDomains(p.getAudience());
+        if (domains.isEmpty()) {
+            return permissions;
+        }
+        return permissions.stream()
+                .filter(k -> k.indexOf('.') > 0 && domains.contains(k.substring(0, k.indexOf('.'))))
+                .toList();
     }
 }

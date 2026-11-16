@@ -60,6 +60,15 @@ public class ServiceRegistryService {
         return new RegisteredService(service, rawKey);
     }
 
+    /** Domains owned by the active service registered under this name; empty if none. */
+    @Transactional(readOnly = true)
+    public List<String> ownedDomains(String serviceName) {
+        return serviceClientRepository.findByName(serviceName)
+                .filter(sc -> Boolean.TRUE.equals(sc.getActive()))
+                .map(ServiceClient::getOwnedDomains)
+                .orElse(List.of());
+    }
+
     /**
      * Idempotent manifest sync, restricted to the service's owned domains.
      * deprecateMissing marks owned keys absent from the manifest as

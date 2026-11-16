@@ -25,14 +25,16 @@ public class UserPrincipal implements UserDetails, OAuth2User {
     private String passwordHash;
     private List<String> roles;
     private Map<String, Object> attributes;
+    /** aud of the request's access token; /api/authz/me scopes permissions to it. Null otherwise. */
+    private String audience;
 
     public static UserPrincipal create(Identity identity, String passwordHash, List<String> roles) {
-        return new UserPrincipal(identity, passwordHash, roles != null ? roles : List.of(), null);
+        return new UserPrincipal(identity, passwordHash, roles != null ? roles : List.of(), null, null);
     }
 
     public static UserPrincipal create(Identity identity, String passwordHash, List<String> roles,
                                        Map<String, Object> attributes) {
-        return new UserPrincipal(identity, passwordHash, roles != null ? roles : List.of(), attributes);
+        return new UserPrincipal(identity, passwordHash, roles != null ? roles : List.of(), attributes, null);
     }
 
     public UUID getId() {
