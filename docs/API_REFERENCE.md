@@ -384,6 +384,31 @@ All raw-JSON. Path-level auth from `SecurityConfig`; some controllers add method
 | GET | `/api/v1/permission-groups/{id}/permissions` | SuperAdmin | List a group's permissions. |
 | PUT | `/api/v1/permission-groups/{id}/permissions` | SuperAdmin | Replace the group's permission set. Body `{ permissionIds: uuid[] }`. 200 empty. |
 
+### Identities — `IdentityAdminController` (`/api/v1/identities`) — **Authenticated** (path rule; method security per row)
+
+Readers: SuperAdmin, CountryAdmin, AccessAdmin, SecurityAdmin, OperationsAdmin, AuditViewer, GovernmentOversight.
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| GET | `/api/v1/identities?query=&status=&limit=50&page=0` | readers | Search by email substring, optional status; `limit` rows (max 200) of 0-based `page`, ordered by email. Returns `IdentityAdminView[]`. |
+| GET | `/api/v1/identities/{id}` | readers | One `IdentityAdminView`. |
+| GET | `/api/v1/identities/{id}/credentials` | SuperAdmin, CountryAdmin, AccessAdmin, SecurityAdmin | How the user can sign in: `CredentialAdminView[]`. Identifiers masked, secrets never returned. |
+| POST | `/api/v1/identities` | SuperAdmin, CountryAdmin, SecurityAdmin | Create a user. Body `{ email, password?, emailVerified? }` → 201 `{ identity: IdentityAdminView, temporaryPassword: string\|null }`. |
+| PUT | `/api/v1/identities/{id}/password` | SuperAdmin, CountryAdmin, SecurityAdmin | Admin password reset. Body `{ newPassword?, revokeSessions? }` → `{ temporaryPassword, sessionsRevoked }`. |
+| PUT | `/api/v1/identities/{id}/status` | SuperAdmin, CountryAdmin, SecurityAdmin | Body `{ status: "ACTIVE"\|"SUSPENDED"\|"DEACTIVATED", reason? }` → `IdentityAdminView`. Not on yourself (400) or another SuperAdmin (403). |
+| PUT | `/api/v1/identities/{id}/email-verified` | SuperAdmin, CountryAdmin, SecurityAdmin | No body. Marks the email verified (verify-only; there is no unverify) → `IdentityAdminView`. Writes an `EMAIL_VERIFIED` security event. 403 on another SuperAdmin. |
+| PUT | `/api/v1/identities/{id}/display-name` | SuperAdmin, CountryAdmin, AccessAdmin, SecurityAdmin | Body `{ name: string\|null }` (max 150; blank clears) → `IdentityAdminView`. 403 on another SuperAdmin. |
+| DELETE | `/api/v1/identities/{id}/mfa` | SuperAdmin, SecurityAdmin | Reset MFA (204). |
+
+**Who may act on a SuperAdmin.** Password and MFA resets are recovery: a SuperAdmin target needs a
+SuperAdmin caller, and one SuperAdmin may recover another. Status, email verification and display name
+are not recovery: nobody may change them on a SuperAdmin other than that SuperAdmin (status not even then).
+
+`IdentityAdminView`: `{ id, email, displayName, emailVerified, accountStatus, mfaEnabled, lastLoginAt,
+createdAt, updatedAt, failedLoginAttempts: int, accountLockedUntil, lastLoginIp }`.
+
+`CredentialAdminView`: `{ type: "PASSWORD"|"GOOGLE"|…, identifier: "ja***@example.com", active, lastUsedAt, createdAt }`.
+
 ### Roles — `RoleController` (`/api/v1/roles`) — **Authenticated** (path rule; service layer refines)
 
 | Method | Path | Auth | Purpose |

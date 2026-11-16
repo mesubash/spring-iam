@@ -3,6 +3,7 @@ package io.github.mesubash.iam.authn.service.impl;
 import io.github.mesubash.iam.authn.dto.AdminCreateIdentityRequest;
 import io.github.mesubash.iam.authn.dto.AdminSetPasswordRequest;
 import io.github.mesubash.iam.authn.dto.AdminUpdateStatusRequest;
+import io.github.mesubash.iam.authn.dto.CredentialAdminView;
 import io.github.mesubash.iam.authn.dto.IdentityAdminView;
 import io.github.mesubash.iam.authn.entity.Credential;
 import io.github.mesubash.iam.authn.entity.Identity;
@@ -18,6 +19,7 @@ import io.github.mesubash.iam.authn.service.IdentityAdminService;
 import io.github.mesubash.iam.authn.service.SecurityEventService;
 import io.github.mesubash.iam.shared.exception.BadRequestException;
 import io.github.mesubash.iam.shared.exception.ConflictException;
+import io.github.mesubash.iam.shared.exception.ForbiddenException;
 import io.github.mesubash.iam.shared.exception.ResourceNotFoundException;
 import io.github.mesubash.iam.shared.util.PasswordUtil;
 import lombok.RequiredArgsConstructor;
@@ -73,6 +75,42 @@ public class IdentityAdminServiceImpl implements IdentityAdminService {
         return identityRepository.findById(id)
                 .map(IdentityAdminView::from)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CredentialAdminView> credentials(UUID id) {
+        if (!identityRepository.existsById(id)) {
+            throw new ResourceNotFoundException("User not found");
+        }
+        return credentialRepository.findByIdentityId(id).stream().map(CredentialAdminView::from).toList();
+    }
+
+    @Override
+    @Transactional
+    public IdentityAdminView markEmailVerified(UserPrincipal caller, UUID id) {
+        Identity identity = identityRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        assertMayAdministerPeerSafe(caller, id, "verify the email of");
+        if (!Boolean.TRUE.equals(identity.getEmailVerified())) {
+            identity.setEmailVerified(true);
+            identityRepository.save(identity);
+            securityEventService.logEvent(identity, SecurityEventType.EMAIL_VERIFIED, null, null,
+                    Map.of("action", "ADMIN_VERIFY", "by", caller.getId().toString()));
+            log.info("Admin {} marked the email of {} verified", caller.getId(), id);
+        }
+        return IdentityAdminView.from(identity);
+    }
+
+    @Override
+    @Transactional
+    public IdentityAdminView setDisplayName(UserPrincipal caller, UUID id, String name) {
+        Identity identity = identityRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        assertMayAdministerPeerSafe(caller, id, "rename");
+        identity.setDisplayName(StringUtils.hasText(name) ? name.trim() : null);
+        identityRepository.save(identity);
+        return IdentityAdminView.from(identity);
     }
 
     @Override
@@ -150,7 +188,7 @@ public class IdentityAdminServiceImpl implements IdentityAdminService {
         if (caller.getId().equals(id)) {
             throw new BadRequestException("You cannot change your own account status");
         }
-        assertMayAdminister(caller, id, "change the status of");
+        assertMayAdministerPeerSafe(caller, id, "change the status of");
 
         Identity identity = identityRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -207,13 +245,27 @@ public class IdentityAdminServiceImpl implements IdentityAdminService {
     private void assertMayAdminister(UserPrincipal caller, UUID targetId, String action) {
         boolean callerIsSuperAdmin = caller.getAuthorities().stream()
                 .anyMatch(a -> "ROLE_SuperAdmin".equals(a.getAuthority()));
-        if (callerIsSuperAdmin) {
+        if (!callerIsSuperAdmin && isSuperAdmin(targetId)) {
+            throw new ForbiddenException("Only a SuperAdmin may " + action + " a SuperAdmin account");
+        }
+    }
+
+    /**
+     * For changes that are not recovery (status, email verification, display name): nobody acts
+     * on a SuperAdmin other than that SuperAdmin. Password and MFA resets keep the peer-allowed
+     * rule above on purpose, so a locked-out last SuperAdmin can still be recovered by another.
+     */
+    private void assertMayAdministerPeerSafe(UserPrincipal caller, UUID targetId, String action) {
+        if (targetId.equals(caller.getId())) {
             return;
         }
-        var targetRoles = authzQueryService.getRolesForIdentity(targetId).getRoles();
-        if (targetRoles != null && targetRoles.contains("SuperAdmin")) {
-            throw new io.github.mesubash.iam.shared.exception.ForbiddenException(
-                    "Only a SuperAdmin may " + action + " a SuperAdmin account");
+        if (isSuperAdmin(targetId)) {
+            throw new ForbiddenException("A SuperAdmin can only " + action + " their own account");
         }
+    }
+
+    private boolean isSuperAdmin(UUID identityId) {
+        var roles = authzQueryService.getRolesForIdentity(identityId).getRoles();
+        return roles != null && roles.contains("SuperAdmin");
     }
 }

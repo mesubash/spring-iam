@@ -1,8 +1,10 @@
 package io.github.mesubash.iam.authn.controller;
 
 import io.github.mesubash.iam.authn.dto.AdminCreateIdentityRequest;
+import io.github.mesubash.iam.authn.dto.AdminSetDisplayNameRequest;
 import io.github.mesubash.iam.authn.dto.AdminSetPasswordRequest;
 import io.github.mesubash.iam.authn.dto.AdminUpdateStatusRequest;
+import io.github.mesubash.iam.authn.dto.CredentialAdminView;
 import io.github.mesubash.iam.authn.dto.IdentityAdminView;
 import io.github.mesubash.iam.authn.security.UserPrincipal;
 import io.github.mesubash.iam.authn.service.IdentityAdminService;
@@ -75,7 +77,6 @@ public class IdentityAdminController {
         return ResponseEntity.ok(identityAdminService.setPassword(caller, id, request));
     }
 
-    @PutMapping("/{id}/status")
     @DeleteMapping("/{id}/mfa")
     @PreAuthorize("hasAnyRole('SuperAdmin','SecurityAdmin')")
     @Operation(summary = "Reset an identity's MFA",
@@ -85,9 +86,39 @@ public class IdentityAdminController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/{id}/credentials")
+    @PreAuthorize("hasAnyRole('SuperAdmin','CountryAdmin','AccessAdmin','SecurityAdmin')")
+    @Operation(summary = "List an identity's credentials",
+            description = "How the identity can sign in: type, masked identifier, activity. Never secrets.")
+    public ResponseEntity<List<CredentialAdminView>> credentials(@PathVariable UUID id) {
+        return ResponseEntity.ok(identityAdminService.credentials(id));
+    }
+
+    @PutMapping("/{id}/email-verified")
+    @PreAuthorize("hasAnyRole('SuperAdmin','CountryAdmin','SecurityAdmin')")
+    @Operation(summary = "Mark an identity's email verified",
+            description = "Verify-only override for users who cannot finish the email loop. No body. "
+                    + "No one may do this to another SuperAdmin.")
+    public ResponseEntity<IdentityAdminView> markEmailVerified(@AuthenticationPrincipal UserPrincipal caller,
+                                                               @PathVariable UUID id) {
+        return ResponseEntity.ok(identityAdminService.markEmailVerified(caller, id));
+    }
+
+    @PutMapping("/{id}/display-name")
+    @PreAuthorize("hasAnyRole('SuperAdmin','CountryAdmin','AccessAdmin','SecurityAdmin')")
+    @Operation(summary = "Set a user's display name",
+            description = "Blank clears it (max 150). No one may rename another SuperAdmin.")
+    public ResponseEntity<IdentityAdminView> setDisplayName(@AuthenticationPrincipal UserPrincipal caller,
+                                                            @PathVariable UUID id,
+                                                            @Valid @RequestBody AdminSetDisplayNameRequest request) {
+        return ResponseEntity.ok(identityAdminService.setDisplayName(caller, id, request.name()));
+    }
+
+    @PutMapping("/{id}/status")
     @PreAuthorize("hasAnyRole('SuperAdmin','CountryAdmin','SecurityAdmin')")
     @Operation(summary = "Change account status",
-            description = "ACTIVE / SUSPENDED / DEACTIVATED; non-active revokes sessions; cannot target yourself")
+            description = "ACTIVE / SUSPENDED / DEACTIVATED; non-active revokes sessions; cannot target "
+                    + "yourself or another SuperAdmin")
     public ResponseEntity<IdentityAdminView> updateStatus(
             @AuthenticationPrincipal UserPrincipal caller,
             @PathVariable UUID id,

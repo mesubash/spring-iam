@@ -3,6 +3,7 @@ package io.github.mesubash.iam.authn.service;
 import io.github.mesubash.iam.authn.dto.AdminCreateIdentityRequest;
 import io.github.mesubash.iam.authn.dto.AdminSetPasswordRequest;
 import io.github.mesubash.iam.authn.dto.AdminUpdateStatusRequest;
+import io.github.mesubash.iam.authn.dto.CredentialAdminView;
 import io.github.mesubash.iam.authn.dto.IdentityAdminView;
 import io.github.mesubash.iam.authn.security.UserPrincipal;
 
@@ -31,6 +32,15 @@ public interface IdentityAdminService {
     PasswordSet setPassword(UserPrincipal caller, UUID id, AdminSetPasswordRequest request);
 
     IdentityAdminView updateStatus(UserPrincipal caller, UUID id, AdminUpdateStatusRequest request);
+
+    /** How the identity can sign in; identifiers masked, never secrets. */
+    List<CredentialAdminView> credentials(UUID id);
+
+    /** Verify-only: marks the email verified for users who cannot finish the email loop. */
+    IdentityAdminView markEmailVerified(UserPrincipal caller, UUID id);
+
+    /** Sets or (blank) clears the display name. */
+    IdentityAdminView setDisplayName(UserPrincipal caller, UUID id, String name);
 
     /** Clears MFA so the user must re-enroll (lost device). Refused on a SuperAdmin unless caller is one. */
     void resetMfa(UserPrincipal caller, UUID id);

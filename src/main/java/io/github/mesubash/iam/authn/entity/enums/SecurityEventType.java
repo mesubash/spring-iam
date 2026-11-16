@@ -19,5 +19,6 @@ public enum SecurityEventType {
     MFA_VERIFIED,
     MFA_FAILED,
     MFA_RECOVERY_USED,
-    MFA_RESET_BY_ADMIN
+    MFA_RESET_BY_ADMIN,
+    EMAIL_VERIFIED
 }
