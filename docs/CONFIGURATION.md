@@ -151,6 +151,7 @@ SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_SECRET=...
 | `iam.integrity.reconciliation-cron` | `-` | nightly closure/ltree drift check (`-` disables) |
 | `iam.break-glass.webhook-url` (`IAM_BREAK_GLASS_WEBHOOK`) | *(empty)* | optional alert POST on break-glass grant |
 | `iam.audit.partitioning.*` / `iam.audit.retention.*` | see yml | monthly partition create-ahead + retention |
+| `logging.level.io.github.mesubash.iam.config.RequestLoggingFilter` | inherits (`INFO`+) | one access-log line per request (method, path, status, ms, client IP, Origin; never query strings, bodies, tokens or cookies; `/actuator`, `/docs` skipped). Set `WARN` to silence |
 
 ---
 
