@@ -194,7 +194,52 @@ export type IdentityAdmin = {
   emailVerified: boolean;
   accountStatus: "ACTIVE" | "LOCKED" | "SUSPENDED" | "DEACTIVATED";
   mfaEnabled: boolean;
+  displayName?: string | null;
   lastLoginAt?: string | null;
+  createdAt: string;
+  updatedAt?: string | null;
+  failedLoginAttempts?: number;
+  accountLockedUntil?: string | null;
+  lastLoginIp?: string | null;
+};
+
+/** How an identity can sign in. The identifier comes masked. */
+export type CredentialAdmin = {
+  type: string;
+  identifier: string | null;
+  active: boolean;
+  lastUsedAt?: string | null;
+  createdAt: string;
+};
+
+export type PageResponse<T> = {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  /** 0-based */
+  number: number;
+  size: number;
+};
+
+export type AdminAuditEntry = {
+  id: string;
+  actorId: string | null;
+  actorEmail: string | null;
+  method: string;
+  path: string;
+  status: number;
+  ip?: string | null;
+  userAgent?: string | null;
+  createdAt: string;
+};
+
+export type SecurityEvent = {
+  id: string;
+  identityId: string;
+  eventType: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  metadata?: Record<string, unknown> | null;
   createdAt: string;
 };
 

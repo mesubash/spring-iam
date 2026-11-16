@@ -1,6 +1,7 @@
 import { api, requestEnvelope } from "./client";
 import type {
   AccessListEntry,
+  AdminAuditEntry,
   AdminPasswordSet,
   Assignment,
   AuditEntry,
@@ -8,6 +9,7 @@ import type {
   AuthorizeResult,
   ContextAttribute,
   CreatedIdentity,
+  CredentialAdmin,
   DenyRule,
   EffectivePermissions,
   ExplainResult,
@@ -18,6 +20,7 @@ import type {
   MeBootstrap,
   MfaSetup,
   ManifestSyncResult,
+  PageResponse,
   Permission,
   PermissionGroup,
   Policy,
@@ -26,6 +29,7 @@ import type {
   Role,
   Scope,
   ScopeSummary,
+  SecurityEvent,
   ServiceClient,
   Session,
   SubjectGroup,
@@ -34,8 +38,8 @@ import type {
 /* --------------------------------- Auth --------------------------------- */
 
 export const authApi = {
-  register: (email: string, password: string) =>
-    requestEnvelope("/api/auth/register", { method: "POST", body: { email, password } }),
+  register: (email: string, password: string, name?: string) =>
+    requestEnvelope("/api/auth/register", { method: "POST", body: { email, password, name } }),
   login: (email: string, password: string) =>
     requestEnvelope<LoginResponse>("/api/auth/login", { method: "POST", body: { email, password } }),
   mfaVerify: (challenge: string, code: string) =>
@@ -109,7 +113,7 @@ export const metaApi = {
 /* ------------------------------ Identities ------------------------------ */
 
 export const identitiesApi = {
-  list: (params?: { query?: string; status?: string; limit?: number }) =>
+  list: (params?: { query?: string; status?: string; limit?: number; page?: number }) =>
     api.get<IdentityAdmin[]>("/api/v1/identities", params),
   get: (id: string) => api.get<IdentityAdmin>(`/api/v1/identities/${id}`),
   create: (input: { email: string; password?: string; emailVerified?: boolean }) =>
@@ -119,6 +123,11 @@ export const identitiesApi = {
   setStatus: (id: string, status: string, reason?: string) =>
     api.put<IdentityAdmin>(`/api/v1/identities/${id}/status`, { status, reason }),
   resetMfa: (id: string) => api.del(`/api/v1/identities/${id}/mfa`),
+  credentials: (id: string) => api.get<CredentialAdmin[]>(`/api/v1/identities/${id}/credentials`),
+  markEmailVerified: (id: string) =>
+    api.put<IdentityAdmin>(`/api/v1/identities/${id}/email-verified`),
+  setDisplayName: (id: string, name: string | null) =>
+    api.put<IdentityAdmin>(`/api/v1/identities/${id}/display-name`, { name }),
 };
 
 /* -------------------------------- Scopes -------------------------------- */
@@ -170,6 +179,9 @@ export const roleHierarchyApi = {
 
 export const assignmentsApi = {
   list: (params?: { subjectId?: string }) => api.get<Assignment[]>("/api/v1/assignments", params),
+  /** Newest first. Not for subject lookups: those are never paged. */
+  page: (page: number, size = 50) =>
+    api.get<PageResponse<Assignment>>("/api/v1/assignments", { page, size }),
   create: (input: {
     subjectId: string;
     subjectType: string;
@@ -287,6 +299,15 @@ export const auditApi = {
     api.get<AuditEntry[]>(`/api/v1/audit/resource/${resourceType}/${resourceId}`, { limit }),
   statistics: (subjectId: string, sinceDaysAgo = 7) =>
     api.get<AuditStatistics>(`/api/v1/audit/statistics/${encodeURIComponent(subjectId)}`, { sinceDaysAgo }),
+  adminActions: (params: { actorId?: string; page: number; size?: number }) =>
+    api.get<PageResponse<AdminAuditEntry>>("/api/v1/audit/admin-actions", params),
+  securityEvents: (params: {
+    identityId?: string;
+    eventType?: string;
+    since?: string;
+    page: number;
+    size?: number;
+  }) => api.get<PageResponse<SecurityEvent>>("/api/v1/audit/security-events", params),
 };
 
 /* ------------------------------ Break-glass ----------------------------- */
