@@ -31,7 +31,7 @@ public class OAuth2AuthenticationFailureHandler extends SimpleUrlAuthenticationF
 
     private final HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository;
 
-    @Value("${app.frontend.url:https://himalayanguardian.com}")
+    @Value("${app.frontend.url:https://app.example.com}")
     private String frontendBaseUrl;
 
     @Override

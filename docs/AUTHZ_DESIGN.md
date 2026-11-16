@@ -268,8 +268,8 @@ CREATE TABLE permissions (
 | Key | domain | resource | action |
 |---|---|---|---|
 | `order.order.create` | order | order | create |
-| `hgn.order.insurance.create` | hgn | order.insurance | insurance-object create |
-| `hgn.order.shipment.item.update` | hgn | order.shipment.item | update |
+| `shop.order.insurance.create` | shop | order.insurance | insurance-object create |
+| `shop.order.shipment.item.update` | shop | order.shipment.item | update |
 
 The engine never parses the middle: RBAC/grant checks are **exact string membership** in a permission set, so a 6-segment key costs exactly what a 3-segment key costs. Depth only matters to wildcard matching (deny rules/policies — see §4.8) and to manifest-sync ownership (first segment = owning namespace). Guidance: prefer flat 3-segment keys; add segments only when the resource genuinely nests (`order.insurance` is a real sub-resource, not a naming fashion).
 
@@ -580,7 +580,7 @@ Behavior spec:
 - **Checked first** in the pipeline; a match ends the decision immediately (`explicit_deny`).
 - `permission_key` wildcard semantics (variable-depth keys, §4.1):
   - `*` matches **exactly one** segment: `invoice.*.approve` matches `invoice.order.approve`, not `invoice.order.item.approve`.
-  - Trailing `**` matches **one or more** remaining segments: `hgn.order.**` matches `hgn.order.insurance.create` and `hgn.order.shipment.item.update`; `**` alone = everything (full suspension).
+  - Trailing `**` matches **one or more** remaining segments: `shop.order.**` matches `shop.order.insurance.create` and `shop.order.shipment.item.update`; `**` alone = everything (full suspension).
   - No `**` present ⇒ segment counts must be equal (exact-arity match).
 - `scope_id = NULL` → applies everywhere; non-null → applies at that scope **and all its descendants** (closure check).
 - `expires_at` → temporary suspension that lifts itself.

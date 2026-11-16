@@ -219,9 +219,9 @@ class AuthorizationServiceDecisionTest {
 
     @Test
     void trailingDoubleStarDenyMatchesAnyDepth() {
-        String deepPerm = "hgn.order.insurance.create";
+        String deepPerm = "shop.order.insurance.create";
         grantRole(null, deepPerm);
-        denyRule("hgn.order.**", null);
+        denyRule("shop.order.**", null);
         AuthorizationResponse r = service.authorize(request(deepPerm, PROJECT_SCOPE));
         assertFalse(r.getAuthorized());
     }

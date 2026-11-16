@@ -74,8 +74,8 @@ public class OAuthController {
                     description = "Frontend/mobile redirect URI after OAuth completes. Must match one of app.frontend.allowed-redirect-uris " +
                             "(scheme + host [+ optional path]). Provide either redirectUri or redirectUrl.",
                     examples = {
-                            @ExampleObject(name = "web", value = "https://himalayanguardian.com/oauth2/redirect"),
-                            @ExampleObject(name = "mobile", value = "hgn://auth/oauth2/redirect")
+                            @ExampleObject(name = "web", value = "https://app.example.com/oauth2/redirect"),
+                            @ExampleObject(name = "mobile", value = "myapp://auth/oauth2/redirect")
                     }
             ),
             @Parameter(
@@ -84,8 +84,8 @@ public class OAuthController {
                     required = false,
                     description = "Alternate name for redirectUri. Provide either redirectUri or redirectUrl.",
                     examples = {
-                            @ExampleObject(name = "web", value = "https://himalayanguardian.com/oauth2/redirect"),
-                            @ExampleObject(name = "mobile", value = "hgn://auth/oauth2/redirect")
+                            @ExampleObject(name = "web", value = "https://app.example.com/oauth2/redirect"),
+                            @ExampleObject(name = "mobile", value = "myapp://auth/oauth2/redirect")
                     }
             )
     })
@@ -109,8 +109,8 @@ public class OAuthController {
                     description = "Frontend/mobile redirect URI after OAuth completes. Must match one of app.frontend.allowed-redirect-uris " +
                             "(scheme + host [+ optional path]). Provide either redirectUri or redirectUrl.",
                     examples = {
-                            @ExampleObject(name = "web", value = "https://himalayanguardian.com/oauth2/redirect"),
-                            @ExampleObject(name = "mobile", value = "hgn://auth/oauth2/redirect")
+                            @ExampleObject(name = "web", value = "https://app.example.com/oauth2/redirect"),
+                            @ExampleObject(name = "mobile", value = "myapp://auth/oauth2/redirect")
                     }
             ),
             @Parameter(
@@ -119,8 +119,8 @@ public class OAuthController {
                     required = false,
                     description = "Alternate name for redirectUri. Provide either redirectUri or redirectUrl.",
                     examples = {
-                            @ExampleObject(name = "web", value = "https://himalayanguardian.com/oauth2/redirect"),
-                            @ExampleObject(name = "mobile", value = "hgn://auth/oauth2/redirect")
+                            @ExampleObject(name = "web", value = "https://app.example.com/oauth2/redirect"),
+                            @ExampleObject(name = "mobile", value = "myapp://auth/oauth2/redirect")
                     }
             )
     })

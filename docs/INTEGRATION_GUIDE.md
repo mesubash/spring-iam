@@ -16,7 +16,7 @@ minimal pieces below.
   assignments, deny rules, grants, and audit. Your service stores this, not the
   email.
 - **permission key** = `domain.<resource-path>.action`, 3–6 segments
-  (`invoice.invoice.approve`, `hgn.order.insurance.create`). Your service owns
+  (`invoice.invoice.approve`, `shop.order.insurance.create`). Your service owns
   its `domain`(s) and defines the keys.
 - **scope** = where authority applies. If you don't use a hierarchy, everything
   lives at the seeded ROOT scope and you never think about it.

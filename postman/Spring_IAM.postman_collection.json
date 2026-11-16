@@ -575,7 +575,7 @@
             },
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/auth/oauth/login/google?redirectUri=https://himalayanguardian.com/oauth2/redirect",
+              "raw": "{{baseUrl}}/api/auth/oauth/login/google?redirectUri=https://app.example.com/oauth2/redirect",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -589,7 +589,7 @@
               "query": [
                 {
                   "key": "redirectUri",
-                  "value": "https://himalayanguardian.com/oauth2/redirect"
+                  "value": "https://app.example.com/oauth2/redirect"
                 }
               ]
             },
