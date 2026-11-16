@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { contextAttributesApi, policiesApi, scopesApi } from "@/api/resources";
+import { contextAttributesApi, permissionsApi, policiesApi, scopesApi } from "@/api/resources";
+import { PermissionCombobox } from "@/components/iam/PermissionCombobox";
 import type { Policy } from "@/api/types";
 import { PageHeader } from "@/components/iam/PageHeader";
 import { PermissionGuardedPage } from "@/components/iam/PermissionGuardedPage";
@@ -158,6 +159,10 @@ function PolicyDialog({
     policy?.enforcementMode ?? "SHADOW",
   );
   const [priority, setPriority] = useState<string>(String(policy?.priority ?? 100));
+  const permsQ = useQuery({ queryKey: ["permissions"], queryFn: () => permissionsApi.list() });
+  const resourceTypes = Array.from(
+    new Set((permsQ.data ?? []).map((p) => p.resource).filter(Boolean)),
+  ).sort();
   const [permissionKey, setPermissionKey] = useState(policy?.permissionKey ?? "");
   const [resourceType, setResourceType] = useState(policy?.resourceType ?? "");
   const [scopeId, setScopeId] = useState(policy?.scopeId ?? "");
@@ -250,18 +255,24 @@ function PolicyDialog({
               onChange={(e) => setPriority(e.target.value)}
             />
             <Label htmlFor="p-perm">Permission key (optional)</Label>
-            <Input
-              id="p-perm"
-              className="font-mono"
+            <PermissionCombobox
               value={permissionKey ?? ""}
-              onChange={(e) => setPermissionKey(e.target.value)}
+              onChange={setPermissionKey}
+              placeholder="Any permission"
             />
             <Label htmlFor="p-rt">Resource type (optional)</Label>
             <Input
               id="p-rt"
+              list="policy-resource-types"
+              placeholder="Any resource type"
               value={resourceType ?? ""}
               onChange={(e) => setResourceType(e.target.value)}
             />
+            <datalist id="policy-resource-types">
+              {resourceTypes.map((rt) => (
+                <option key={rt} value={rt} />
+              ))}
+            </datalist>
             <Label htmlFor="p-scope">Scope (optional)</Label>
             <select
               id="p-scope"

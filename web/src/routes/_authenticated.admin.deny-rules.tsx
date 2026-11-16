@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { denyRulesApi, scopesApi } from "@/api/resources";
+import { PermissionCombobox } from "@/components/iam/PermissionCombobox";
 import type { DenyRule } from "@/api/types";
 import { PageHeader } from "@/components/iam/PageHeader";
 import { PermissionGuardedPage } from "@/components/iam/PermissionGuardedPage";
@@ -235,12 +236,10 @@ function CreateDialog({
             <option value="SERVICE">SERVICE</option>
           </select>
           <Label htmlFor="d-perm">Permission key</Label>
-          <Input
-            id="d-perm"
-            className="font-mono"
-            placeholder="invoice.payment.write"
+          <PermissionCombobox
             value={permissionKey}
-            onChange={(e) => setPermissionKey(e.target.value)}
+            onChange={setPermissionKey}
+            placeholder="invoice.payment.write"
           />
           <p className="text-xs text-[var(--muted-foreground)]">
             Wildcards supported: <span className="font-mono">invoice.*.*</span> denies a whole domain,{" "}

@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { pdpApi, rolesApi, type AuthorizeInput } from "@/api/resources";
+import { pdpApi, rolesApi, scopesApi, type AuthorizeInput } from "@/api/resources";
+import { PermissionCombobox } from "@/components/iam/PermissionCombobox";
 import type { ExplainResult, ExplainStep } from "@/api/types";
 import { PageHeader } from "@/components/iam/PageHeader";
 import { PermissionGuardedPage } from "@/components/iam/PermissionGuardedPage";
@@ -98,6 +99,8 @@ function RequestFields({
 }) {
   const [jsonErr, setJsonErr] = useState<string | null>(null);
   const set = (k: keyof FormState) => (v: string) => setForm({ ...form, [k]: v });
+  const scopesQ = useQuery({ queryKey: ["scopes"], queryFn: () => scopesApi.list() });
+  const scopes = [...(scopesQ.data ?? [])].sort((a, b) => a.path.localeCompare(b.path));
   return (
     <div className="space-y-2">
       <div>
@@ -108,12 +111,9 @@ function RequestFields({
       </div>
       <div>
         <Label>Permission</Label>
-        <Input
-          className="mt-1 font-mono text-xs"
-          placeholder="domain.resource.action"
-          value={form.permission}
-          onChange={(e) => set("permission")(e.target.value)}
-        />
+        <div className="mt-1">
+          <PermissionCombobox value={form.permission} onChange={set("permission")} />
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
@@ -136,12 +136,18 @@ function RequestFields({
         </div>
       </div>
       <div>
-        <Label>Scope ID</Label>
-        <Input
-          className="mt-1 font-mono text-xs"
+        <Label>Scope</Label>
+        <select
           value={form.scopeId}
           onChange={(e) => set("scopeId")(e.target.value)}
-        />
+          className="mt-1 h-9 w-full rounded border border-[var(--border)] bg-[var(--card)] px-2 font-mono text-xs"
+        >
+          {scopes.map((sc) => (
+            <option key={sc.id} value={sc.id}>
+              {sc.path} — {sc.name}
+            </option>
+          ))}
+        </select>
       </div>
       <div>
         <Label>Context (JSON, optional)</Label>
@@ -296,6 +302,8 @@ function SimulateTab() {
   const [adds, setAdds] = useState<HypoAssignment[]>([{ roleId: "", scopeId: ROOT_SCOPE }]);
   const [result, setResult] = useState<ExplainResult | null>(null);
   const roles = useQuery({ queryKey: ["roles"], queryFn: () => rolesApi.list() });
+  const scopesQ = useQuery({ queryKey: ["scopes"], queryFn: () => scopesApi.list() });
+  const scopeOptions = [...(scopesQ.data ?? [])].sort((a, b) => a.path.localeCompare(b.path));
 
   const m = useMutation({
     mutationFn: () =>
@@ -348,12 +356,17 @@ function SimulateTab() {
                     </option>
                   ))}
                 </select>
-                <Input
-                  className="w-0 flex-1 font-mono text-xs"
-                  placeholder="Scope ID"
+                <select
                   value={a.scopeId}
                   onChange={(e) => setAdd(i, { scopeId: e.target.value })}
-                />
+                  className="h-9 w-0 flex-1 rounded border border-[var(--border)] bg-[var(--card)] px-2 font-mono text-xs"
+                >
+                  {scopeOptions.map((sc) => (
+                    <option key={sc.id} value={sc.id}>
+                      {sc.path}
+                    </option>
+                  ))}
+                </select>
                 <button
                   type="button"
                   className="text-xs text-[var(--muted-foreground)] hover:text-[var(--destructive)]"

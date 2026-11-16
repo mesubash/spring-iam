@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { resourceGrantsApi } from "@/api/resources";
+import { resourceGrantsApi, scopesApi } from "@/api/resources";
+import { PermissionCombobox } from "@/components/iam/PermissionCombobox";
 import type { ResourceGrant } from "@/api/types";
 import { PageHeader } from "@/components/iam/PageHeader";
 import { PermissionGuardedPage } from "@/components/iam/PermissionGuardedPage";
@@ -201,6 +202,8 @@ function CreateGrantDialog({
   const qc = useQueryClient();
   const [subjectId, setSubjectId] = useState("");
   const [permissionKey, setPermissionKey] = useState("");
+  const scopesQ = useQuery({ queryKey: ["scopes"], queryFn: () => scopesApi.list() });
+  const scopeOptions = [...(scopesQ.data ?? [])].sort((a, b) => a.path.localeCompare(b.path));
   const [resourceType, setResourceType] = useState("");
   const [resourceId, setResourceId] = useState("");
   const [scopeId, setScopeId] = useState("");
@@ -242,12 +245,9 @@ function CreateGrantDialog({
           </div>
           <div>
             <Label>Permission key</Label>
-            <Input
-              className="mt-1 font-mono text-xs"
-              placeholder="domain.resource.action"
-              value={permissionKey}
-              onChange={(e) => setPermissionKey(e.target.value)}
-            />
+            <div className="mt-1">
+              <PermissionCombobox value={permissionKey} onChange={setPermissionKey} />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
@@ -268,12 +268,19 @@ function CreateGrantDialog({
             </div>
           </div>
           <div>
-            <Label>Scope ID (optional)</Label>
-            <Input
-              className="mt-1 font-mono text-xs"
+            <Label>Scope (optional)</Label>
+            <select
               value={scopeId}
               onChange={(e) => setScopeId(e.target.value)}
-            />
+              className="mt-1 h-9 w-full rounded border border-[var(--border)] bg-[var(--card)] px-2 font-mono text-xs"
+            >
+              <option value="">Any scope</option>
+              {scopeOptions.map((sc) => (
+                <option key={sc.id} value={sc.id}>
+                  {sc.path}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <Label>Expires at (optional)</Label>

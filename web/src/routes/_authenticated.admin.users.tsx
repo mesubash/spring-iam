@@ -442,6 +442,17 @@ function UserRolesSection({ subjectId }: { subjectId: string }) {
 
   const active = (assignmentsQ.data ?? []).filter((a) => a.active && !a.revokedAt);
 
+  // Prefill with the user's current role and scope so the form reflects what
+  // they hold; the button arms only for a combination not already assigned.
+  useEffect(() => {
+    if (!roleId && !scopeId && active.length > 0) {
+      setRoleId(active[0].roleId);
+      setScopeId(active[0].scopeId);
+    }
+  }, [roleId, scopeId, active]);
+
+  const alreadyAssigned = active.some((a) => a.roleId === roleId && a.scopeId === scopeId);
+
   const grant = useMutation({
     mutationFn: () =>
       assignmentsApi.create({ subjectId, subjectType: "USER", roleId, scopeId }),
@@ -502,6 +513,9 @@ function UserRolesSection({ subjectId }: { subjectId: string }) {
 
       {can("platform.assignment.create") ? (
         <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-[var(--border)] pt-3">
+          <p className="w-full text-xs font-medium text-[var(--muted-foreground)]">
+            Grant another role
+          </p>
           <div className="min-w-40 flex-1 space-y-1">
             <Label className="text-xs">Role</Label>
             <select
@@ -533,11 +547,17 @@ function UserRolesSection({ subjectId }: { subjectId: string }) {
             </select>
           </div>
           <Button
+            variant={roleId && scopeId && !alreadyAssigned ? "default" : "outline"}
             onClick={() => grant.mutate()}
-            disabled={grant.isPending || !roleId || !scopeId}
+            disabled={grant.isPending || !roleId || !scopeId || alreadyAssigned}
           >
             {grant.isPending ? "Granting…" : "Grant role"}
           </Button>
+          {alreadyAssigned ? (
+            <p className="w-full text-xs text-[var(--muted-foreground)]">
+              This role is already assigned at this scope. Change either to grant something new.
+            </p>
+          ) : null}
         </div>
       ) : null}
 
