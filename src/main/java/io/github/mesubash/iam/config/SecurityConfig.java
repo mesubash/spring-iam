@@ -154,6 +154,7 @@ public class SecurityConfig {
                                 "/api/auth/mfa/enable",
                                 "/api/auth/refresh",
                                 "/api/auth/oauth/**",
+                                "/api/auth/sso/authorize",   // reads the session cookie itself
                                 "/api/auth/verify-email",
                                 "/api/auth/verify-email-and-setup-password",
                                 "/api/auth/resend-verification",

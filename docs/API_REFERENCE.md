@@ -64,7 +64,9 @@ Controller: `AuthController` (envelope responses). Public endpoints per `Securit
 | POST | `/api/auth/refresh` | Public (needs refresh cookie) | Rotate access token using the `__Host-Refresh` cookie. |
 | POST | `/api/auth/logout` | Bearer (authenticated) | Revoke current access token + clear refresh cookie. |
 | POST | `/api/auth/logout-all` | Bearer (authenticated) | Revoke all refresh tokens/sessions for the user. |
-| POST | `/api/auth/oauth/exchange` | Public | Exchange the one-time OAuth redirect `code` for tokens, or an MFA step (same as `login`). |
+| POST | `/api/auth/oauth/exchange` | Public | Exchange the one-time OAuth or SSO redirect `code` for tokens, or an MFA step (same as `login`). |
+| GET | `/api/auth/sso/authorize` | Public (reads the session cookie) | Single sign-on into an allowlisted app (see § Single sign-on). |
+| POST | `/api/auth/sso/consent` | Bearer (authenticated) | Record that the user agreed to SSO into the app at `redirect_uri`. |
 | POST | `/api/auth/verify-email` | Public | Verify email via `token`. |
 | POST | `/api/auth/verify-email-and-setup-password` | Public | Verify an invited user's email and set the initial password (one token). |
 | POST | `/api/auth/resend-verification` | Public | Resend the verification email. |
@@ -164,6 +166,56 @@ Present **only when `oauth2=true`** (`@ConditionalOnProperty`); otherwise the pa
 | GET | `/api/auth/oauth/providers` | Public | List supported providers (`["google"]`) and their login URLs (envelope). |
 | GET | `/api/auth/oauth/login/google` | Public | Begin Google OAuth; requires `?redirectUri=` (or `?redirectUrl=`). Redirects to the provider. |
 | GET | `/api/auth/oauth/login/{provider}` | Public | Generic provider login initiation; requires `?redirectUri=`. Redirects (400 for unsupported provider or missing redirect). |
+
+### Single sign-on — `/api/auth/sso/*`
+
+Lets one sign-in cover several apps. The IAM's own session cookie (`__Host-Refresh`) is the
+"hub" session; an app without a session of its own sends the browser to the IAM and gets back
+a one-time code for a **new, separate** session (its own refresh token, revoked independently).
+Always on; no feature flag.
+
+**`GET /api/auth/sso/authorize`** — query: `redirect_uri` (required), `state` (echoed back,
+recommended), `prompt` (`none` for a silent check). Other OIDC parameters such as `client_id`
+are ignored.
+
+1. `redirect_uri` must pass the same allowlist as OAuth (`app.frontend.allowed-redirect-uris` +
+   `cors.allowed-origins`: exact scheme and host, whole normalized path segments). Otherwise
+   **400** and no redirect.
+2. The IAM reads the session cookie **without rotating it**. Only the session's current refresh
+   token counts; a rotated, revoked or expired one is "no session".
+3. No usable session (also: account not active, or the session does not meet the MFA requirement,
+   see below):
+   - `prompt=none` → `302 redirect_uri?error=login_required&state=…`. Never a login page, so an
+     app can probe on load and stay quietly signed out.
+   - otherwise → `302 <iam.sso.login-url>?continue=<this authorize URL>`. After sign-in the login
+     page navigates the browser to `continue`, which comes back here with a session.
+4. Consent (only when `iam.sso.consent-url` is set): the first time a user signs in to an app
+   **origin** this way, the IAM asks first.
+   - `prompt=none` → `302 redirect_uri?error=consent_required&state=…`
+   - otherwise → `302 <iam.sso.consent-url>?redirect_uri=…&continue=<this authorize URL>`. The
+     consent page shows the app, calls `POST /api/auth/sso/consent` with the user's access token
+     and body `{ "redirect_uri": string }`, then navigates to `continue`. On "no" it sends the
+     browser to `redirect_uri?error=access_denied`. Consent is kept for 365 days per user and
+     origin. It is a confirmation step between your own allowlisted apps, not a third-party
+     client grant.
+5. Otherwise → `302 redirect_uri?code=…&state=…`. The app checks `state`, then swaps the code at
+   `POST /api/auth/oauth/exchange` (`{ "code": string }`). The code lives 60 seconds and works
+   once.
+
+**MFA.** SSO never creates a session that the login gate would refuse. A hub session exists only
+after the gate passed, and the IAM re-checks at authorize time: if the user now has MFA enabled,
+or holds a role in `iam.mfa.required-roles`, and the hub session's `amr` lacks `mfa`, there is
+no code (`login_required` / login page). The app's session copies the hub session's `amr`, so its
+access tokens (and refreshed ones) say how the user really signed in, e.g. `["pwd","otp","mfa"]`.
+The exchange of an SSO code always answers `OK`, never an MFA step.
+
+**Cookies.** The exchange sets the app's refresh cookie on the host that served the exchange. If
+the app reaches the IAM on its own host (a same-origin proxy or a BFF), its session cookie is
+separate from the hub's. If it calls the same IAM host the login page uses, the new cookie
+replaces the hub cookie; SSO still works, because the replacement is an equally valid session.
+
+**Sign-out** is per session: ending the app's session does not end the hub session, and vice
+versa. Use `POST /api/auth/logout-all` to end every session of the user.
 
 ---
 

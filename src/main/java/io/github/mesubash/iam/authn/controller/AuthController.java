@@ -39,6 +39,15 @@ public class AuthController {
 
     private final AuthService authService;
     private final TokenEncryptionUtil tokenEncryptionUtil;
+    private final io.github.mesubash.iam.authn.security.RedirectAllowlist redirectAllowlist;
+
+    /** Where SSO authorize sends a browser with no usable session; gets ?continue=&lt;authorize URL&gt;. */
+    @Value("${iam.sso.login-url:${app.frontend.url:http://localhost:3000}/login}")
+    private String ssoLoginUrl;
+
+    /** Page that asks before an app gets its first SSO code. Empty: no consent step. */
+    @Value("${iam.sso.consent-url:}")
+    private String ssoConsentUrl;
 
     @Value("${app.jwt.refresh-token-cookie-name:__Host-Refresh}")
     private String refreshTokenCookieName;
@@ -142,6 +151,76 @@ public class AuthController {
             HttpServletResponse response) {
         return loginResponse(authService.exchangeOAuthCode(body.get("code"), clientIp(httpRequest),
                 httpRequest.getHeader("User-Agent")), response);
+    }
+
+    @GetMapping("/sso/authorize")
+    @Operation(summary = "SSO authorize",
+            description = "Single sign-on for apps on the redirect allowlist. With a live session cookie, "
+                    + "redirects to redirect_uri?code=…&state=…; the app swaps the code at /oauth/exchange. "
+                    + "Otherwise sends the browser to the login (or consent) page, or with prompt=none back "
+                    + "to redirect_uri with error=login_required / consent_required.")
+    public void ssoAuthorize(
+            @RequestParam("redirect_uri") String redirectUri,
+            @RequestParam(value = "state", required = false) String state,
+            @RequestParam(value = "prompt", required = false) String prompt,
+            HttpServletRequest request,
+            HttpServletResponse response) throws java.io.IOException {
+        if (!redirectAllowlist.isAllowed(redirectUri)) {
+            response.sendError(HttpStatus.BAD_REQUEST.value(), "redirect_uri is not allowed");
+            return;
+        }
+        // prompt=none: a silent check that never shows a page; the app learns the answer from ?error=.
+        boolean silent = "none".equalsIgnoreCase(prompt);
+        String selfUrl = request.getRequestURL() + "?" + request.getQueryString();
+
+        String code;
+        try {
+            code = authService.beginSso(getRefreshTokenFromCookie(request), originOf(redirectUri),
+                    org.springframework.util.StringUtils.hasText(ssoConsentUrl));
+        } catch (UnauthorizedException noUsableSession) {
+            response.sendRedirect(silent ? withParam(redirectUri, "error", "login_required", state)
+                    : withParam(ssoLoginUrl, "continue", selfUrl, null));
+            return;
+        }
+        if (code == null) {
+            response.sendRedirect(silent ? withParam(redirectUri, "error", "consent_required", state)
+                    : withParam(withParam(ssoConsentUrl, "redirect_uri", redirectUri, null), "continue", selfUrl, null));
+            return;
+        }
+        response.sendRedirect(withParam(redirectUri, "code", code, state));
+    }
+
+    @PostMapping("/sso/consent")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "SSO consent",
+            description = "Called by the consent page: the signed-in person agrees that the app at "
+                    + "redirect_uri may sign them in. Body: { \"redirect_uri\": string }")
+    public ResponseEntity<ApiResponse<SuccessResponse>> ssoConsent(
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        String redirectUri = body.get("redirect_uri");
+        if (!redirectAllowlist.isAllowed(redirectUri)) {
+            throw new io.github.mesubash.iam.shared.exception.BadRequestException("redirect_uri is not allowed");
+        }
+        authService.grantSsoConsent(principal.getId(), originOf(redirectUri));
+        return ResponseEntity.ok(ApiResponse.success("Consent recorded",
+                SuccessResponse.of("The app can now sign you in")));
+    }
+
+    /** Consent is per app origin: the code goes to whatever path, but the origin receives it. */
+    private static String originOf(String uri) {
+        java.net.URI u = java.net.URI.create(uri);
+        return (u.getScheme() + "://" + u.getHost() + (u.getPort() == -1 ? "" : ":" + u.getPort()))
+                .toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private static String withParam(String url, String name, String value, String state) {
+        StringBuilder out = new StringBuilder(url).append(url.contains("?") ? "&" : "?")
+                .append(name).append('=').append(java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8));
+        if (state != null && !state.isEmpty()) {
+            out.append("&state=").append(java.net.URLEncoder.encode(state, java.nio.charset.StandardCharsets.UTF_8));
+        }
+        return out.toString();
     }
 
     @PostMapping("/logout")

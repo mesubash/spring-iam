@@ -17,7 +17,19 @@ public interface AuthService {
 
     JwtResponse refreshToken(String refreshToken);
 
+    /** Swaps a one-time code from the OAuth redirect or from SSO authorize. */
     LoginResult exchangeOAuthCode(String code, String ipAddress, String userAgent);
+
+    /**
+     * SSO: a single-use code for the app at {@code redirectOrigin}, minted from the caller's
+     * existing session (which is read, not rotated). Returns null when {@code askConsent} is set
+     * and the person has not yet agreed for that origin. Throws {@code UnauthorizedException}
+     * when there is no live session or it does not meet the current MFA requirement.
+     */
+    String beginSso(String refreshToken, String redirectOrigin, boolean askConsent);
+
+    /** Remember that the person agreed to SSO into the app at {@code redirectOrigin}. */
+    void grantSsoConsent(java.util.UUID identityId, String redirectOrigin);
 
     void logout(String accessToken);
 

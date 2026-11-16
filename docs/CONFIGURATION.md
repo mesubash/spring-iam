@@ -60,7 +60,22 @@ hour, and every replica picks up the new active key within a minute.
 | `APP_JWT_ENCRYPT_COOKIES` | `true` | AES-GCM-encrypt the cookie value |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:8080` | allowed origins |
 | `APP_FRONTEND_URL` | `http://localhost:3000` | default OAuth redirect origin |
-| `APP_ALLOWED_REDIRECT_URIS` | *(empty)* | OAuth redirect allowlist (empty ⇒ frontend origin only) |
+| `APP_ALLOWED_REDIRECT_URIS` | *(empty)* | OAuth and SSO redirect allowlist (empty ⇒ frontend origin only) |
+
+---
+
+## Single sign-on
+
+`GET /api/auth/sso/authorize` sends codes only to `redirect_uri`s on the redirect allowlist above
+(`APP_ALLOWED_REDIRECT_URIS` + `CORS_ALLOWED_ORIGINS`). See API_REFERENCE § Single sign-on.
+
+| Property | Default | Purpose |
+|---|---|---|
+| `iam.sso.login-url` | `${app.frontend.url}/login` | login page for an authorize request without a usable session; gets `?continue=<authorize URL>` and must navigate there after sign-in |
+| `iam.sso.consent-url` | *(empty)* | page that asks before an app origin gets its first SSO code; gets `?redirect_uri=…&continue=…`. Empty: no consent step |
+
+The `continue` URL is built from the request URL, so behind a reverse proxy set
+`server.forward-headers-strategy` so that it shows the public host.
 
 ---
 

@@ -240,6 +240,19 @@ public class AuthServiceImpl implements AuthService {
             throw new InvalidTokenException("Exchange code is required");
         }
 
+        // SSO code: minted from a session that already passed the MFA gate, so the app's new
+        // session is issued directly and inherits that session's amr.
+        String sso = stringRedisTemplate.opsForValue().getAndDelete(SSO_CODE_PREFIX + code);
+        if (sso != null) {
+            String[] ssoBundle = tokenEncryptionUtil.decrypt(sso).split(" ", 2);
+            Identity identity = identityRepository.findById(UUID.fromString(ssoBundle[0]))
+                    .orElseThrow(() -> new InvalidTokenException("Identity not found"));
+            ensureAccountActive(identity);
+            List<String> amr = ssoBundle.length > 1 && !ssoBundle[1].isEmpty()
+                    ? List.of(ssoBundle[1].split(",")) : List.of();
+            return LoginResult.ok(issueSession(identity, ipAddress, userAgent, amr));
+        }
+
         // Single-use: GETDEL — a second exchange with the same code fails
         String encrypted = stringRedisTemplate.opsForValue()
                 .getAndDelete(OAuth2AuthenticationSuccessHandler.EXCHANGE_PREFIX + code);
@@ -257,6 +270,55 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new InvalidTokenException("Identity not found"));
         ensureAccountActive(identity);
         return afterFirstFactor(identity, provider, ipAddress, userAgent);
+    }
+
+    public static final String SSO_CODE_PREFIX = "authn:sso:code:";
+    private static final String SSO_CONSENT_PREFIX = "authn:sso:consent:";
+    private static final java.time.Duration SSO_CODE_TTL = java.time.Duration.ofSeconds(60);
+    private static final java.time.Duration SSO_CONSENT_TTL = java.time.Duration.ofDays(365);
+    private final java.security.SecureRandom secureRandom = new java.security.SecureRandom();
+
+    @Override
+    @Transactional(readOnly = true)
+    public String beginSso(String refreshToken, String redirectOrigin, boolean askConsent) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            throw new UnauthorizedException("No session");
+        }
+        io.github.mesubash.iam.authn.entity.Session session;
+        try {
+            session = sessionService.findLiveSession(refreshToken);
+        } catch (InvalidTokenException e) {
+            throw new UnauthorizedException("No session");
+        }
+        Identity identity = identityRepository.findById(session.getIdentityId())
+                .orElseThrow(() -> new UnauthorizedException("No session"));
+        ensureAccountActive(identity);
+
+        // Every session was made after the MFA gate, but the gate may have tightened since
+        // (MFA turned on, a required role granted). Such a session cannot sign apps in.
+        List<String> amr = session.getAmr() == null ? List.of() : List.of(session.getAmr().split(","));
+        if (!amr.contains("mfa") && (mfaService.isEnabled(identity.getId())
+                || mfaRequiredForRoles(getRolesForIdentity(identity.getId())))) {
+            throw new UnauthorizedException("Session does not meet the MFA requirement");
+        }
+
+        if (askConsent && !Boolean.TRUE.equals(
+                stringRedisTemplate.hasKey(SSO_CONSENT_PREFIX + identity.getId() + ":" + redirectOrigin))) {
+            return null;
+        }
+
+        byte[] codeBytes = new byte[16];
+        secureRandom.nextBytes(codeBytes);
+        String code = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(codeBytes);
+        stringRedisTemplate.opsForValue().set(SSO_CODE_PREFIX + code,
+                tokenEncryptionUtil.encrypt(identity.getId() + " " + String.join(",", amr)), SSO_CODE_TTL);
+        return code;
+    }
+
+    @Override
+    public void grantSsoConsent(UUID identityId, String redirectOrigin) {
+        stringRedisTemplate.opsForValue().set(SSO_CONSENT_PREFIX + identityId + ":" + redirectOrigin,
+                "1", SSO_CONSENT_TTL);
     }
 
     @Override

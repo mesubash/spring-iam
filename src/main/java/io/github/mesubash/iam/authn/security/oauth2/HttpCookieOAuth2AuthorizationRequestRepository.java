@@ -1,6 +1,7 @@
 package io.github.mesubash.iam.authn.security.oauth2;
 
 import io.github.mesubash.iam.authn.config.JwtConfig;
+import io.github.mesubash.iam.authn.security.RedirectAllowlist;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -10,12 +11,6 @@ import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequ
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Stores the OAuth2 authorization request in an HttpOnly cookie instead of the HTTP session.
@@ -43,15 +38,7 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
     @Value("${app.cookie.secure:true}")
     private boolean secureCookie;
 
-    @Value("${app.frontend.allowed-redirect-uris:}")
-    private String allowedRedirectUris;
-
-    @Value("${cors.allowed-origins:}")
-    private String extraAllowedRedirectUris;
-
-    @Value("${app.frontend.url:http://localhost:3000}")
-    private String frontendBaseUrl;
-
+    private final RedirectAllowlist redirectAllowlist;
     private final JwtConfig jwtConfig;
 
     @Override
@@ -91,7 +78,7 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
         }
 
         if (StringUtils.hasText(redirectUriAfterLogin)) {
-            if (!isAllowedRedirect(redirectUriAfterLogin)) {
+            if (!isAllowedRedirectUri(redirectUriAfterLogin)) {
                 return;
             }
             CookieUtils.addCookie(
@@ -136,89 +123,11 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
     public String getRedirectUriFromCookie(HttpServletRequest request) {
         return CookieUtils.getCookie(request, REDIRECT_URI_COOKIE_NAME)
                 .map(cookie -> CookieUtils.verifySignedRaw(cookie.getValue(), jwtConfig.getSecret()))
-                .filter(uri -> uri != null && isAllowedRedirect(uri))
+                .filter(uri -> isAllowedRedirectUri(uri))
                 .orElse(null);
     }
 
     public boolean isAllowedRedirectUri(String uri) {
-        return uri != null && isAllowedRedirect(uri);
-    }
-
-    // Redirects must match the configured allowlist; with no allowlist
-    // configured, only the frontend base URL's origin is accepted.
-    private boolean isAllowedRedirect(String uri) {
-        if (!StringUtils.hasText(uri)) {
-            return false;
-        }
-        try {
-            URI candidate = new URI(uri);
-            if (!StringUtils.hasText(candidate.getScheme())) {
-                return false;
-            }
-
-            List<URI> allowed = parseAllowedRedirects();
-            if (allowed.isEmpty() && StringUtils.hasText(frontendBaseUrl)) {
-                try {
-                    allowed = List.of(new URI(frontendBaseUrl));
-                } catch (URISyntaxException ignored) {
-                    return false;
-                }
-            }
-
-            return allowed.stream().anyMatch(a -> isMatch(candidate, a));
-        } catch (URISyntaxException e) {
-            return false;
-        }
-    }
-
-    private List<URI> parseAllowedRedirects() {
-        List<URI> allowed = new ArrayList<>();
-
-        // Merge both envs
-        String merged =
-                Stream.of(allowedRedirectUris, extraAllowedRedirectUris)
-                        .filter(StringUtils::hasText)
-                        .collect(Collectors.joining(","));
-
-        if (StringUtils.hasText(merged)) {
-            for (String part : merged.split(",")) {
-                String trimmed = part.trim();
-                if (!StringUtils.hasText(trimmed)) {
-                    continue;
-                }
-                try {
-                    URI uri = new URI(trimmed);
-                    if (StringUtils.hasText(uri.getScheme()) && StringUtils.hasText(uri.getHost())) {
-                        allowed.add(uri);
-                    }
-                } catch (URISyntaxException ignored) {
-                }
-            }
-        }
-        return allowed;
-    }
-
-
-
-    private boolean isMatch(URI candidate, URI allowed) {
-        if (!allowed.getScheme().equalsIgnoreCase(candidate.getScheme())) {
-            return false;
-        }
-        if (!allowed.getHost().equalsIgnoreCase(candidate.getHost())) {
-            return false;
-        }
-        if (allowed.getPort() != -1 && allowed.getPort() != candidate.getPort()) {
-            return false;
-        }
-        String allowedPath = allowed.getPath();
-        if (StringUtils.hasText(allowedPath) && !"/".equals(allowedPath)) {
-            // Normalize first ("/cb/../admin") and match whole segments ("/cb" must not allow "/cb-x").
-            String candidatePath = candidate.normalize().getPath() == null ? "" : candidate.normalize().getPath();
-            String base = allowedPath.endsWith("/") ? allowedPath.substring(0, allowedPath.length() - 1) : allowedPath;
-            if (!candidatePath.equals(base) && !candidatePath.startsWith(base + "/")) {
-                return false;
-            }
-        }
-        return true;
+        return redirectAllowlist.isAllowed(uri);
     }
 }

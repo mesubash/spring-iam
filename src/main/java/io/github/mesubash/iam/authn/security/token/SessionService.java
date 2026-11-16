@@ -156,6 +156,21 @@ public class SessionService {
         return new RotationResult(session, newRaw, false);
     }
 
+    /**
+     * The live session behind a refresh token, without rotating it. Only the current
+     * token counts: an already-rotated one is rejected here, not treated as replay.
+     */
+    @Transactional(readOnly = true)
+    public Session findLiveSession(String rawToken) {
+        RefreshToken token = refreshTokenRepository.findByTokenHash(sha256(rawToken))
+                .filter(t -> t.getRevokedAt() == null && t.getReplacedBy() == null
+                        && t.getExpiresAt().isAfter(Instant.now()))
+                .orElseThrow(() -> new InvalidTokenException("Invalid refresh token"));
+        return sessionRepository.findById(token.getSessionId())
+                .filter(Session::isAlive)
+                .orElseThrow(() -> new InvalidTokenException("Session expired or revoked"));
+    }
+
     @Transactional
     public void revokeSession(UUID sessionId, String reason) {
         sessionRepository.findById(sessionId).ifPresent(session -> {
