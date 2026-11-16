@@ -310,6 +310,9 @@ public class AuthServiceImpl implements AuthService {
         credential.setSecretHash(passwordEncoder.encode(newPassword));
         credentialRepository.save(credential);
 
+        // A reset usually follows a compromise: whoever holds a session from before it is out.
+        sessionService.revokeAll(identity.getId(), "SECURITY");
+
         securityEventService.logEvent(identity, SecurityEventType.PASSWORD_RESET, null, null);
         tokenService.revoke(userId, token, TokenType.PASSWORD_RESET);
     }
@@ -334,6 +337,9 @@ public class AuthServiceImpl implements AuthService {
 
         credential.setSecretHash(passwordEncoder.encode(request.getNewPassword()));
         credentialRepository.save(credential);
+
+        // Sessions on other devices must not outlive the password they signed in with.
+        sessionService.revokeAll(identity.getId(), "SECURITY");
 
         securityEventService.logEvent(identity, SecurityEventType.PASSWORD_CHANGED, null, null);
     }
