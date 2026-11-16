@@ -487,11 +487,11 @@ public class AuthorizationService {
             PermissionsResult permissionsResult = null;
 
             // Groups bypass the permission cache: group assignments aren't covered
-            // by the per-subject conditional check or invalidation counters yet.
-            boolean hasConditionalAssignments = groupsEnabled || assignmentRepository
-                    .existsActiveConditionalAssignments(subject, Instant.now());
+            // by the per-subject restricted-assignment check or invalidation counters yet.
+            boolean hasRestrictedAssignments = groupsEnabled || assignmentRepository
+                    .existsActiveRestrictedAssignments(subject);
 
-            if (!hasConditionalAssignments) {
+            if (!hasRestrictedAssignments) {
                 cachedPermissions = cacheService.getCachedUserPermissions(subject, resourceScopeId);
             }
 
@@ -504,7 +504,7 @@ public class AuthorizationService {
                 permissionsResult = fetchUserPermissions(subject, permissionKey,
                         resourceScopeId, request);
                 userPermissions = permissionsResult.permissions;
-                if (permissionsResult.cacheable && !hasConditionalAssignments) {
+                if (permissionsResult.cacheable && !hasRestrictedAssignments) {
                     cacheService.cacheUserPermissions(subject, resourceScopeId, userPermissions);
                 }
                 log.debug("Permission cache MISS for subject: {}", subject);

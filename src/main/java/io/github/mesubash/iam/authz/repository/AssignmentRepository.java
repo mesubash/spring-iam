@@ -59,14 +59,12 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
             nativeQuery = true)
     List<String> findSubjectsWithAssignmentCoveringScope(@Param("scopeId") UUID scopeId);
 
+    // Timed grants count too, including already-expired active rows: a permission set cached
+    // while the grant was live must not keep authorizing after its deadline.
     @Query(value = "SELECT EXISTS (" +
             "SELECT 1 FROM assignments a " +
-            "WHERE a.subject_id = :subjectId " +
-            "AND a.active = true " +
-            "AND (a.expires_at IS NULL OR a.expires_at > :now) " +
-            "AND a.conditions IS NOT NULL " +
-            "AND a.conditions <> '{}'::jsonb" +
+            "WHERE a.subject_id = :subjectId AND a.active = true " +
+            "AND (a.expires_at IS NOT NULL OR (a.conditions IS NOT NULL AND a.conditions <> '{}'::jsonb))" +
             ")", nativeQuery = true)
-    boolean existsActiveConditionalAssignments(@Param("subjectId") String subjectId,
-                                               @Param("now") Instant now);
+    boolean existsActiveRestrictedAssignments(@Param("subjectId") String subjectId);
 }

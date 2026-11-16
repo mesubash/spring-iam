@@ -83,7 +83,7 @@ class AuthorizationServiceDecisionTest {
         when(policyService.getApplicablePolicies(anyString(), any())).thenReturn(List.of());
         when(denyRuleRepository.findAllActiveDenyRulesForSubjects(any(), any())).thenReturn(List.of());
         when(assignmentRepository.findActiveAssignmentsForSubjects(any(), any())).thenReturn(List.of());
-        when(assignmentRepository.existsActiveConditionalAssignments(anyString(), any())).thenReturn(false);
+        when(assignmentRepository.existsActiveRestrictedAssignments(anyString())).thenReturn(false);
         when(roleHierarchyRepository.findAllByChildRoleIds(any())).thenReturn(List.of());
         when(resourceGrantRepository.findActiveForResource(any(), any(), any(), any())).thenReturn(List.of());
         when(subjectGroupMemberRepository.findActiveGroupIds(anyString())).thenReturn(List.of());

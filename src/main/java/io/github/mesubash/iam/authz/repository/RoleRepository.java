@@ -14,6 +14,8 @@ public interface RoleRepository extends JpaRepository<Role, UUID> {
     // Global roles only — tenant roles share names across subtrees
     Optional<Role> findByOwnerScopeIdIsNullAndName(String name);
 
+    List<Role> findByIsSystemRoleTrue();
+
     @Query("SELECT r FROM Role r WHERE r.name = :name AND " +
            "((:owner IS NULL AND r.ownerScopeId IS NULL) OR r.ownerScopeId = :owner)")
     Optional<Role> findByOwnerAndName(@Param("owner") UUID ownerScopeId, @Param("name") String name);

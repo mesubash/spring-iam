@@ -27,6 +27,9 @@ import java.util.*;
 @RequiredArgsConstructor
 public class AssignmentService {
 
+    private static final UUID ROOT_SCOPE = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID SUPER_ADMIN_ROLE = UUID.fromString("10000000-0000-0000-0000-000000000001");
+
     private static final HttpClient HTTP = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(3)).build();
 
@@ -70,6 +73,12 @@ public class AssignmentService {
         // Validate scope exists
         Scope scope = scopeRepository.findById(scopeId)
                 .orElseThrow(() -> new IllegalArgumentException("Scope not found"));
+
+        // SuperAdmin is the platform owner: only meaningful at ROOT. Role claims ignore it
+        // anywhere else, so refuse the grant instead of creating a row that silently does nothing.
+        if (SUPER_ADMIN_ROLE.equals(role.getId()) && !ROOT_SCOPE.equals(scopeId)) {
+            throw new IllegalArgumentException("SuperAdmin can only be assigned at ROOT");
+        }
 
         // Tenant-scoped role: only assignable within its owning subtree
         if (role.getOwnerScopeId() != null

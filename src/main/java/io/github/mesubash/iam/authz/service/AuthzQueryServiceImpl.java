@@ -29,6 +29,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AuthzQueryServiceImpl implements AuthzQueryService {
 
+    private static final UUID ROOT_SCOPE = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID SUPER_ADMIN_ROLE = UUID.fromString("10000000-0000-0000-0000-000000000001");
+
     private final AssignmentRepository assignmentRepository;
     private final RoleRepository roleRepository;
     private final ScopeRepository scopeRepository;
@@ -74,13 +77,25 @@ public class AuthzQueryServiceImpl implements AuthzQueryService {
                     .build();
         }
 
+        // SuperAdmin only counts where it was meant to live: at ROOT. Assigned anywhere else it
+        // would still become a global ROLE_SuperAdmin authority.
         Set<UUID> roleIds = assignments.stream()
+                .filter(a -> !SUPER_ADMIN_ROLE.equals(a.getRoleId()) || ROOT_SCOPE.equals(a.getScopeId()))
                 .map(Assignment::getRoleId)
                 .collect(Collectors.toSet());
 
-        List<String> roleNames = roleRepository.findAllById(roleIds).stream()
-                .filter(Role::getActive)
+        // Role names become Spring authorities (ROLE_<name>) that @PreAuthorize trusts, but names
+        // are only unique per owner scope. A tenant role named like a built-in one ("SuperAdmin",
+        // "SecurityAdmin", ...) would otherwise pass every check gated on the built-in role.
+        List<Role> held = roleRepository.findAllById(roleIds);
+        Set<String> builtInNames = roleRepository.findByIsSystemRoleTrue().stream()
                 .map(Role::getName)
+                .collect(Collectors.toSet());
+        List<String> roleNames = held.stream()
+                .filter(Role::getActive)
+                .filter(r -> Boolean.TRUE.equals(r.getIsSystemRole()) || !builtInNames.contains(r.getName()))
+                .map(Role::getName)
+                .distinct()
                 .collect(Collectors.toList());
 
         // Use the first assignment's scope as primary scope
