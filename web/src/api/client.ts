@@ -1,7 +1,7 @@
 // Typed API client with in-memory access token + 401→refresh→retry.
 // Envelope { status, message, data } is unwrapped to `data` when present.
 
-const BASE_URL =
+export const BASE_URL =
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:8080";
 
 let accessToken: string | null = null;

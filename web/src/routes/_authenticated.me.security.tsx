@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/iam/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ApiError } from "@/api/client";
+import { ApiError, setAccessToken } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 
 export const Route = createFileRoute("/_authenticated/me/security")({
@@ -188,15 +188,17 @@ function ChangePasswordCard() {
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const { setIdentity } = useAuth();
+  const navigate = useNavigate();
 
   const m = useMutation({
     mutationFn: () => authApi.changePassword(current, next),
-    onSuccess: (res) => {
-      toast.success(res.message ?? "Password changed");
-      setCurrent("");
-      setNext("");
-      setConfirm("");
-      setErr(null);
+    // The server ends every session, this one included.
+    onSuccess: () => {
+      setAccessToken(null);
+      setIdentity(null);
+      toast.success("Password changed. Sign in again.");
+      navigate({ to: "/login" });
     },
     onError: (e: Error) => setErr(e instanceof ApiError ? e.message : "Could not change password."),
   });

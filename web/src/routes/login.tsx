@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
-import { ApiError } from "@/api/client";
+import { ApiError, BASE_URL } from "@/api/client";
 import { mfaApi } from "@/api/resources";
 import { OtpCodeInput } from "@/components/iam/OtpCodeInput";
 import { QrCode } from "@/components/iam/QrCode";
 import { RecoveryCodes } from "@/components/iam/RecoveryCodes";
+import { safeContinueUrl } from "@/lib/continue-url";
 import { AlertCircle, Eye, EyeOff, LoaderCircle, ShieldCheck } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
@@ -66,9 +67,21 @@ function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>({ step: "password" });
 
+  // SSO sends the user here with ?continue=<authorize URL>; resume it once signed in
+  // (password or MFA step, or already signed in).
+  const goOn = () => {
+    const next = safeContinueUrl(
+      new URLSearchParams(window.location.search).get("continue"),
+      BASE_URL,
+    );
+    if (next) window.location.assign(next);
+    else navigate({ to: "/me/access" });
+  };
+
   useEffect(() => {
-    if (isAuthenticated) navigate({ to: "/me/access" });
-  }, [isAuthenticated, navigate]);
+    if (isAuthenticated) goOn();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,8 +94,8 @@ function LoginPage() {
       } else if (res.kind === "enroll") {
         setMode({ step: "enroll", enrollmentToken: res.enrollmentToken });
       } else {
+        // The effect below navigates once the session is set.
         if (res.message) toast.success(res.message);
-        navigate({ to: "/me/access" });
       }
     } catch (err) {
       let msg = "Sign-in failed. Please try again.";
@@ -116,7 +129,6 @@ function LoginPage() {
           onSubmit={async (code) => {
             await completeMfaLogin(mode.challenge, code);
             toast.success("Signed in");
-            navigate({ to: "/me/access" });
           }}
           onChallengeExpired={() => {
             backToPassword(MFA_SESSION_EXPIRED_ERROR);
