@@ -55,11 +55,29 @@ class RevocationCutoffIntegrationTest {
         mvc.perform(get("/api/auth/sessions").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
 
-        // Cutoff alone (session still alive): the token must die anyway.
+        // The cutoff covers whole seconds before the revoke, so revoke in a later second than
+        // the token's iat. Cutoff alone (session still alive): the token must die anyway.
+        Thread.sleep(1001 - System.currentTimeMillis() % 1000);
         revocationService.revokeAllBefore(id);
 
         mvc.perform(get("/api/auth/sessions").header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void aLoginRightAfterRevokeAllStillWorks() throws Exception {
+        String email = "cutoff-" + UUID.randomUUID() + "@example.com";
+        loginNewUser(email);
+        UUID id = identityRepository.findByPrimaryEmail(email).orElseThrow().getId();
+
+        revocationService.revokeAllBefore(id);
+        LoginRequest login = new LoginRequest();
+        login.setEmail(email);
+        login.setPassword(PASSWORD);
+        String fresh = authService.login(login, "203.0.113.7", "junit").tokens().getAccessToken();
+
+        mvc.perform(get("/api/auth/sessions").header("Authorization", "Bearer " + fresh))
+                .andExpect(status().isOk());
     }
 
     @Test

@@ -73,7 +73,11 @@ identity's sessions — logout-all, password reset or change, admin set-password
 | `auth:revoked-before:<identityId>` | epoch millis | access-token lifetime + 5 min | the IAM only |
 
 Reject an access token when `iat * 1000 <= value` for its `sub`. A missing key
-means no cutoff. The IAM applies the same rule to its own endpoints.
+means no cutoff. The IAM applies the same rule to its own endpoints. Because
+`iat` has one-second precision, the IAM writes the last millisecond of the
+second *before* the revoke, so a sign-in completed right after it is not
+rejected; a token minted earlier in that same second is still caught on the
+IAM's own endpoints by the session blacklist.
 
 ```java
 boolean revoked(Claims c) {

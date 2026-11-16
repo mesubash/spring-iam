@@ -28,7 +28,12 @@ public class RevocationService {
 
     /** Invalidate every access token issued to this identity up to now. */
     public void revokeAllBefore(UUID identityId) {
-        redis.opsForValue().set(KEY_PREFIX + identityId, Long.toString(System.currentTimeMillis()),
+        // JWT iat has one-second precision, so the cutoff is the last millisecond of the previous
+        // second: a login completed in the same second as this revoke must not get a token that
+        // is dead on arrival. A token minted earlier in that same second survives here, but the
+        // revoke also blacklists every session id, which the IAM checks on its own endpoints.
+        long cutoff = (System.currentTimeMillis() / 1000L) * 1000L - 1;
+        redis.opsForValue().set(KEY_PREFIX + identityId, Long.toString(cutoff),
                 Duration.ofMillis(jwtConfig.getExpiration()).plus(CLOCK_SKEW));
     }
 
