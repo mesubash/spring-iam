@@ -2,10 +2,16 @@ import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-route
 import { useAuth } from "@/context/AuthContext";
 import { useAuthz } from "@/context/AuthzContext";
 import { cn } from "@/lib/utils";
-import { LogOut } from "lucide-react";
+import { ChevronDown, LogOut } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useState } from "react";
 
-type NavItem = { to: string; label: string; permission?: string; featureFlag?: keyof import("@/api/types").FeatureFlags };
+type NavItem = {
+  to: string;
+  label: string;
+  permission?: string;
+  featureFlag?: keyof import("@/api/types").FeatureFlags;
+};
 
 const meItems: NavItem[] = [
   { to: "/me/access", label: "My Access" },
@@ -21,14 +27,23 @@ const adminItems: NavItem[] = [
   { to: "/admin/assignments", label: "Assignments", permission: "platform.assignment.read" },
   { to: "/admin/deny-rules", label: "Deny Rules", permission: "platform.deny_rule.read" },
   { to: "/admin/policies", label: "Policies", permission: "platform.policy.read" },
-  { to: "/admin/context-attributes", label: "Context Attributes", permission: "platform.policy.read" },
+  {
+    to: "/admin/context-attributes",
+    label: "Context Attributes",
+    permission: "platform.policy.read",
+  },
   {
     to: "/admin/resource-grants",
     label: "Resource Grants",
     featureFlag: "resource-grants",
     permission: "platform.resource_grant.read",
   },
-  { to: "/admin/groups", label: "Groups", featureFlag: "groups", permission: "platform.group.read" },
+  {
+    to: "/admin/groups",
+    label: "Groups",
+    featureFlag: "groups",
+    permission: "platform.group.read",
+  },
   {
     to: "/admin/services",
     label: "Services",
@@ -133,30 +148,33 @@ function NavGroup({
   pathname: string;
 }) {
   return (
-    <div className="mb-4">
-      <div className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+    <Collapsible defaultOpen className="group/collapsible mb-4">
+      <CollapsibleTrigger className="flex w-full cursor-pointer items-center rounded px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-[var(--muted-foreground)] hover:text-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--ring)]">
         {label}
-      </div>
-      <ul>
-        {items.map((item) => {
-          const active = pathname === item.to || pathname.startsWith(item.to + "/");
-          return (
-            <li key={item.to}>
-              <Link
-                to={item.to}
-                className={cn(
-                  "block rounded px-2 py-1.5 text-[13px] focus:outline-none focus:ring-1 focus:ring-[var(--ring)]",
-                  active
-                    ? "bg-[var(--primary-subtle)] font-medium text-[var(--primary)]"
-                    : "text-[var(--foreground)] hover:bg-[var(--background)]",
-                )}
-              >
-                {item.label}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+        <ChevronDown className="ml-auto h-3.5 w-3.5 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <ul>
+          {items.map((item) => {
+            const active = pathname === item.to || pathname.startsWith(item.to + "/");
+            return (
+              <li key={item.to}>
+                <Link
+                  to={item.to}
+                  className={cn(
+                    "block rounded px-2 py-1.5 text-[13px] focus:outline-none focus:ring-1 focus:ring-[var(--ring)]",
+                    active
+                      ? "bg-[var(--primary-subtle)] font-medium text-[var(--primary)]"
+                      : "text-[var(--foreground)] hover:bg-[var(--background)]",
+                  )}
+                >
+                  {item.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
