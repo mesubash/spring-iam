@@ -3,6 +3,7 @@ package io.github.mesubash.iam.config;
 import io.github.mesubash.iam.util.ClientIpResolver;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +15,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -22,6 +27,11 @@ import java.util.concurrent.TimeUnit;
 public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final String RATE_LIMIT_PREFIX = "rate_limit:";
+
+    // Refresh is frequent and self-protecting (opaque 256-bit token, rotation, reuse detection),
+    // so it gets a looser cap keyed per session: a per-IP cap would be shared by everyone behind
+    // one NAT and burn out on multi-tab clients.
+    static final String REFRESH_PATH = "/api/auth/refresh";
 
     private static final Set<String> RATE_LIMITED_PATHS = Set.of(
             "/api/auth/login",
@@ -33,6 +43,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             "/api/auth/mfa/disable",
             "/api/auth/mfa/recovery-codes",
             "/api/auth/register",
+            REFRESH_PATH,
             "/api/auth/forgot-password",
             "/api/auth/reset-password",
             "/api/auth/resend-verification",
@@ -43,6 +54,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     @Value("${iam.rate-limit.max-requests:10}")
     private int maxRequests;
+
+    @Value("${iam.rate-limit.refresh-max-requests:60}")
+    private int refreshMaxRequests;
+
+    @Value("${app.jwt.refresh-token-cookie-name:__Host-Refresh}")
+    private String refreshCookieName;
 
     @Value("${iam.rate-limit.window-seconds:60}")
     private int windowSeconds;
@@ -65,8 +82,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
-        String clientIp = ClientIpResolver.resolve(request);
-        String key = RATE_LIMIT_PREFIX + path + ":" + clientIp;
+        boolean refresh = REFRESH_PATH.equals(path);
+        int limit = refresh ? refreshMaxRequests : maxRequests;
+        String key = RATE_LIMIT_PREFIX + path + ":" + (refresh ? refreshKey(request) : ClientIpResolver.resolve(request));
 
         try {
             Long count = redisTemplate.opsForValue().increment(key);
@@ -74,12 +92,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 redisTemplate.expire(key, windowSeconds, TimeUnit.SECONDS);
             }
 
-            if (count != null && count > maxRequests) {
+            if (count != null && count > limit) {
                 Long ttl = redisTemplate.getExpire(key, TimeUnit.SECONDS);
                 response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
                 response.setContentType("application/json");
                 response.setHeader("Retry-After", String.valueOf(ttl != null ? ttl : windowSeconds));
-                response.setHeader("X-RateLimit-Limit", String.valueOf(maxRequests));
+                response.setHeader("X-RateLimit-Limit", String.valueOf(limit));
                 response.setHeader("X-RateLimit-Remaining", "0");
                 response.setHeader("X-RateLimit-Retry-After-Seconds", String.valueOf(ttl != null ? ttl : windowSeconds));
                 response.getWriter().write(
@@ -87,8 +105,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 return;
             }
 
-            long remaining = maxRequests - (count != null ? count : 0);
-            response.setHeader("X-RateLimit-Limit", String.valueOf(maxRequests));
+            long remaining = limit - (count != null ? count : 0);
+            response.setHeader("X-RateLimit-Limit", String.valueOf(limit));
             response.setHeader("X-RateLimit-Remaining", String.valueOf(Math.max(0, remaining)));
         } catch (RedisConnectionFailureException ex) {
             if ("closed".equalsIgnoreCase(failMode)) {
@@ -105,4 +123,25 @@ public class RateLimitFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    // Per session: the refresh cookie, hashed so the token never becomes a Redis key.
+    // Cookieless calls fall back to the IP so they stay bounded.
+    private String refreshKey(HttpServletRequest request) {
+        if (request.getCookies() != null) {
+            for (Cookie cookie : request.getCookies()) {
+                if (refreshCookieName.equals(cookie.getName()) && !cookie.getValue().isEmpty()) {
+                    return "sess:" + sha256(cookie.getValue());
+                }
+            }
+        }
+        return ClientIpResolver.resolve(request);
+    }
+
+    private static String sha256(String value) {
+        try {
+            return HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
+    }
 }

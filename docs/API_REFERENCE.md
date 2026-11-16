@@ -58,7 +58,7 @@ When a flag is off, its endpoints throw `ResourceNotFoundException` → **HTTP 4
 
 ### Rate limiting
 
-The `RateLimitFilter` runs first and may return **429** with `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Retry-After-Seconds`, `Retry-After` headers.
+The `RateLimitFilter` runs first and may return **429** with `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Retry-After-Seconds`, `Retry-After` headers. Auth endpoints that take credentials or codes are capped per client IP (`iam.rate-limit.max-requests`). `/api/auth/refresh` is capped per session — keyed on the refresh cookie, falling back to the IP without one — at the looser `iam.rate-limit.refresh-max-requests`, so users sharing one NAT don't exhaust each other's budget.
 
 ---
 

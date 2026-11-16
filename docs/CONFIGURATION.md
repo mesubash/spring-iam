@@ -144,6 +144,7 @@ SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_SECRET=...
 | `IAM_MFA_REQUIRED_ROLES` | *(empty)* | comma-separated roles that must use MFA (holders without it are sent to enrollment at login) |
 | `IAM_PASSWORD_BREACH_CHECK` | `false` | reject passwords listed by Have I Been Pwned on register, reset, change, verify-and-setup and admin set (not generated ones). k-anonymity: only a 5-char SHA-1 prefix is sent. Needs outbound HTTPS to `api.pwnedpasswords.com`; fail-open (3 s timeout) |
 | `iam.rate-limit.max-requests` | `10` | requests per IP per auth endpoint per window |
+| `iam.rate-limit.refresh-max-requests` | `60` | `/api/auth/refresh` requests per session (refresh cookie) per window; cookieless calls count per IP |
 | `iam.rate-limit.window-seconds` | `60` | rate-limit window |
 | `iam.rate-limit.fail-mode` (`IAM_RATELIMIT_FAIL_MODE`) | `closed` | `closed` (reject when Redis is down) \| `open` (allow) |
 | `iam.integrity.fail-on-error` | `false` | refuse startup on broken invariants |

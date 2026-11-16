@@ -142,6 +142,7 @@ iam:
 
   rate-limit:
     max-requests: 10        # per IP per endpoint per window
+    refresh-max-requests: 60  # /refresh: per session (refresh cookie), not per IP
     window-seconds: 60      # sliding window
     fail-mode: ${IAM_RATELIMIT_FAIL_MODE:closed}   # closed (reject when Redis down) | open (availability)
 
