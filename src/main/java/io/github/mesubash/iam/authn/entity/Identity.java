@@ -44,6 +44,10 @@ public class Identity {
     @Column(name = "account_locked_until")
     private OffsetDateTime accountLockedUntil;
 
+    /** When the most recent failed login happened; drives the sliding lockout window. */
+    @Column(name = "last_failed_login_at")
+    private OffsetDateTime lastFailedLoginAt;
+
     @Column(name = "last_login_at")
     private OffsetDateTime lastLoginAt;
 

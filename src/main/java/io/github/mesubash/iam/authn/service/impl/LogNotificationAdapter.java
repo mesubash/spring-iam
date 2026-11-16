@@ -29,6 +29,11 @@ public class LogNotificationAdapter {
             public void sendReactivation(String email, String token) {
                 log.warn("DEV notification adapter — reactivation for {}: token={}", email, token);
             }
+
+            @Override
+            public void sendAccountLocked(String email) {
+                log.warn("DEV notification adapter — account locked for {}", email);
+            }
         };
     }
 }

@@ -126,6 +126,7 @@ iam:
     lockout:
       max-attempts: 5
       lockout-duration-minutes: 30
+      window-minutes: 15       # only failures within this window count toward a lock
 
   rate-limit:
     max-requests: 10        # per IP per endpoint per window
