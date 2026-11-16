@@ -52,6 +52,7 @@ const adminItems: NavItem[] = [
   },
   { to: "/admin/permissions", label: "Permissions", permission: "platform.permission.read" },
   { to: "/admin/audit", label: "Audit", permission: "platform.audit.read" },
+  { to: "/admin/security-audit", label: "Security Audit", permission: "platform.audit.read" },
   { to: "/admin/explain", label: "Explain", permission: "platform.audit.read" },
 ];
 

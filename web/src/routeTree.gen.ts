@@ -19,6 +19,7 @@ import { Route as AuthenticatedMeSecurityRouteImport } from './routes/_authentic
 import { Route as AuthenticatedMeAccessRouteImport } from './routes/_authenticated.me.access'
 import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated.admin.users'
 import { Route as AuthenticatedAdminServicesRouteImport } from './routes/_authenticated.admin.services'
+import { Route as AuthenticatedAdminSecurityAuditRouteImport } from './routes/_authenticated.admin.security-audit'
 import { Route as AuthenticatedAdminScopesRouteImport } from './routes/_authenticated.admin.scopes'
 import { Route as AuthenticatedAdminRolesRouteImport } from './routes/_authenticated.admin.roles'
 import { Route as AuthenticatedAdminResourceGrantsRouteImport } from './routes/_authenticated.admin.resource-grants'
@@ -82,6 +83,12 @@ const AuthenticatedAdminServicesRoute =
   AuthenticatedAdminServicesRouteImport.update({
     id: '/admin/services',
     path: '/admin/services',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAdminSecurityAuditRoute =
+  AuthenticatedAdminSecurityAuditRouteImport.update({
+    id: '/admin/security-audit',
+    path: '/admin/security-audit',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedAdminScopesRoute =
@@ -184,6 +191,7 @@ export interface FileRoutesByFullPath {
   '/admin/resource-grants': typeof AuthenticatedAdminResourceGrantsRoute
   '/admin/roles': typeof AuthenticatedAdminRolesRoute
   '/admin/scopes': typeof AuthenticatedAdminScopesRoute
+  '/admin/security-audit': typeof AuthenticatedAdminSecurityAuditRoute
   '/admin/services': typeof AuthenticatedAdminServicesRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/me/access': typeof AuthenticatedMeAccessRoute
@@ -209,6 +217,7 @@ export interface FileRoutesByTo {
   '/admin/resource-grants': typeof AuthenticatedAdminResourceGrantsRoute
   '/admin/roles': typeof AuthenticatedAdminRolesRoute
   '/admin/scopes': typeof AuthenticatedAdminScopesRoute
+  '/admin/security-audit': typeof AuthenticatedAdminSecurityAuditRoute
   '/admin/services': typeof AuthenticatedAdminServicesRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/me/access': typeof AuthenticatedMeAccessRoute
@@ -236,6 +245,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/resource-grants': typeof AuthenticatedAdminResourceGrantsRoute
   '/_authenticated/admin/roles': typeof AuthenticatedAdminRolesRoute
   '/_authenticated/admin/scopes': typeof AuthenticatedAdminScopesRoute
+  '/_authenticated/admin/security-audit': typeof AuthenticatedAdminSecurityAuditRoute
   '/_authenticated/admin/services': typeof AuthenticatedAdminServicesRoute
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
   '/_authenticated/me/access': typeof AuthenticatedMeAccessRoute
@@ -263,6 +273,7 @@ export interface FileRouteTypes {
     | '/admin/resource-grants'
     | '/admin/roles'
     | '/admin/scopes'
+    | '/admin/security-audit'
     | '/admin/services'
     | '/admin/users'
     | '/me/access'
@@ -288,6 +299,7 @@ export interface FileRouteTypes {
     | '/admin/resource-grants'
     | '/admin/roles'
     | '/admin/scopes'
+    | '/admin/security-audit'
     | '/admin/services'
     | '/admin/users'
     | '/me/access'
@@ -314,6 +326,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/resource-grants'
     | '/_authenticated/admin/roles'
     | '/_authenticated/admin/scopes'
+    | '/_authenticated/admin/security-audit'
     | '/_authenticated/admin/services'
     | '/_authenticated/admin/users'
     | '/_authenticated/me/access'
@@ -401,6 +414,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/services'
       fullPath: '/admin/services'
       preLoaderRoute: typeof AuthenticatedAdminServicesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/admin/security-audit': {
+      id: '/_authenticated/admin/security-audit'
+      path: '/admin/security-audit'
+      fullPath: '/admin/security-audit'
+      preLoaderRoute: typeof AuthenticatedAdminSecurityAuditRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/admin/scopes': {
@@ -517,6 +537,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedAdminResourceGrantsRoute: typeof AuthenticatedAdminResourceGrantsRoute
   AuthenticatedAdminRolesRoute: typeof AuthenticatedAdminRolesRoute
   AuthenticatedAdminScopesRoute: typeof AuthenticatedAdminScopesRoute
+  AuthenticatedAdminSecurityAuditRoute: typeof AuthenticatedAdminSecurityAuditRoute
   AuthenticatedAdminServicesRoute: typeof AuthenticatedAdminServicesRoute
   AuthenticatedAdminUsersRoute: typeof AuthenticatedAdminUsersRoute
   AuthenticatedMeAccessRoute: typeof AuthenticatedMeAccessRoute
@@ -540,6 +561,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAdminResourceGrantsRoute: AuthenticatedAdminResourceGrantsRoute,
   AuthenticatedAdminRolesRoute: AuthenticatedAdminRolesRoute,
   AuthenticatedAdminScopesRoute: AuthenticatedAdminScopesRoute,
+  AuthenticatedAdminSecurityAuditRoute: AuthenticatedAdminSecurityAuditRoute,
   AuthenticatedAdminServicesRoute: AuthenticatedAdminServicesRoute,
   AuthenticatedAdminUsersRoute: AuthenticatedAdminUsersRoute,
   AuthenticatedMeAccessRoute: AuthenticatedMeAccessRoute,

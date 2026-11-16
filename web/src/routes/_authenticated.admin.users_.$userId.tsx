@@ -288,7 +288,16 @@ function SecurityEventsSection({ userId }: { userId: string }) {
   const events = q.data?.content ?? [];
   return (
     <section className="rounded border border-[var(--border)] p-3">
-      <h3 className="text-sm font-semibold">Recent security events</h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold">Recent security events</h3>
+        <Link
+          to="/admin/security-audit"
+          search={{ identityId: userId }}
+          className="text-xs text-[var(--primary)] hover:underline"
+        >
+          View all
+        </Link>
+      </div>
       {q.isLoading ? (
         <p className="mt-2 text-xs text-[var(--muted-foreground)]">Loading…</p>
       ) : q.isError ? (
