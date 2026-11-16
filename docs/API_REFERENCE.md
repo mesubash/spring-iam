@@ -59,11 +59,12 @@ Controller: `AuthController` (envelope responses). Public endpoints per `Securit
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
 | POST | `/api/auth/register` | Public | Create an account; sends email verification (login blocked until verified). |
-| POST | `/api/auth/login` | Public | Authenticate; returns access token + sets refresh cookie. |
+| POST | `/api/auth/login` | Public | Authenticate; returns access token + sets refresh cookie, or an MFA step (see below). |
+| POST | `/api/auth/mfa/verify` | Public (needs a challenge) | Second login step: TOTP or recovery code → tokens. |
 | POST | `/api/auth/refresh` | Public (needs refresh cookie) | Rotate access token using the `__Host-Refresh` cookie. |
 | POST | `/api/auth/logout` | Bearer (authenticated) | Revoke current access token + clear refresh cookie. |
 | POST | `/api/auth/logout-all` | Bearer (authenticated) | Revoke all refresh tokens/sessions for the user. |
-| POST | `/api/auth/oauth/exchange` | Public | Exchange the one-time OAuth redirect `code` for tokens. |
+| POST | `/api/auth/oauth/exchange` | Public | Exchange the one-time OAuth redirect `code` for tokens, or an MFA step (same as `login`). |
 | POST | `/api/auth/verify-email` | Public | Verify email via `token`. |
 | POST | `/api/auth/verify-email-and-setup-password` | Public | Verify an invited user's email and set the initial password (one token). |
 | POST | `/api/auth/resend-verification` | Public | Resend the verification email. |
@@ -74,6 +75,33 @@ Controller: `AuthController` (envelope responses). Public endpoints per `Securit
 | POST | `/api/auth/verify-email-change` | Public | Confirm the email change via `token`. |
 | POST | `/api/auth/request-reactivation` | Public | Request reactivation email for a deactivated account. |
 | POST | `/api/auth/verify-reactivation` | Public | Reactivate an account via `token`. |
+
+### MFA — `/api/auth/mfa/*` (`MfaController`)
+
+TOTP (RFC 6238, 6 digits, 30 s) plus ten single-use recovery codes.
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| POST | `/api/auth/mfa/setup` | Bearer **or** `enrollmentToken` | Start enrollment → `{ otpauthUri, secret }` (render the URI as a QR code). |
+| POST | `/api/auth/mfa/enable` | Bearer **or** `enrollmentToken` | Confirm with a code → `{ recoveryCodes: string[] }` (shown once). |
+| POST | `/api/auth/mfa/disable` | Bearer | Turn MFA off; body `{ code }` (TOTP or recovery code). |
+| POST | `/api/auth/mfa/recovery-codes` | Bearer | New recovery codes; body `{ code }` (TOTP only). |
+| DELETE | `/api/v1/identities/{id}/mfa` | SuperAdmin, SecurityAdmin | Admin reset for a lost device (204). A SuperAdmin target needs a SuperAdmin caller. |
+
+**Login with MFA.** `login` and `oauth/exchange` return one of three `data` shapes:
+
+```json
+{ "accessToken": "…", "tokenType": "Bearer", "expiresIn": 900 }      // signed in
+{ "status": "MFA_REQUIRED", "challenge": "…" }                         // → POST /mfa/verify
+{ "status": "MFA_ENROLLMENT_REQUIRED", "enrollmentToken": "…" }       // → /mfa/setup + /mfa/enable
+```
+
+- `mfa/verify` body: `{ "challenge": string, "code": string }`. The challenge lasts 5 minutes and
+  allows 5 wrong codes; the 401 message says how many attempts are left.
+- `MFA_ENROLLMENT_REQUIRED` is returned to holders of a role listed in `iam.mfa.required-roles`
+  who have not enrolled. After `enable`, sign in again.
+- Access tokens carry `amr` (RFC 8176): `["pwd"]`, the OAuth provider (e.g. `["google"]`), or
+  `[<first factor>, "otp", "mfa"]` after a second factor. Refreshed tokens keep it.
 
 > Note: there is **no `/api/auth/me`** endpoint in the code. Login/refresh responses carry the identity summary; use `/api/authz/me/*` (§6) for scopes/permissions.
 

@@ -125,6 +125,8 @@ SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_SECRET=...
 | `iam.account.lockout.max-attempts` | `5` | failed logins before lockout |
 | `iam.account.lockout.lockout-duration-minutes` | `30` | lockout duration |
 | `iam.account.lockout.window-minutes` | `15` | sliding window: only failures this recent count toward a lockout |
+| `IAM_MFA_ISSUER` | `spring-iam` | name shown in authenticator apps |
+| `IAM_MFA_REQUIRED_ROLES` | *(empty)* | comma-separated roles that must use MFA (holders without it are sent to enrollment at login) |
 | `iam.rate-limit.max-requests` | `10` | requests per IP per auth endpoint per window |
 | `iam.rate-limit.window-seconds` | `60` | rate-limit window |
 | `iam.rate-limit.fail-mode` (`IAM_RATELIMIT_FAIL_MODE`) | `closed` | `closed` (reject when Redis is down) \| `open` (allow) |
@@ -140,6 +142,7 @@ SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_SECRET=...
 - [ ] Set `IAM_KEY_ENCRYPTION_KEY` (encrypts signing keys at rest)
 - [ ] Set `IAM_COOKIE_KEY` (independent from any JWT secret)
 - [ ] Set `APP_JWT_SECRET` when running more than one instance
+- [ ] Consider `IAM_MFA_REQUIRED_ROLES=SuperAdmin`
 - [ ] Exactly one trusted reverse proxy in front: the client IP is the rightmost `X-Forwarded-For` hop
 - [ ] Set a strong `IAM_INTERNAL_API_KEY` (or enable the service registry)
 - [ ] `APP_COOKIE_SECURE=true` (default) behind HTTPS

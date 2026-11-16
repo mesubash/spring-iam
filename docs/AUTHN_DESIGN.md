@@ -50,7 +50,7 @@ It is a **central token issuer**: it verifies credentials, mints short-lived asy
 | User profile data (name, phone, avatar) | consuming services (§4.6) |
 | What the user may DO | AuthZ module (`AUTHZ_DESIGN.md`) |
 | Sending emails | `NotificationPort` — deployment plugs its own channel (§12) |
-| MFA enrollment/verification | deferred, seam prepared — F10 |
+| MFA enrollment/verification | TOTP + recovery codes (0.3.0); WebAuthn deferred |
 | Being a certified OIDC Provider for third parties | boundary — §15 |
 
 ---
@@ -282,7 +282,7 @@ Dropped with the table: `IdentityProfile` entity, repository, `ProfileController
   "sid": "S1-uuid",                      // session id — audit correlation + session-level revoke
   "typ": "access",
   "email_verified": true, "status": "ACTIVE",
-  "amr": ["pwd"],                        // auth methods: pwd | google | apple | … (+ "otp" when F10 lands)
+  "amr": ["pwd"],                        // auth methods: pwd | google | … ; + "otp","mfa" after a second factor
   // claims-mode additions:
   "roles": ["OrgAdmin"],                 // mode: roles (default)
   "perms": ["invoice.invoice.read", …],  // mode: permissions
@@ -620,7 +620,7 @@ This shipped after the AuthZ schema flexibility work; the two modules are indepe
 | Boundary | Status | Pattern |
 |---|---|---|
 | **Not a certified OIDC Provider** — IAM issues tokens for *your* fleet; it does not implement the full OIDC/OAuth2 AS spec (discovery doc, all grant types, consent screens) for arbitrary third-party clients | deliberate — full OIDC AS is a product in itself (Keycloak/Ory exist) | third-party federation need ⇒ front IAM with a real OIDC AS, or future enhancement if demand is real |
-| **Native MFA** | deferred — F10; seam ready (`mfa_enabled`, `amr` claim, L3 `require_mfa` condition) | upstream IdP asserts MFA via OAuth `amr` meanwhile |
+| **Native MFA** | TOTP shipped in 0.3.0 (`amr` claim carries `otp`/`mfa`); WebAuthn deferred | callers feed `amr` into the `require_mfa` context |
 | **SCIM / directory sync** | not planned until an enterprise adopter needs AD/Okta user provisioning | manifest-style sync could extend to identities; future-doc entry when triggered |
 | **Passwordless (magic links / passkeys)** | not in v1 | magic-link ≈ one-time-token flow already 80 % built; passkeys ride F10's WebAuthn work |
 | **Refresh-token client binding (DPoP / mTLS)** | not in v1 — a refresh token stolen *from the device keystore itself* is usable elsewhere until reuse detection fires | rotation + reuse detection bounds the damage window; DPoP is the standards-track answer if a deployment's threat model requires possession proof — future-doc candidate |

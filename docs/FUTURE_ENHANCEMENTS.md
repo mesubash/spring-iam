@@ -21,7 +21,7 @@ Before adding anything to the core design, check it against the trigger column. 
 | F7 | Multi-dimensional scoping | XL | A deployment needs matrix-org enforcement that metadata+policies can't express |
 | F8 | Resource hierarchy inheritance (Zanzibar-lite) | XL | Per-resource sharing at >10⁶ grants or nested-container semantics as core product |
 | F9 | Access reviews / attestation campaigns | M | Compliance regime requiring periodic re-certification (SOX/ISO 27001) |
-| F10 | Native MFA (TOTP/WebAuthn) in AuthN | M | Deployments without an upstream IdP that can assert MFA |
+| F10 | ~~Native MFA (TOTP)~~ shipped in 0.3.0; WebAuthn remains | M | Phishing-resistant second factor needed |
 | F11 | LLM policy assistant (NL → draft policy) | S | Policy Studio shipped and template/builder still leaves authoring friction |
 
 ---

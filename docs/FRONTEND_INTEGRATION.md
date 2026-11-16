@@ -88,6 +88,8 @@ user's email on reload.
 
 ```
 login    → POST /api/auth/login → access token in memory + refresh cookie set → GET /me/bootstrap
+           (or data.status = MFA_REQUIRED → POST /api/auth/mfa/verify {challenge, code} → same as above;
+            MFA_ENROLLMENT_REQUIRED → /api/auth/mfa/setup + /enable with the enrollmentToken, then log in again)
 any 401  → POST /api/auth/refresh (cookie) → new access token → retry once
 on reload→ POST /api/auth/refresh (cookie) → token → GET /me/bootstrap → session restored
 ```

@@ -15,6 +15,8 @@ truth for the answer.
 **Authentication** — a central token issuer, not a gatekeeper.
 - Password + OAuth2 (Google) login, email verification, account lockout,
   password/email change, reactivation.
+- TOTP multi-factor authentication with recovery codes, required per role if
+  you want, applied to social login too; tokens carry an `amr` claim.
 - **RS256** access tokens (15 min) verified locally by consumers via
   **JWKS** — no shared secrets. Opaque rotating refresh tokens with per-device
   sessions and theft detection.
