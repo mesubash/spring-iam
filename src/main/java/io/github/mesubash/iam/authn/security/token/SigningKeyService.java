@@ -3,11 +3,16 @@ package io.github.mesubash.iam.authn.security.token;
 import io.github.mesubash.iam.authn.entity.SigningKey;
 import io.github.mesubash.iam.authn.repository.SigningKeyRepository;
 import jakarta.annotation.PostConstruct;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.DependsOn;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
@@ -43,18 +48,36 @@ public class SigningKeyService {
 
     private static final Duration ROTATED_KEY_GRACE = Duration.ofHours(1); // >= access TTL
 
+    // Arbitrary app-wide advisory-lock ids (Postgres) for key bootstrap / rotation.
+    private static final long BOOTSTRAP_LOCK = 918273645L;
+    private static final long ROTATION_LOCK = 918273646L;
+
     private final SigningKeyRepository repository;
+    private final TransactionTemplate tx;
+    private final int rotationDays;
+
+    @PersistenceContext
+    private EntityManager entityManager;
     private final SecretKeySpec keyEncryptionKey; // null = store private key unencrypted (dev)
     private final SecureRandom secureRandom = new SecureRandom();
 
+    // Re-read periodically so a rotation done by another replica is picked up well inside the
+    // rotated key's grace window (otherwise this replica would keep signing with a dead key).
+    private static final Duration ACTIVE_KEY_REFRESH = Duration.ofSeconds(60);
+
     private volatile ActiveKey activeKey;
+    private volatile Instant activeKeyLoadedAt = Instant.EPOCH;
     private final Map<String, RSAPublicKey> publicKeyCache = new ConcurrentHashMap<>();
 
     public record ActiveKey(String kid, PrivateKey privateKey) {}
 
     public SigningKeyService(SigningKeyRepository repository,
-                             @Value("${iam.authn.keys.encryption-key:}") String encryptionKey) {
+                             PlatformTransactionManager transactionManager,
+                             @Value("${iam.authn.keys.encryption-key:}") String encryptionKey,
+                             @Value("${iam.authn.keys.rotation-days:90}") int rotationDays) {
         this.repository = repository;
+        this.tx = new TransactionTemplate(transactionManager);
+        this.rotationDays = rotationDays;
         if (encryptionKey == null || encryptionKey.isBlank()) {
             this.keyEncryptionKey = null;
         } else {
@@ -68,27 +91,72 @@ public class SigningKeyService {
         }
     }
 
+    /**
+     * Creates the first key on an empty table. Replicas booting together serialize on a
+     * transaction-scoped advisory lock so N replicas produce ONE key, not N. (An explicit
+     * TransactionTemplate is needed: @Transactional does not apply to @PostConstruct, and the
+     * xact lock would be released as soon as the statement's own transaction ended.)
+     */
     @PostConstruct
-    @Transactional
     public void bootstrap() {
-        if (repository.count() == 0) {
-            SigningKey key = generateKey();
-            repository.save(key);
-            log.warn("No signing keys found — generated bootstrap RS256 key pair (kid={}). "
-                    + "Private key stored {}.", key.getKid(),
-                    keyEncryptionKey != null ? "encrypted" : "UNENCRYPTED — set IAM_KEY_ENCRYPTION_KEY for production");
+        tx.executeWithoutResult(status -> {
+            entityManager.createNativeQuery("SELECT pg_advisory_xact_lock(" + BOOTSTRAP_LOCK + ")").getSingleResult();
+            if (repository.count() == 0) {
+                SigningKey key = generateKey();
+                repository.save(key);
+                log.warn("No signing keys found — generated bootstrap RS256 key pair (kid={}). "
+                        + "Private key stored {}.", key.getKid(),
+                        keyEncryptionKey != null ? "encrypted" : "UNENCRYPTED — set IAM_KEY_ENCRYPTION_KEY for production");
+            }
+        });
+    }
+
+    /**
+     * Rotates the active key once it is older than {@code iam.authn.keys.rotation-days} (0 = off).
+     * Non-blocking advisory lock: if another replica is rotating, this run is skipped. The rotated
+     * key keeps verifying for the grace window, so in-flight tokens stay valid.
+     */
+    @Scheduled(cron = "${iam.authn.keys.rotation-cron:0 20 3 * * *}")
+    public void rotateIfDue() {
+        if (rotationDays <= 0) {
+            return;
+        }
+        try {
+            tx.executeWithoutResult(status -> {
+                Boolean got = (Boolean) entityManager
+                        .createNativeQuery("SELECT pg_try_advisory_xact_lock(" + ROTATION_LOCK + ")")
+                        .getSingleResult();
+                if (!Boolean.TRUE.equals(got)) {
+                    return;
+                }
+                repository.findByStatus("ACTIVE").ifPresent(active -> {
+                    Instant cutoff = Instant.now().minus(Duration.ofDays(rotationDays));
+                    if (active.getCreatedAt() != null && active.getCreatedAt().isBefore(cutoff)) {
+                        log.info("Signing key {} older than {} days — rotating", active.getKid(), rotationDays);
+                        rotate();
+                    }
+                });
+            });
+        } catch (Exception e) {
+            log.error("Scheduled signing-key rotation check failed: {}", e.getMessage());
         }
     }
 
     public ActiveKey activeKey() {
         ActiveKey cached = activeKey;
-        if (cached != null) {
+        if (cached != null && activeKeyLoadedAt.plus(ACTIVE_KEY_REFRESH).isAfter(Instant.now())) {
             return cached;
         }
         SigningKey key = repository.findByStatus("ACTIVE")
                 .orElseThrow(() -> new IllegalStateException("No ACTIVE signing key"));
+        if (cached != null && cached.kid().equals(key.getKid())) {
+            activeKeyLoadedAt = Instant.now();
+            return cached;
+        }
         ActiveKey loaded = new ActiveKey(key.getKid(), decodePrivate(decryptIfNeeded(key.getPrivateKey())));
+        publicKeyCache.clear();   // another replica rotated: drop cached keys so grace expiry applies
         activeKey = loaded;
+        activeKeyLoadedAt = Instant.now();
         return loaded;
     }
 
