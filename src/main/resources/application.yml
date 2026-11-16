@@ -134,6 +134,12 @@ iam:
     # login instead of getting a session. Recommended: SuperAdmin.
     required-roles: ${IAM_MFA_REQUIRED_ROLES:}
 
+  password:
+    breach-check:
+      # Reject passwords listed by Have I Been Pwned (k-anonymity: only a 5-char SHA-1 prefix
+      # is sent). Needs outbound HTTPS to api.pwnedpasswords.com; fail-open if unreachable.
+      enabled: ${IAM_PASSWORD_BREACH_CHECK:false}
+
   rate-limit:
     max-requests: 10        # per IP per endpoint per window
     window-seconds: 60      # sliding window

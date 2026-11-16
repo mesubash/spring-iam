@@ -11,6 +11,7 @@ import io.github.mesubash.iam.authn.entity.enums.CredentialType;
 import io.github.mesubash.iam.authn.entity.enums.SecurityEventType;
 import io.github.mesubash.iam.authn.repository.CredentialRepository;
 import io.github.mesubash.iam.authn.repository.IdentityRepository;
+import io.github.mesubash.iam.authn.security.PwnedPasswordService;
 import io.github.mesubash.iam.authn.security.UserPrincipal;
 import io.github.mesubash.iam.authn.security.token.SessionService;
 import io.github.mesubash.iam.authn.service.IdentityAdminService;
@@ -43,6 +44,7 @@ public class IdentityAdminServiceImpl implements IdentityAdminService {
     private final SecurityEventService securityEventService;
     private final io.github.mesubash.iam.shared.service.AuthzQueryService authzQueryService;
     private final io.github.mesubash.iam.authn.mfa.MfaService mfaService;
+    private final PwnedPasswordService pwnedPasswordService;
 
     @Override
     @Transactional
@@ -115,6 +117,9 @@ public class IdentityAdminServiceImpl implements IdentityAdminService {
 
         boolean generated = !StringUtils.hasText(request.getNewPassword());
         String password = generated ? PasswordUtil.generateSecureToken(12) : request.getNewPassword();
+        if (!generated) {
+            pwnedPasswordService.rejectIfBreached(password);
+        }
 
         Credential credential = credentialRepository
                 .findByIdentityIdAndCredentialType(identity.getId(), CredentialType.PASSWORD)

@@ -17,6 +17,7 @@ import io.github.mesubash.iam.authn.entity.enums.TokenType;
 import io.github.mesubash.iam.authn.repository.CredentialRepository;
 import io.github.mesubash.iam.authn.repository.IdentityRepository;
 import io.github.mesubash.iam.authn.security.JwtTokenProvider;
+import io.github.mesubash.iam.authn.security.PwnedPasswordService;
 import io.github.mesubash.iam.authn.security.TokenEncryptionUtil;
 import io.github.mesubash.iam.authn.security.UserPrincipal;
 import io.github.mesubash.iam.authn.security.oauth2.OAuth2AuthenticationSuccessHandler;
@@ -72,6 +73,7 @@ public class AuthServiceImpl implements AuthService {
     private final LoginAttemptService loginAttemptService;
     private final MfaService mfaService;
     private final MfaChallengeService mfaChallengeService;
+    private final PwnedPasswordService pwnedPasswordService;
 
     /** Roles that must use MFA: holders without it are sent to enrollment instead of a session. */
     @org.springframework.beans.factory.annotation.Value("${iam.mfa.required-roles:}")
@@ -405,11 +407,12 @@ public class AuthServiceImpl implements AuthService {
         securityEventService.logEvent(identity, SecurityEventType.EMAIL_CHANGED, null, null);
     }
 
-    private static void assertAcceptablePassword(String password) {
+    private void assertAcceptablePassword(String password) {
         String violation = PasswordUtil.policyViolation(password);
         if (violation != null) {
             throw new BadRequestException(violation);
         }
+        pwnedPasswordService.rejectIfBreached(password);
     }
 
     private static String sha256(String value) {
