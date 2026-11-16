@@ -26,7 +26,7 @@ public interface AuthService {
      * and the person has not yet agreed for that origin. Throws {@code UnauthorizedException}
      * when there is no live session or it does not meet the current MFA requirement.
      */
-    String beginSso(String refreshToken, String redirectOrigin, boolean askConsent);
+    String beginSso(String refreshToken, String redirectOrigin, boolean askConsent, String audience);
 
     /** Remember that the person agreed to SSO into the app at {@code redirectOrigin}. */
     void grantSsoConsent(java.util.UUID identityId, String redirectOrigin);

@@ -77,8 +77,10 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         secureRandom.nextBytes(codeBytes);
         String code = Base64.getUrlEncoder().withoutPadding().encodeToString(codeBytes);
 
+        String audience = authorizationRequestRepository.getAudienceFromCookie(request);
         redisTemplate.opsForValue().set(EXCHANGE_PREFIX + code,
-                tokenEncryptionUtil.encrypt(userPrincipal.getId() + " " + provider(authentication)), EXCHANGE_TTL);
+                tokenEncryptionUtil.encrypt(userPrincipal.getId() + " " + provider(authentication)
+                        + (audience == null ? "" : " " + audience)), EXCHANGE_TTL);
 
         cleanupOAuthState(request, response);
 

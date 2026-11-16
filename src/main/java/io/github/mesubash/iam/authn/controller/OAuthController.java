@@ -172,6 +172,11 @@ public class OAuthController {
                 + separator
                 + "redirectUri="
                 + URLEncoder.encode(redirectUri, StandardCharsets.UTF_8);
+        // Rides to the authorization-request repository, which keeps it in a signed cookie.
+        String audience = request.getParameter("audience");
+        if (StringUtils.hasText(audience)) {
+            authUrl += "&audience=" + URLEncoder.encode(audience, StandardCharsets.UTF_8);
+        }
 
         log.info("Redirecting to OAuth provider: {} with state: {}", provider, state);
 

@@ -18,4 +18,7 @@ public class LoginRequest {
     @NotBlank(message = "Password is required")
     private String password;
 
+    /** Optional token audience (one of app.jwt.allowed-audiences); omitted → the default. */
+    private String audience;
+
 }

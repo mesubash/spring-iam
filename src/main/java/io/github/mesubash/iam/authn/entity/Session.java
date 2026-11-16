@@ -61,6 +61,10 @@ public class Session {
     @Column(name = "amr", length = 100)
     private String amr;
 
+    /** Token audience this session was opened for; every access token it mints carries it. */
+    @Column(name = "audience", length = 200)
+    private String audience;
+
     public boolean isAlive() {
         return revokedAt == null && expiresAt.isAfter(Instant.now());
     }

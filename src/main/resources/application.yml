@@ -194,6 +194,10 @@ app:
     issuer: ${APP_JWT_ISSUER:spring-iam}
     # Optional aud claim. When set, tokens without it are rejected.
     audience: ${APP_JWT_AUDIENCE:}
+    # Per-app audiences (comma list, e.g. portal,billing). Clients pick one with `audience` on
+    # login / OAuth start / SSO authorize; the session keeps it across refreshes. Empty = off.
+    # Default when a client names none: `audience` above, else the first entry here.
+    allowed-audiences: ${APP_JWT_ALLOWED_AUDIENCES:}
     expiration: 900000                   # access token, 15 minutes
     refresh-expiration: 604800000        # session lifetime, 7 days
     claims-mode: ${APP_JWT_CLAIMS_MODE:roles}   # minimal | roles | permissions

@@ -31,12 +31,17 @@ public class MfaChallengeService {
 
     private final StringRedisTemplate redis;
 
-    /** Identity awaiting a second factor, and the first factor it passed (amr value). */
-    public record Pending(UUID identityId, String firstFactor) {}
+    /**
+     * Identity awaiting a second factor, the first factor it passed (amr value), and the token
+     * audience the login asked for (null = default), so the session opens for the right app.
+     */
+    public record Pending(UUID identityId, String firstFactor, String audience) {}
 
-    public String issueChallenge(UUID identityId, String firstFactor) {
+    public String issueChallenge(UUID identityId, String firstFactor, String audience) {
         String token = token();
-        redis.opsForValue().set(CHALLENGE + token, identityId + " " + firstFactor, CHALLENGE_TTL);
+        // "<identityId> <firstFactor>[ <audience>]": audience last, so the split keeps it whole.
+        redis.opsForValue().set(CHALLENGE + token,
+                identityId + " " + firstFactor + (audience == null ? "" : " " + audience), CHALLENGE_TTL);
         return token;
     }
 
@@ -55,8 +60,9 @@ public class MfaChallengeService {
         if (v == null) {
             return Optional.empty();
         }
-        String[] parts = v.split(" ", 2);
-        return Optional.of(new Pending(UUID.fromString(parts[0]), parts.length > 1 ? parts[1] : "pwd"));
+        String[] parts = v.split(" ", 3);
+        return Optional.of(new Pending(UUID.fromString(parts[0]), parts.length > 1 ? parts[1] : "pwd",
+                parts.length > 2 ? parts[2] : null));
     }
 
     /** Burn the challenge. Call only after a successful verification. */

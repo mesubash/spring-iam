@@ -48,6 +48,12 @@ public class JwtTokenProvider {
      *            Resource servers and require_mfa conditions can read it from the token.
      */
     public String generateAccessToken(UserPrincipal principal, UUID sessionId, java.util.List<String> amr) {
+        return generateAccessToken(principal, sessionId, amr, null);
+    }
+
+    /** @param audience the session's audience; null → the configured default (or no aud at all) */
+    public String generateAccessToken(UserPrincipal principal, UUID sessionId, java.util.List<String> amr,
+                                      String audience) {
         SigningKeyService.ActiveKey key = signingKeyService.activeKey();
         Date now = new Date();
         String mode = jwtConfig.getClaimsMode() != null ? jwtConfig.getClaimsMode() : "roles";
@@ -65,8 +71,9 @@ public class JwtTokenProvider {
         if (amr != null && !amr.isEmpty()) {
             builder.claim("amr", amr);
         }
-        if (jwtConfig.getAudience() != null && !jwtConfig.getAudience().isBlank()) {
-            builder.audience().add(jwtConfig.getAudience()).and();
+        String aud = audience != null ? audience : jwtConfig.defaultAudience();
+        if (aud != null) {
+            builder.audience().add(aud).and();
         }
         if (!"minimal".equalsIgnoreCase(mode)) {
             builder.claim("roles", principal.getRoles());
@@ -100,9 +107,10 @@ public class JwtTokenProvider {
                 parser.requireIssuer(issuer);
             }
             Claims claims = parser.build().parseSignedClaims(token).getPayload();
-            String audience = jwtConfig.getAudience();
-            if (audience != null && !audience.isBlank()
-                    && (claims.getAudience() == null || !claims.getAudience().contains(audience))) {
+            // This IAM serves every audience it mints, so any accepted one is valid here.
+            java.util.Set<String> accepted = jwtConfig.acceptedAudiences();
+            if (!accepted.isEmpty()
+                    && (claims.getAudience() == null || claims.getAudience().stream().noneMatch(accepted::contains))) {
                 throw new InvalidTokenException("Token audience mismatch");
             }
             return claims;
@@ -119,6 +127,21 @@ public class JwtTokenProvider {
         } catch (IllegalArgumentException e) {
             throw new InvalidTokenException("JWT claims string is empty", e);
         }
+    }
+
+    /**
+     * The audience a client asked for, checked against the accepted list. Blank → the default.
+     * Anything else unknown is a 400, so a typo never silently yields a token for another app.
+     */
+    public String resolveAudience(String requested) {
+        if (requested == null || requested.isBlank()) {
+            return jwtConfig.defaultAudience();
+        }
+        String trimmed = requested.trim();
+        if (!jwtConfig.acceptedAudiences().contains(trimmed)) {
+            throw new io.github.mesubash.iam.shared.exception.BadRequestException("Unknown audience: " + trimmed);
+        }
+        return trimmed;
     }
 
     public boolean validateToken(String token) {

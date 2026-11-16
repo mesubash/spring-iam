@@ -87,6 +87,33 @@ class JwtTokenProviderTest {
     }
 
     @Test
+    void perAppAudiencesAreMintedAndAnyAllowedOneParses() {
+        String outsider = provider.generateAccessToken(principal(), UUID.randomUUID(), null, "elsewhere");
+        config.setAllowedAudiences(List.of("portal", "billing"));
+
+        assertThat(provider.parseToken(provider.generateAccessToken(principal(), UUID.randomUUID()))
+                .getAudience()).containsExactly("portal");                          // default = first allowed
+        assertThat(provider.parseToken(provider.generateAccessToken(principal(), UUID.randomUUID(), null, "billing"))
+                .getAudience()).containsExactly("billing");
+        assertThatThrownBy(() -> provider.parseToken(outsider)).isInstanceOf(InvalidTokenException.class);
+
+        assertThat(provider.resolveAudience(null)).isEqualTo("portal");
+        assertThat(provider.resolveAudience(" billing ")).isEqualTo("billing");
+        assertThatThrownBy(() -> provider.resolveAudience("elsewhere"))
+                .isInstanceOf(io.github.mesubash.iam.shared.exception.BadRequestException.class);
+    }
+
+    @Test
+    void featureOffKeepsTheSingleAudienceBehaviour() {
+        assertThat(provider.resolveAudience(null)).isNull();
+        assertThatThrownBy(() -> provider.resolveAudience("billing"))
+                .isInstanceOf(io.github.mesubash.iam.shared.exception.BadRequestException.class);
+        config.setAudience("billing");
+        assertThat(provider.resolveAudience(null)).isEqualTo("billing");
+        assertThat(provider.resolveAudience("billing")).isEqualTo("billing");
+    }
+
+    @Test
     void rejectsUnknownKid() {
         String token = provider.generateAccessToken(principal(), UUID.randomUUID());
         when(signingKeyService.publicKeyFor(anyString())).thenReturn(null);

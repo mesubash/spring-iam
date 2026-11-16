@@ -15,6 +15,29 @@ public class JwtConfig {
     private String audience;
 
     /**
+     * Audiences a client may ask for (login / OAuth start / SSO authorize). Empty = feature off:
+     * tokens carry {@link #audience} (or no aud) exactly as before.
+     */
+    private java.util.List<String> allowedAudiences = new java.util.ArrayList<>();
+
+    /** What a session gets when the client names no audience: the single audience, else the first allowed. */
+    public String defaultAudience() {
+        if (audience != null && !audience.isBlank()) {
+            return audience;
+        }
+        return allowedAudiences.isEmpty() ? null : allowedAudiences.get(0);
+    }
+
+    /** Every audience this IAM mints and therefore accepts: the allowed list plus the single audience. */
+    public java.util.Set<String> acceptedAudiences() {
+        java.util.Set<String> all = new java.util.LinkedHashSet<>(allowedAudiences);
+        if (audience != null && !audience.isBlank()) {
+            all.add(audience);
+        }
+        return all;
+    }
+
+    /**
      * Never returns a guessable default. When APP_JWT_SECRET is unset a random boot-time secret is
      * generated, so OAuth state cookies stay unforgeable (but only within this instance's lifetime).
      */

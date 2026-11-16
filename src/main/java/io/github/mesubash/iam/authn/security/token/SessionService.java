@@ -78,12 +78,16 @@ public class SessionService {
     public record RotationResult(Session session, String rawToken, boolean retried) {}
 
     public IssuedRefresh createSession(UUID identityId, String ipAddress, String userAgent) {
-        return createSession(identityId, ipAddress, userAgent, null);
+        return createSession(identityId, ipAddress, userAgent, null, null);
     }
 
-    /** @param amr authentication methods for the session; refreshed tokens carry them too */
+    /**
+     * @param amr      authentication methods for the session; refreshed tokens carry them too
+     * @param audience token audience for the session (null → the configured default at mint time)
+     */
     @Transactional
-    public IssuedRefresh createSession(UUID identityId, String ipAddress, String userAgent, List<String> amr) {
+    public IssuedRefresh createSession(UUID identityId, String ipAddress, String userAgent, List<String> amr,
+                                       String audience) {
         evictBeyondCap(identityId);
 
         Instant now = Instant.now();
@@ -91,6 +95,7 @@ public class SessionService {
                 .identityId(identityId)
                 .createdIp(ClientIpResolver.normalize(ipAddress))
                 .amr(amr == null || amr.isEmpty() ? null : String.join(",", amr))
+                .audience(audience)
                 .userAgent(userAgent)
                 .deviceLabel(deviceLabel(userAgent))
                 .createdAt(now)

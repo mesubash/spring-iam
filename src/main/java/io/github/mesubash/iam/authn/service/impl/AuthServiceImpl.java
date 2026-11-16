@@ -120,6 +120,8 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public LoginResult login(LoginRequest request, String ipAddress, String userAgent) {
         log.info("User attempting to login: {}", request.getEmail());
+        // Validated before the password check: a bad audience is a client bug, not a failed login.
+        String audience = jwtTokenProvider.resolveAudience(request.getAudience());
 
         // Check if account is locked before attempting auth (own tx)
         identityRepository.findByPrimaryEmail(request.getEmail())
@@ -143,21 +145,22 @@ public class AuthServiceImpl implements AuthService {
         }
 
         ensureAccountActive(identity);
-        return afterFirstFactor(identity, "pwd", ipAddress, userAgent);
+        return afterFirstFactor(identity, "pwd", audience, ipAddress, userAgent);
     }
 
     /**
      * The MFA gate, shared by password login and the OAuth code exchange so neither path can
      * skip it. Decides before any session exists.
      */
-    private LoginResult afterFirstFactor(Identity identity, String firstFactor, String ipAddress, String userAgent) {
+    private LoginResult afterFirstFactor(Identity identity, String firstFactor, String audience,
+                                         String ipAddress, String userAgent) {
         if (mfaService.isEnabled(identity.getId())) {
-            return LoginResult.mfaRequired(mfaChallengeService.issueChallenge(identity.getId(), firstFactor));
+            return LoginResult.mfaRequired(mfaChallengeService.issueChallenge(identity.getId(), firstFactor, audience));
         }
         if (mfaRequiredForRoles(getRolesForIdentity(identity.getId()))) {
             return LoginResult.enrollmentRequired(mfaChallengeService.issueEnrollment(identity.getId()));
         }
-        return LoginResult.ok(issueSession(identity, ipAddress, userAgent, List.of(firstFactor)));
+        return LoginResult.ok(issueSession(identity, ipAddress, userAgent, List.of(firstFactor), audience));
     }
 
     private boolean mfaRequiredForRoles(List<String> roles) {
@@ -170,15 +173,17 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /** Mint a session + tokens for a fully authenticated identity. One session per device. */
-    private JwtResponse issueSession(Identity identity, String ipAddress, String userAgent, List<String> amr) {
+    private JwtResponse issueSession(Identity identity, String ipAddress, String userAgent, List<String> amr,
+                                     String audience) {
         identity.setLastLoginAt(OffsetDateTime.now());
         identity.setFailedLoginAttempts(0);
         identity.setAccountLockedUntil(null);
         identityRepository.save(identity);
 
         UserPrincipal principal = UserPrincipal.create(identity, null, getRolesForIdentity(identity.getId()));
-        SessionService.IssuedRefresh issued = sessionService.createSession(identity.getId(), ipAddress, userAgent, amr);
-        String accessToken = jwtTokenProvider.generateAccessToken(principal, issued.session().getId(), amr);
+        SessionService.IssuedRefresh issued =
+                sessionService.createSession(identity.getId(), ipAddress, userAgent, amr, audience);
+        String accessToken = jwtTokenProvider.generateAccessToken(principal, issued.session().getId(), amr, audience);
         long expiresIn = jwtConfig.getExpiration() / 1000;
 
         securityEventService.logEvent(identity, SecurityEventType.LOGIN_SUCCESS, ipAddress, userAgent);
@@ -207,7 +212,8 @@ public class AuthServiceImpl implements AuthService {
         Identity identity = identityRepository.findById(identityId)
                 .orElseThrow(() -> new UnauthorizedException("User not found"));
         ensureAccountActive(identity);
-        return issueSession(identity, ipAddress, userAgent, List.of(pending.firstFactor(), "otp", "mfa"));
+        return issueSession(identity, ipAddress, userAgent, List.of(pending.firstFactor(), "otp", "mfa"),
+                pending.audience());
     }
 
     @Override
@@ -229,7 +235,7 @@ public class AuthServiceImpl implements AuthService {
 
         String amr = rotation.session().getAmr();
         String newAccessToken = jwtTokenProvider.generateAccessToken(userPrincipal, rotation.session().getId(),
-                amr == null ? null : List.of(amr.split(",")));
+                amr == null ? null : List.of(amr.split(",")), rotation.session().getAudience());
         long expiresIn = jwtConfig.getExpiration() / 1000;
 
         return new JwtResponse(newAccessToken, rotation.rawToken(), expiresIn, null); // identity comes from GET /api/authz/me/bootstrap
@@ -244,15 +250,17 @@ public class AuthServiceImpl implements AuthService {
 
         // SSO code: minted from a session that already passed the MFA gate, so the app's new
         // session is issued directly and inherits that session's amr.
+        // "<identityId> <amr>[ <audience>]": the audience the app asked for at authorize.
         String sso = stringRedisTemplate.opsForValue().getAndDelete(SSO_CODE_PREFIX + code);
         if (sso != null) {
-            String[] ssoBundle = tokenEncryptionUtil.decrypt(sso).split(" ", 2);
+            String[] ssoBundle = tokenEncryptionUtil.decrypt(sso).split(" ", 3);
             Identity identity = identityRepository.findById(UUID.fromString(ssoBundle[0]))
                     .orElseThrow(() -> new InvalidTokenException("Identity not found"));
             ensureAccountActive(identity);
             List<String> amr = ssoBundle.length > 1 && !ssoBundle[1].isEmpty()
                     ? List.of(ssoBundle[1].split(",")) : List.of();
-            return LoginResult.ok(issueSession(identity, ipAddress, userAgent, amr));
+            String audience = jwtTokenProvider.resolveAudience(ssoBundle.length > 2 ? ssoBundle[2] : null);
+            return LoginResult.ok(issueSession(identity, ipAddress, userAgent, amr, audience));
         }
 
         // Single-use: GETDEL — a second exchange with the same code fails
@@ -264,14 +272,16 @@ public class AuthServiceImpl implements AuthService {
 
         // The code carries only the identity: no session exists until the MFA gate has passed,
         // so social login cannot skip a second factor the password path would require.
-        // "<identityId> <provider>": the provider becomes the session's first amr value.
-        String[] bundle = tokenEncryptionUtil.decrypt(encrypted).split(" ", 2);
+        // "<identityId> <provider>[ <audience>]": the provider becomes the session's first amr value;
+        // the audience is the one named when the flow started (?audience=), checked only now.
+        String[] bundle = tokenEncryptionUtil.decrypt(encrypted).split(" ", 3);
         UUID identityId = UUID.fromString(bundle[0]);
         String provider = bundle.length > 1 ? bundle[1] : "oauth";
+        String audience = jwtTokenProvider.resolveAudience(bundle.length > 2 ? bundle[2] : null);
         Identity identity = identityRepository.findById(identityId)
                 .orElseThrow(() -> new InvalidTokenException("Identity not found"));
         ensureAccountActive(identity);
-        return afterFirstFactor(identity, provider, ipAddress, userAgent);
+        return afterFirstFactor(identity, provider, audience, ipAddress, userAgent);
     }
 
     public static final String SSO_CODE_PREFIX = "authn:sso:code:";
@@ -282,7 +292,9 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional(readOnly = true)
-    public String beginSso(String refreshToken, String redirectOrigin, boolean askConsent) {
+    public String beginSso(String refreshToken, String redirectOrigin, boolean askConsent, String audience) {
+        // Checked first: an app asking for an audience it may not have is an error, session or not.
+        String resolvedAudience = jwtTokenProvider.resolveAudience(audience);
         if (refreshToken == null || refreshToken.isBlank()) {
             throw new UnauthorizedException("No session");
         }
@@ -313,7 +325,8 @@ public class AuthServiceImpl implements AuthService {
         secureRandom.nextBytes(codeBytes);
         String code = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(codeBytes);
         stringRedisTemplate.opsForValue().set(SSO_CODE_PREFIX + code,
-                tokenEncryptionUtil.encrypt(identity.getId() + " " + String.join(",", amr)), SSO_CODE_TTL);
+                tokenEncryptionUtil.encrypt(identity.getId() + " " + String.join(",", amr)
+                        + (resolvedAudience == null ? "" : " " + resolvedAudience)), SSO_CODE_TTL);
         return code;
     }
 

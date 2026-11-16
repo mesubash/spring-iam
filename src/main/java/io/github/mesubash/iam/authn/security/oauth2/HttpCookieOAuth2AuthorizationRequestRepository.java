@@ -28,6 +28,8 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
     public static final String REDIRECT_URI_COOKIE_NAME = "oauth_redirect_uri";
     public static final String REDIRECT_URI_PARAM_NAME = "redirectUri";
     public static final String REDIRECT_URL_PARAM_NAME = "redirectUrl";
+    public static final String AUDIENCE_COOKIE_NAME = "oauth_audience";
+    public static final String AUDIENCE_PARAM_NAME = "audience";
     private static final int COOKIE_EXPIRE_SECONDS = 180;
 
     @Value("${app.cookie.domain:}")
@@ -68,6 +70,14 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
                 secureCookie,
                 normalizedDomain
         );
+
+        // Validated at the code exchange, against app.jwt.allowed-audiences; here only bounded.
+        String audience = request.getParameter(AUDIENCE_PARAM_NAME);
+        if (StringUtils.hasText(audience) && audience.length() <= 200) {
+            CookieUtils.addCookie(response, AUDIENCE_COOKIE_NAME,
+                    CookieUtils.serializeAndSign(audience, jwtConfig.getSecret()),
+                    COOKIE_EXPIRE_SECONDS, secureCookie, normalizedDomain);
+        }
 
         String redirectUriAfterLogin = request.getParameter(REDIRECT_URI_PARAM_NAME);
         if (!StringUtils.hasText(redirectUriAfterLogin)) {
@@ -118,6 +128,14 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
                 secureCookie,
                 normalizedDomain
         );
+        CookieUtils.deleteCookie(request, response, AUDIENCE_COOKIE_NAME, secureCookie, normalizedDomain);
+    }
+
+    /** The audience the flow was started for (?audience=), or null. Not yet validated. */
+    public String getAudienceFromCookie(HttpServletRequest request) {
+        return CookieUtils.getCookie(request, AUDIENCE_COOKIE_NAME)
+                .map(cookie -> CookieUtils.<String>deserializeSigned(cookie.getValue(), jwtConfig.getSecret()))
+                .orElse(null);
     }
 
     public String getRedirectUriFromCookie(HttpServletRequest request) {

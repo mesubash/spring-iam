@@ -158,11 +158,13 @@ public class AuthController {
             description = "Single sign-on for apps on the redirect allowlist. With a live session cookie, "
                     + "redirects to redirect_uri?code=…&state=…; the app swaps the code at /oauth/exchange. "
                     + "Otherwise sends the browser to the login (or consent) page, or with prompt=none back "
-                    + "to redirect_uri with error=login_required / consent_required.")
+                    + "to redirect_uri with error=login_required / consent_required. Optional audience "
+                    + "(one of app.jwt.allowed-audiences) sets the app token's aud; an unknown one is a 400.")
     public void ssoAuthorize(
             @RequestParam("redirect_uri") String redirectUri,
             @RequestParam(value = "state", required = false) String state,
             @RequestParam(value = "prompt", required = false) String prompt,
+            @RequestParam(value = "audience", required = false) String audience,
             HttpServletRequest request,
             HttpServletResponse response) throws java.io.IOException {
         if (!redirectAllowlist.isAllowed(redirectUri)) {
@@ -176,7 +178,7 @@ public class AuthController {
         String code;
         try {
             code = authService.beginSso(getRefreshTokenFromCookie(request), originOf(redirectUri),
-                    org.springframework.util.StringUtils.hasText(ssoConsentUrl));
+                    org.springframework.util.StringUtils.hasText(ssoConsentUrl), audience);
         } catch (UnauthorizedException noUsableSession) {
             response.sendRedirect(silent ? withParam(redirectUri, "error", "login_required", state)
                     : withParam(ssoLoginUrl, "continue", selfUrl, null));
