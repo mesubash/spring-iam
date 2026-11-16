@@ -40,6 +40,14 @@ public class JwtTokenProvider {
     private io.github.mesubash.iam.shared.service.AuthzQueryService authzQueryService;
 
     public String generateAccessToken(UserPrincipal principal, UUID sessionId) {
+        return generateAccessToken(principal, sessionId, null);
+    }
+
+    /**
+     * @param amr RFC 8176 authentication methods ("pwd", "otp", "mfa", or the OAuth provider).
+     *            Resource servers and require_mfa conditions can read it from the token.
+     */
+    public String generateAccessToken(UserPrincipal principal, UUID sessionId, java.util.List<String> amr) {
         SigningKeyService.ActiveKey key = signingKeyService.activeKey();
         Date now = new Date();
         String mode = jwtConfig.getClaimsMode() != null ? jwtConfig.getClaimsMode() : "roles";
@@ -54,6 +62,9 @@ public class JwtTokenProvider {
                 .claim("email_verified", principal.getIdentity() != null
                         && Boolean.TRUE.equals(principal.getIdentity().getEmailVerified()));
 
+        if (amr != null && !amr.isEmpty()) {
+            builder.claim("amr", amr);
+        }
         if (jwtConfig.getAudience() != null && !jwtConfig.getAudience().isBlank()) {
             builder.audience().add(jwtConfig.getAudience()).and();
         }

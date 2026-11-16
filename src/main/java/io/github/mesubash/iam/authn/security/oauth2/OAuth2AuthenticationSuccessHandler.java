@@ -78,13 +78,19 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         String code = Base64.getUrlEncoder().withoutPadding().encodeToString(codeBytes);
 
         redisTemplate.opsForValue().set(EXCHANGE_PREFIX + code,
-                tokenEncryptionUtil.encrypt(userPrincipal.getId().toString()), EXCHANGE_TTL);
+                tokenEncryptionUtil.encrypt(userPrincipal.getId() + " " + provider(authentication)), EXCHANGE_TTL);
 
         cleanupOAuthState(request, response);
 
         String separator = redirectUrl.contains("?") ? "&" : "?";
         response.sendRedirect(redirectUrl + separator + "code="
                 + URLEncoder.encode(code, StandardCharsets.UTF_8));
+    }
+
+    /** OAuth registration id ("google", ...), recorded as the session's amr value. */
+    private static String provider(Authentication authentication) {
+        return authentication instanceof org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken t
+                ? t.getAuthorizedClientRegistrationId() : "oauth";
     }
 
     private String resolveRedirectUrl(HttpServletRequest request) {

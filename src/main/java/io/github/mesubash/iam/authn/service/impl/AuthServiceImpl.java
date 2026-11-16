@@ -138,21 +138,21 @@ public class AuthServiceImpl implements AuthService {
         }
 
         ensureAccountActive(identity);
-        return afterFirstFactor(identity, ipAddress, userAgent);
+        return afterFirstFactor(identity, "pwd", ipAddress, userAgent);
     }
 
     /**
      * The MFA gate, shared by password login and the OAuth code exchange so neither path can
      * skip it. Decides before any session exists.
      */
-    private LoginResult afterFirstFactor(Identity identity, String ipAddress, String userAgent) {
+    private LoginResult afterFirstFactor(Identity identity, String firstFactor, String ipAddress, String userAgent) {
         if (mfaService.isEnabled(identity.getId())) {
-            return LoginResult.mfaRequired(mfaChallengeService.issueChallenge(identity.getId()));
+            return LoginResult.mfaRequired(mfaChallengeService.issueChallenge(identity.getId(), firstFactor));
         }
         if (mfaRequiredForRoles(getRolesForIdentity(identity.getId()))) {
             return LoginResult.enrollmentRequired(mfaChallengeService.issueEnrollment(identity.getId()));
         }
-        return LoginResult.ok(issueSession(identity, ipAddress, userAgent));
+        return LoginResult.ok(issueSession(identity, ipAddress, userAgent, List.of(firstFactor)));
     }
 
     private boolean mfaRequiredForRoles(List<String> roles) {
@@ -165,15 +165,15 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /** Mint a session + tokens for a fully authenticated identity. One session per device. */
-    private JwtResponse issueSession(Identity identity, String ipAddress, String userAgent) {
+    private JwtResponse issueSession(Identity identity, String ipAddress, String userAgent, List<String> amr) {
         identity.setLastLoginAt(OffsetDateTime.now());
         identity.setFailedLoginAttempts(0);
         identity.setAccountLockedUntil(null);
         identityRepository.save(identity);
 
         UserPrincipal principal = UserPrincipal.create(identity, null, getRolesForIdentity(identity.getId()));
-        SessionService.IssuedRefresh issued = sessionService.createSession(identity.getId(), ipAddress, userAgent);
-        String accessToken = jwtTokenProvider.generateAccessToken(principal, issued.session().getId());
+        SessionService.IssuedRefresh issued = sessionService.createSession(identity.getId(), ipAddress, userAgent, amr);
+        String accessToken = jwtTokenProvider.generateAccessToken(principal, issued.session().getId(), amr);
         long expiresIn = jwtConfig.getExpiration() / 1000;
 
         securityEventService.logEvent(identity, SecurityEventType.LOGIN_SUCCESS, ipAddress, userAgent);
@@ -185,8 +185,9 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public JwtResponse verifyMfaAndIssue(String challenge, String code, String ipAddress, String userAgent) {
         // Peek: a wrong code must not consume the challenge, so the user can retry within its TTL.
-        UUID identityId = mfaChallengeService.peekChallenge(challenge)
+        MfaChallengeService.Pending pending = mfaChallengeService.peekChallenge(challenge)
                 .orElseThrow(() -> new UnauthorizedException("Invalid or expired MFA challenge"));
+        UUID identityId = pending.identityId();
         if (!mfaService.verifyForLogin(identityId, code)) {
             int left = mfaChallengeService.registerFailure(challenge);
             if (left <= 0) {
@@ -201,7 +202,7 @@ public class AuthServiceImpl implements AuthService {
         Identity identity = identityRepository.findById(identityId)
                 .orElseThrow(() -> new UnauthorizedException("User not found"));
         ensureAccountActive(identity);
-        return issueSession(identity, ipAddress, userAgent);
+        return issueSession(identity, ipAddress, userAgent, List.of(pending.firstFactor(), "otp", "mfa"));
     }
 
     @Override
@@ -221,8 +222,9 @@ public class AuthServiceImpl implements AuthService {
         List<String> roles = getRolesForIdentity(identity.getId());
         UserPrincipal userPrincipal = UserPrincipal.create(identity, null, roles);
 
-        String newAccessToken = jwtTokenProvider.generateAccessToken(
-                userPrincipal, rotation.session().getId());
+        String amr = rotation.session().getAmr();
+        String newAccessToken = jwtTokenProvider.generateAccessToken(userPrincipal, rotation.session().getId(),
+                amr == null ? null : List.of(amr.split(",")));
         long expiresIn = jwtConfig.getExpiration() / 1000;
 
         return new JwtResponse(newAccessToken, rotation.rawToken(), expiresIn, null); // identity comes from GET /api/authz/me/bootstrap
@@ -244,11 +246,14 @@ public class AuthServiceImpl implements AuthService {
 
         // The code carries only the identity: no session exists until the MFA gate has passed,
         // so social login cannot skip a second factor the password path would require.
-        UUID identityId = UUID.fromString(tokenEncryptionUtil.decrypt(encrypted));
+        // "<identityId> <provider>": the provider becomes the session's first amr value.
+        String[] bundle = tokenEncryptionUtil.decrypt(encrypted).split(" ", 2);
+        UUID identityId = UUID.fromString(bundle[0]);
+        String provider = bundle.length > 1 ? bundle[1] : "oauth";
         Identity identity = identityRepository.findById(identityId)
                 .orElseThrow(() -> new InvalidTokenException("Identity not found"));
         ensureAccountActive(identity);
-        return afterFirstFactor(identity, ipAddress, userAgent);
+        return afterFirstFactor(identity, provider, ipAddress, userAgent);
     }
 
     @Override

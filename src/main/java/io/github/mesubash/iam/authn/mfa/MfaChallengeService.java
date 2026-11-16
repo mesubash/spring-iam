@@ -31,9 +31,12 @@ public class MfaChallengeService {
 
     private final StringRedisTemplate redis;
 
-    public String issueChallenge(UUID identityId) {
+    /** Identity awaiting a second factor, and the first factor it passed (amr value). */
+    public record Pending(UUID identityId, String firstFactor) {}
+
+    public String issueChallenge(UUID identityId, String firstFactor) {
         String token = token();
-        redis.opsForValue().set(CHALLENGE + token, identityId.toString(), CHALLENGE_TTL);
+        redis.opsForValue().set(CHALLENGE + token, identityId + " " + firstFactor, CHALLENGE_TTL);
         return token;
     }
 
@@ -44,8 +47,16 @@ public class MfaChallengeService {
     }
 
     /** Read the challenge without consuming it, so a mistyped code can be retried. */
-    public Optional<UUID> peekChallenge(String token) {
-        return read(CHALLENGE, token);
+    public Optional<Pending> peekChallenge(String token) {
+        if (token == null || token.isBlank()) {
+            return Optional.empty();
+        }
+        String v = redis.opsForValue().get(CHALLENGE + token);
+        if (v == null) {
+            return Optional.empty();
+        }
+        String[] parts = v.split(" ", 2);
+        return Optional.of(new Pending(UUID.fromString(parts[0]), parts.length > 1 ? parts[1] : "pwd"));
     }
 
     /** Burn the challenge. Call only after a successful verification. */
@@ -67,21 +78,17 @@ public class MfaChallengeService {
 
     /** Peeked, not burned, so setup and then enable can both use it; the TTL bounds the window. */
     public Optional<UUID> peekEnrollment(String token) {
-        return read(ENROLL, token);
+        if (token == null || token.isBlank()) {
+            return Optional.empty();
+        }
+        String id = redis.opsForValue().get(ENROLL + token);
+        return id == null ? Optional.empty() : Optional.of(UUID.fromString(id));
     }
 
     public void clearEnrollment(String token) {
         if (token != null) {
             redis.delete(ENROLL + token);
         }
-    }
-
-    private Optional<UUID> read(String prefix, String token) {
-        if (token == null || token.isBlank()) {
-            return Optional.empty();
-        }
-        String id = redis.opsForValue().get(prefix + token);
-        return id == null ? Optional.empty() : Optional.of(UUID.fromString(id));
     }
 
     private static String token() {

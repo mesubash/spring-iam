@@ -15,6 +15,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,6 +32,7 @@ class MfaLoginIntegrationTest {
     @Autowired private IdentityRepository identityRepository;
     @Autowired private StringRedisTemplate redis;
     @Autowired private TokenEncryptionUtil encryption;
+    @Autowired private io.github.mesubash.iam.authn.security.JwtTokenProvider jwt;
 
     private String newVerifiedUser() {
         String email = "mfa-" + UUID.randomUUID() + "@example.com";
@@ -78,6 +80,10 @@ class MfaLoginIntegrationTest {
                 gated.mfaToken(), TotpServiceTest.codeFor(secret, nowStep() + 1), null, "junit");
         assertThat(tokens.getAccessToken()).isNotBlank();
         assertThat(tokens.getRefreshToken()).isNotBlank();
+        assertThat(jwt.parseToken(tokens.getAccessToken()).get("amr")).isEqualTo(List.of("pwd", "otp", "mfa"));
+        // A refreshed token keeps the session's amr.
+        assertThat(jwt.parseToken(authService.refreshToken(tokens.getRefreshToken()).getAccessToken()).get("amr"))
+                .isEqualTo(List.of("pwd", "otp", "mfa"));
 
         // The challenge is single-use.
         assertThatThrownBy(() -> authService.verifyMfaAndIssue(gated.mfaToken(), "123456", null, "junit"))
@@ -93,7 +99,7 @@ class MfaLoginIntegrationTest {
 
         String code = "test-" + UUID.randomUUID();
         redis.opsForValue().set(OAuth2AuthenticationSuccessHandler.EXCHANGE_PREFIX + code,
-                encryption.encrypt(id.toString()), Duration.ofSeconds(60));
+                encryption.encrypt(id + " google"), Duration.ofSeconds(60));
 
         LoginResult result = authService.exchangeOAuthCode(code, null, "junit");
         assertThat(result.status()).isEqualTo(LoginResult.Status.MFA_REQUIRED);

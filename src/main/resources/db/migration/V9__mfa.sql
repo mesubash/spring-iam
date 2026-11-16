@@ -30,3 +30,7 @@ ALTER TABLE security_events ADD CONSTRAINT security_events_event_type_check
         'SESSION_EVICTED', 'REUSE_DETECTED', 'OAUTH_LINKED', 'EMAIL_CHANGED',
         'MFA_VERIFIED', 'MFA_FAILED', 'MFA_RECOVERY_USED', 'MFA_RESET_BY_ADMIN'
     ));
+
+-- Authentication methods (RFC 8176 amr) the session was opened with, e.g. "pwd,otp,mfa".
+-- Kept on the session so refreshed access tokens carry the same amr claim.
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS amr VARCHAR(100);

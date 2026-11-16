@@ -57,6 +57,10 @@ public class Session {
     @Column(name = "revoke_reason", length = 30)
     private String revokeReason;
 
+    /** RFC 8176 methods used to open this session, comma-separated (e.g. "pwd,otp,mfa"). */
+    @Column(name = "amr", length = 100)
+    private String amr;
+
     public boolean isAlive() {
         return revokedAt == null && expiresAt.isAfter(Instant.now());
     }

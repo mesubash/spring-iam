@@ -46,8 +46,9 @@ class MfaChallengeServiceTest {
     @Test
     void challenge_roundtrips_identity() {
         UUID id = UUID.randomUUID();
-        String token = service.issueChallenge(id);
-        assertThat(service.peekChallenge(token)).contains(id);
+        String token = service.issueChallenge(id, "google");
+        assertThat(service.peekChallenge(token))
+                .contains(new MfaChallengeService.Pending(id, "google"));
     }
 
     @Test

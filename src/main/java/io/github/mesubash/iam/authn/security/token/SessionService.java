@@ -74,14 +74,20 @@ public class SessionService {
 
     public record RotationResult(Session session, String rawToken, boolean retried) {}
 
-    @Transactional
     public IssuedRefresh createSession(UUID identityId, String ipAddress, String userAgent) {
+        return createSession(identityId, ipAddress, userAgent, null);
+    }
+
+    /** @param amr authentication methods for the session; refreshed tokens carry them too */
+    @Transactional
+    public IssuedRefresh createSession(UUID identityId, String ipAddress, String userAgent, List<String> amr) {
         evictBeyondCap(identityId);
 
         Instant now = Instant.now();
         Session session = sessionRepository.save(Session.builder()
                 .identityId(identityId)
                 .createdIp(ClientIpResolver.normalize(ipAddress))
+                .amr(amr == null || amr.isEmpty() ? null : String.join(",", amr))
                 .userAgent(userAgent)
                 .deviceLabel(deviceLabel(userAgent))
                 .createdAt(now)
