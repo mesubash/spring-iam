@@ -64,7 +64,8 @@ public class RedirectAllowlist {
         if (!allowed.getHost().equalsIgnoreCase(candidate.getHost())) {
             return false;
         }
-        if (allowed.getPort() != -1 && allowed.getPort() != candidate.getPort()) {
+        // An entry without a port means the scheme's default port, not "any port".
+        if (effectivePort(allowed) != effectivePort(candidate)) {
             return false;
         }
         String allowedPath = allowed.getPath();
@@ -77,5 +78,12 @@ public class RedirectAllowlist {
             }
         }
         return true;
+    }
+
+    private static int effectivePort(URI uri) {
+        if (uri.getPort() != -1) {
+            return uri.getPort();
+        }
+        return "http".equalsIgnoreCase(uri.getScheme()) ? 80 : "https".equalsIgnoreCase(uri.getScheme()) ? 443 : -1;
     }
 }

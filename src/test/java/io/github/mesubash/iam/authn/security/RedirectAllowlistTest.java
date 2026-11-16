@@ -32,4 +32,13 @@ class RedirectAllowlistTest {
         assertThat(repo.isAllowed("myapp://auth/oauth2/redirect")).isTrue();
         assertThat(repo.isAllowed("otherapp://auth/oauth2/redirect")).isFalse();
     }
+
+    @Test
+    void entryWithoutPortMeansTheDefaultPort() {
+        var repo = repo("https://app.example.com/cb");
+        assertThat(repo.isAllowed("https://app.example.com/cb")).isTrue();
+        assertThat(repo.isAllowed("https://app.example.com:443/cb")).isTrue();
+        assertThat(repo.isAllowed("https://app.example.com:8443/cb")).isFalse();
+        assertThat(repo("http://localhost:5173/cb").isAllowed("http://localhost:5173/cb")).isTrue();
+    }
 }
