@@ -155,6 +155,7 @@ public class SecurityConfig {
                                 "/api/auth/oauth/**",
                                 "/api/auth/sso/authorize",   // reads the session cookie itself
                                 "/api/auth/whoami",          // likewise, without rotating it
+                                "/api/auth/self/**",         // session cookie, checked in the controller
                                 "/api/auth/verify-email",
                                 "/api/auth/verify-email-and-setup-password",
                                 "/api/auth/resend-verification",

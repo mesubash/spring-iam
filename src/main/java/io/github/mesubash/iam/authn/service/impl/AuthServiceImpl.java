@@ -376,6 +376,18 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    public void logoutSession(String refreshToken) { // no outer tx: a dead token must not mark it rollback-only
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return;
+        }
+        try {
+            sessionService.revokeSession(sessionService.findLiveSession(refreshToken).getId(), "LOGOUT");
+        } catch (InvalidTokenException alreadyGone) {
+            // Expired, revoked or rotated away: nothing left to end.
+        }
+    }
+
+    @Override
     public void forgotPassword(String email) {
         // Non-revealing: always succeed regardless of whether the account exists,
         // so the response cannot be used to enumerate registered emails.

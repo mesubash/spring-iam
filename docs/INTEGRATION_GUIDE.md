@@ -220,6 +220,13 @@ displayName, emailVerified, mfaEnabled, roles } }`, or 401. It never rotates
 the cookie, so it is safe on every request; mint access tokens with
 `/api/auth/refresh` only when you need one.
 
+The same BFF can run account self-service on the cookie: `POST
+/api/auth/self/{change-password, mfa/setup, mfa/enable, mfa/disable, profile,
+logout}`. Always send `Content-Type: application/json` (also on the bodiless
+`mfa/setup` and `logout`); anything else is 415. Current password, TOTP codes and
+the password policy apply exactly as on the bearer endpoints, and `self/logout`
+ends only this session.
+
 See [`UI_PLAN.md`](UI_PLAN.md) for the admin-console and permission-driven-UI
 design.
 

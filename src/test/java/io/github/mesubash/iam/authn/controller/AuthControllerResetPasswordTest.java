@@ -12,7 +12,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 class AuthControllerResetPasswordTest {
 
     private final AuthService authService = mock(AuthService.class);
-    private final AuthController controller = new AuthController(authService, null, null);
+    private final AuthController controller = new AuthController(authService, null, null, null, null);
 
     @Test
     void acceptsJsonBody() {

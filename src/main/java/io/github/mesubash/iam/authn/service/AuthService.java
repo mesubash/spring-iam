@@ -40,6 +40,9 @@ public interface AuthService {
 
     void logout(String accessToken);
 
+    /** Revokes only the session behind this refresh token. No-op when it is not live. */
+    void logoutSession(String refreshToken);
+
     void changeEmail(String currentEmail, String newEmail, String currentPassword);
 
     void verifyEmailChange(String token);

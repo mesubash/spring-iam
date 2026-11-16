@@ -73,6 +73,7 @@ Controller: `AuthController` (envelope responses). Public endpoints per `Securit
 | POST | `/api/auth/mfa/verify` | Public (needs a challenge) | Second login step: TOTP or recovery code → tokens. |
 | POST | `/api/auth/refresh` | Public (needs refresh cookie) | Rotate access token using the `__Host-Refresh` cookie. |
 | GET | `/api/auth/whoami` | Public (needs refresh cookie) | Who is signed in, read **without rotating** the cookie (see § Cookie-authenticated endpoints). |
+| POST | `/api/auth/self/*` | Session cookie + JSON body | Self-service for a BFF: password, MFA, display name, sign out this session (see § Cookie-authenticated endpoints). |
 | POST | `/api/auth/logout` | Bearer (authenticated) | Revoke current access token + clear refresh cookie. |
 | POST | `/api/auth/logout-all` | Bearer (authenticated) | Revoke all refresh tokens/sessions for the user and set the sign-out cutoff, so every access token already issued is rejected here and by resource servers that read it (INTEGRATION_GUIDE §3.1). |
 | POST | `/api/auth/oauth/exchange` | Public | Exchange the one-time OAuth or SSO redirect `code` for tokens, or an MFA step (same as `login`). |
@@ -102,6 +103,21 @@ on for the account or required for one of its roles); otherwise **401**, as with
 { "id": "…", "email": "ada@example.com", "displayName": "Ada", "emailVerified": true,
   "mfaEnabled": false, "roles": ["User"] }
 ```
+
+**`/api/auth/self/*`** — `POST` only, envelope responses. Each one **requires
+`Content-Type: application/json`** (415 otherwise, even with no body): `SameSite=Lax` keeps the
+cookie off cross-site POSTs, but a sibling subdomain is same-site, and a JSON content type forces
+a CORS preflight the origin allowlist refuses. They call the same services as the bearer
+endpoints, so the same checks apply.
+
+| Path | Body → `data` | Notes |
+|------|---------------|-------|
+| `/api/auth/self/change-password` | `{ currentPassword, newPassword, confirmPassword }` → `SuccessResponse` | Current password and password policy enforced (400). Ends every session, this one included, and clears the cookie. |
+| `/api/auth/self/mfa/setup` | none → `{ otpauthUri, secret }` | Refused when MFA is already on. Rate-limited. |
+| `/api/auth/self/mfa/enable` | `{ code }` → `{ recoveryCodes: [...] }` | The session (single-factor) stops counting afterwards; sign in again with the second factor. Rate-limited. |
+| `/api/auth/self/mfa/disable` | `{ code }` → `null` | Current TOTP or recovery code (400 when wrong), and only from a session that passed MFA. Rate-limited. |
+| `/api/auth/self/profile` | `{ name }` → `SuccessResponse` | Sets, or with a blank name clears, the display name (max 150). |
+| `/api/auth/self/logout` | none → `SuccessResponse` | Revokes only the session behind the cookie and clears it; other devices stay signed in. Idempotent. |
 
 ### MFA — `/api/auth/mfa/*` (`MfaController`)
 

@@ -40,6 +40,8 @@ public class AuthController {
     private final AuthService authService;
     private final TokenEncryptionUtil tokenEncryptionUtil;
     private final io.github.mesubash.iam.authn.security.RedirectAllowlist redirectAllowlist;
+    private final io.github.mesubash.iam.authn.mfa.MfaService mfaService;
+    private final io.github.mesubash.iam.authn.service.IdentityAdminService identityAdminService;
 
     /** Where SSO authorize sends a browser with no usable session; gets ?continue=&lt;authorize URL&gt;. */
     @Value("${iam.sso.login-url:${app.frontend.url:http://localhost:3000}/login}")
@@ -238,6 +240,78 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("ok", new WhoAmI(identity.getId(), identity.getPrimaryEmail(),
                 identity.getDisplayName(), Boolean.TRUE.equals(identity.getEmailVerified()),
                 Boolean.TRUE.equals(identity.getMfaEnabled()), me.getRoles())));
+    }
+
+    // ── /self/*: authenticated by the session cookie (a BFF forwards it), not a bearer token.
+    // The same services as the bearer endpoints do the work, so the current password, the
+    // current TOTP code and the password policy all still apply, and a session that no longer
+    // meets the MFA requirement is refused (sessionPrincipal). CSRF: SameSite=Lax keeps the
+    // cookie off cross-site POSTs, but a sibling subdomain is same-site; requiring a JSON body
+    // makes any cross-origin call a CORS preflight, which the allowlist refuses. ──
+
+    private static final String JSON = org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
+
+    private UserPrincipal self(HttpServletRequest request) {
+        return authService.sessionPrincipal(getRefreshTokenFromCookie(request));
+    }
+
+    @PostMapping(value = "/self/change-password", consumes = JSON)
+    @Operation(summary = "Change password (session cookie)",
+            description = "Requires the current password. Ends every session, this one included.")
+    public ResponseEntity<ApiResponse<SuccessResponse>> selfChangePassword(
+            @Valid @RequestBody PasswordChangeRequest body,
+            HttpServletRequest request, HttpServletResponse response) {
+        authService.changePassword(self(request).getEmail(), body);
+        clearRefreshTokenCookie(response);
+        return ResponseEntity.ok(ApiResponse.success("Password changed",
+                SuccessResponse.of("Your password has been changed. Sign in again.")));
+    }
+
+    @PostMapping(value = "/self/mfa/setup", consumes = JSON)
+    @Operation(summary = "Begin MFA enrollment (session cookie)")
+    public ResponseEntity<ApiResponse<io.github.mesubash.iam.authn.mfa.MfaService.SetupResult>> selfMfaSetup(
+            HttpServletRequest request) {
+        UserPrincipal me = self(request);
+        return ResponseEntity.ok(ApiResponse.success("MFA setup started", mfaService.setup(me.getId(), me.getEmail())));
+    }
+
+    @PostMapping(value = "/self/mfa/enable", consumes = JSON)
+    @Operation(summary = "Confirm a code and enable MFA (session cookie); returns recovery codes once")
+    public ResponseEntity<ApiResponse<Map<String, List<String>>>> selfMfaEnable(
+            @Valid @RequestBody io.github.mesubash.iam.authn.mfa.MfaRequests.Code body, HttpServletRequest request) {
+        List<String> codes = mfaService.enable(self(request).getId(), body.code());
+        return ResponseEntity.ok(ApiResponse.success("MFA enabled", Map.of("recoveryCodes", codes)));
+    }
+
+    @PostMapping(value = "/self/mfa/disable", consumes = JSON)
+    @Operation(summary = "Disable MFA (session cookie; requires a current TOTP or recovery code)")
+    public ResponseEntity<ApiResponse<Void>> selfMfaDisable(
+            @Valid @RequestBody io.github.mesubash.iam.authn.mfa.MfaRequests.Code body, HttpServletRequest request) {
+        mfaService.disable(self(request).getId(), body.code());
+        return ResponseEntity.ok(ApiResponse.success("MFA disabled", null));
+    }
+
+    @PostMapping(value = "/self/profile", consumes = JSON)
+    @Operation(summary = "Set or (blank) clear your display name (session cookie)")
+    public ResponseEntity<ApiResponse<SuccessResponse>> selfProfile(
+            @Valid @RequestBody AdminSetDisplayNameRequest body, HttpServletRequest request) {
+        UserPrincipal me = self(request);
+        identityAdminService.setDisplayName(me, me.getId(), body.name());
+        return ResponseEntity.ok(ApiResponse.success("Profile updated", SuccessResponse.of("Your name has been updated")));
+    }
+
+    @PostMapping(value = "/self/logout", consumes = JSON)
+    @Operation(summary = "Sign out this session (session cookie)",
+            description = "Revokes only the session behind the cookie, not other devices. Idempotent.")
+    public ResponseEntity<ApiResponse<SuccessResponse>> selfLogout(
+            HttpServletRequest request, HttpServletResponse response) {
+        try {
+            authService.logoutSession(getRefreshTokenFromCookie(request));
+        } catch (UnauthorizedException noCookie) {
+            // Nothing to revoke; still clear whatever the browser holds.
+        }
+        clearRefreshTokenCookie(response);
+        return ResponseEntity.ok(ApiResponse.success("Signed out", SuccessResponse.of("You have been signed out")));
     }
 
     @PostMapping("/logout")

@@ -13,12 +13,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import io.github.mesubash.iam.authn.security.token.SessionService;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -35,6 +38,7 @@ class SelfServiceIntegrationTest {
     @Autowired MfaService mfaService;
     @Autowired IdentityRepository identityRepository;
     @Autowired TokenEncryptionUtil encryption;
+    @Autowired SessionService sessionService;
 
     String newVerifiedUser() {
         String email = "self-" + UUID.randomUUID() + "@example.com";
@@ -101,5 +105,104 @@ class SelfServiceIntegrationTest {
         JwtResponse beforeMfa = login(email).tokens();
         enableMfa(email);
         mvc.perform(get("/api/auth/whoami").cookie(session(beforeMfa))).andExpect(status().isUnauthorized());
+    }
+
+    static String changePassword(String current, String next) {
+        return "{\"currentPassword\":\"" + current + "\",\"newPassword\":\"" + next
+                + "\",\"confirmPassword\":\"" + next + "\"}";
+    }
+
+    @Test
+    void selfEndpointsRequireTheCookie() throws Exception {
+        for (String path : new String[] {"/api/auth/self/change-password", "/api/auth/self/mfa/setup",
+                "/api/auth/self/mfa/enable", "/api/auth/self/mfa/disable", "/api/auth/self/profile"}) {
+            mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"currentPassword\":\"" + PASSWORD + "\",\"newPassword\":\"New-Password-77\","
+                                    + "\"confirmPassword\":\"New-Password-77\",\"code\":\"123456\",\"name\":\"X\"}"))
+                    .andExpect(status().isUnauthorized());
+        }
+    }
+
+    @Test
+    void selfEndpointsRequireAJsonBody() throws Exception {
+        String email = newVerifiedUser();
+        Cookie cookie = session(login(email).tokens());
+        // What a cross-site HTML form can send: refused before anything runs.
+        mvc.perform(post("/api/auth/self/profile").cookie(cookie)
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED).content("name=Mallory"))
+                .andExpect(status().isUnsupportedMediaType());
+        mvc.perform(post("/api/auth/self/logout").cookie(cookie)).andExpect(status().isUnsupportedMediaType());
+        assertThat(identityRepository.findById(idOf(email)).orElseThrow().getDisplayName()).isNull();
+
+        mvc.perform(post("/api/auth/self/profile").cookie(cookie)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"  Ada \"}"))
+                .andExpect(status().isOk());
+        assertThat(identityRepository.findById(idOf(email)).orElseThrow().getDisplayName()).isEqualTo("Ada");
+    }
+
+    @Test
+    void selfChangePasswordEnforcesCurrentPasswordAndPolicy() throws Exception {
+        String email = newVerifiedUser();
+        Cookie cookie = session(login(email).tokens());
+        mvc.perform(post("/api/auth/self/change-password").cookie(cookie).contentType(MediaType.APPLICATION_JSON)
+                        .content(changePassword("Wrong-Password-1", "New-Password-77")))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/auth/self/change-password").cookie(cookie).contentType(MediaType.APPLICATION_JSON)
+                        .content(changePassword(PASSWORD, "onlyletterspassword")))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(post("/api/auth/self/change-password").cookie(cookie).contentType(MediaType.APPLICATION_JSON)
+                        .content(changePassword(PASSWORD, "New-Password-77")))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.containsString("Max-Age=0")));
+        assertThat(sessionService.listActiveSessions(idOf(email))).isEmpty();
+    }
+
+    @Test
+    void selfMfaDisableNeedsACurrentCodeAndAnMfaSession() throws Exception {
+        String email = newVerifiedUser();
+        JwtResponse beforeMfa = login(email).tokens();
+
+        // Enrolment through /self, then the single-factor session no longer counts.
+        String secret = mvcSetup(session(beforeMfa));
+        long step = System.currentTimeMillis() / 1000L / 30;
+        mvc.perform(post("/api/auth/self/mfa/enable").cookie(session(beforeMfa))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"" + TotpServiceTest.codeFor(secret, step) + "\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.recoveryCodes").isArray());
+        mvc.perform(post("/api/auth/self/mfa/disable").cookie(session(beforeMfa))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"" + TotpServiceTest.codeFor(secret, step + 1) + "\"}"))
+                .andExpect(status().isUnauthorized());
+
+        JwtResponse withMfa = authService.verifyMfaAndIssue(login(email).mfaToken(),
+                TotpServiceTest.codeFor(secret, step + 1), null, "junit");
+        mvc.perform(post("/api/auth/self/mfa/disable").cookie(session(withMfa))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"code\":\"000000\"}"))
+                .andExpect(status().isBadRequest());
+        assertThat(mfaService.isEnabled(idOf(email))).isTrue();
+    }
+
+    String mvcSetup(Cookie cookie) throws Exception {
+        String body = mvc.perform(post("/api/auth/self/mfa/setup").cookie(cookie).contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        return com.jayway.jsonpath.JsonPath.read(body, "$.data.secret");
+    }
+
+    @Test
+    void selfLogoutEndsOnlyThisSession() throws Exception {
+        String email = newVerifiedUser();
+        JwtResponse here = login(email).tokens();
+        JwtResponse elsewhere = login(email).tokens();
+
+        mvc.perform(post("/api/auth/self/logout").cookie(session(here)).contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/auth/whoami").cookie(session(here))).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/auth/whoami").cookie(session(elsewhere))).andExpect(status().isOk());
+
+        // Idempotent, with or without a cookie.
+        mvc.perform(post("/api/auth/self/logout").cookie(session(here)).contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/auth/self/logout").contentType(MediaType.APPLICATION_JSON)).andExpect(status().isOk());
     }
 }
