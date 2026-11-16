@@ -353,6 +353,10 @@ public class AuthServiceImpl implements AuthService {
         securityEventService.logEvent(identity, SecurityEventType.PASSWORD_CHANGED, null, null);
     }
 
+    // Verification tokens are single-use, so a second click on the link lands here too.
+    private static final String EXPIRED_VERIFICATION_LINK = "This verification link has expired or has already "
+            + "been used. If your email is already verified, sign in; otherwise request a new verification email.";
+
     private static final String EMAIL_CHANGE_PREFIX = "authn:ott:email_change:";
 
     @Override
@@ -429,7 +433,7 @@ public class AuthServiceImpl implements AuthService {
     public void verifyEmail(String token) {
         String userId = tokenService.getTokenUserId(token, TokenType.EMAIL_VERIFICATION);
         if (userId == null) {
-            throw new InvalidTokenException("Invalid or expired verification token");
+            throw new InvalidTokenException(EXPIRED_VERIFICATION_LINK);
         }
 
         Identity identity = identityRepository.findById(UUID.fromString(userId))
@@ -446,7 +450,7 @@ public class AuthServiceImpl implements AuthService {
     public void verifyEmailAndSetupPassword(String token, String newPassword) {
         String userId = tokenService.getTokenUserId(token, TokenType.EMAIL_VERIFICATION);
         if (userId == null) {
-            throw new InvalidTokenException("Invalid or expired verification token");
+            throw new InvalidTokenException(EXPIRED_VERIFICATION_LINK);
         }
         assertAcceptablePassword(newPassword);
 
