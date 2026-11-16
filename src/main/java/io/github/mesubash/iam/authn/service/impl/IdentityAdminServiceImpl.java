@@ -41,6 +41,7 @@ public class IdentityAdminServiceImpl implements IdentityAdminService {
     private final PasswordEncoder passwordEncoder;
     private final SessionService sessionService;
     private final SecurityEventService securityEventService;
+    private final io.github.mesubash.iam.shared.service.AuthzQueryService authzQueryService;
 
     @Override
     @Transactional(readOnly = true)
@@ -99,6 +100,7 @@ public class IdentityAdminServiceImpl implements IdentityAdminService {
     public PasswordSet setPassword(UserPrincipal caller, UUID id, AdminSetPasswordRequest request) {
         Identity identity = identityRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        assertMayAdminister(caller, id, "set the password of");
 
         boolean generated = !StringUtils.hasText(request.getNewPassword());
         String password = generated ? PasswordUtil.generateSecureToken(12) : request.getNewPassword();
@@ -132,6 +134,7 @@ public class IdentityAdminServiceImpl implements IdentityAdminService {
         if (caller.getId().equals(id)) {
             throw new BadRequestException("You cannot change your own account status");
         }
+        assertMayAdminister(caller, id, "change the status of");
 
         Identity identity = identityRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -175,6 +178,26 @@ public class IdentityAdminServiceImpl implements IdentityAdminService {
             return AccountStatus.valueOf(status.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
             throw new BadRequestException("Unknown account status: " + status);
+        }
+    }
+
+    /**
+     * Refuses when the target is a SuperAdmin and the caller is not. Admin endpoints are gated on
+     * what the caller may do, never on who the target is, so a SecurityAdmin or CountryAdmin could
+     * otherwise set the SuperAdmin's password and sign in as it (or lock it out): every step
+     * authorised, the sequence a takeover. SuperAdmin acting on SuperAdmin stays allowed, or the
+     * last administrator would be unrecoverable.
+     */
+    private void assertMayAdminister(UserPrincipal caller, UUID targetId, String action) {
+        boolean callerIsSuperAdmin = caller.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_SuperAdmin".equals(a.getAuthority()));
+        if (callerIsSuperAdmin) {
+            return;
+        }
+        var targetRoles = authzQueryService.getRolesForIdentity(targetId).getRoles();
+        if (targetRoles != null && targetRoles.contains("SuperAdmin")) {
+            throw new io.github.mesubash.iam.shared.exception.ForbiddenException(
+                    "Only a SuperAdmin may " + action + " a SuperAdmin account");
         }
     }
 }
