@@ -42,6 +42,17 @@ public class IdentityAdminServiceImpl implements IdentityAdminService {
     private final SessionService sessionService;
     private final SecurityEventService securityEventService;
     private final io.github.mesubash.iam.shared.service.AuthzQueryService authzQueryService;
+    private final io.github.mesubash.iam.authn.mfa.MfaService mfaService;
+
+    @Override
+    @Transactional
+    public void resetMfa(UserPrincipal caller, UUID id) {
+        identityRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        // Clearing MFA is the first step of a takeover (reset MFA, set password, sign in), so it
+        // gets the same target check as setPassword.
+        assertMayAdminister(caller, id, "reset MFA for");
+        mfaService.adminReset(id);
+    }
 
     @Override
     @Transactional(readOnly = true)

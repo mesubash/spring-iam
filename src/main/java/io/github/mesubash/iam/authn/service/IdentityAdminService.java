@@ -31,4 +31,7 @@ public interface IdentityAdminService {
     PasswordSet setPassword(UserPrincipal caller, UUID id, AdminSetPasswordRequest request);
 
     IdentityAdminView updateStatus(UserPrincipal caller, UUID id, AdminUpdateStatusRequest request);
+
+    /** Clears MFA so the user must re-enroll (lost device). Refused on a SuperAdmin unless caller is one. */
+    void resetMfa(UserPrincipal caller, UUID id);
 }

@@ -1,10 +1,8 @@
 package io.github.mesubash.iam.authn.security.oauth2;
 
-import io.github.mesubash.iam.util.ClientIpResolver;
 import io.github.mesubash.iam.authn.entity.enums.AccountStatus;
 import io.github.mesubash.iam.authn.security.TokenEncryptionUtil;
 import io.github.mesubash.iam.authn.security.UserPrincipal;
-import io.github.mesubash.iam.authn.security.token.SessionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +37,6 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
     public static final String EXCHANGE_PREFIX = "authn:oauth:xchg:";
     private static final Duration EXCHANGE_TTL = Duration.ofSeconds(60);
 
-    private final SessionService sessionService;
     private final TokenEncryptionUtil tokenEncryptionUtil;
     private final HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository;
     private final StringRedisTemplate redisTemplate;
@@ -74,18 +71,14 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
             return;
         }
 
-        SessionService.IssuedRefresh issued = sessionService.createSession(
-                userPrincipal.getId(), ClientIpResolver.resolve(request), request.getHeader("User-Agent"));
-
-        // Single-use exchange code -> encrypted (identity, session, refresh) bundle
+        // Single-use exchange code -> encrypted identity id. The session is created at exchange
+        // time, after the MFA gate, so a social login cannot bypass a second factor.
         byte[] codeBytes = new byte[16];
         secureRandom.nextBytes(codeBytes);
         String code = Base64.getUrlEncoder().withoutPadding().encodeToString(codeBytes);
 
-        String bundle = userPrincipal.getId() + "|" + issued.session().getId()
-                + "|" + issued.rawToken();
         redisTemplate.opsForValue().set(EXCHANGE_PREFIX + code,
-                tokenEncryptionUtil.encrypt(bundle), EXCHANGE_TTL);
+                tokenEncryptionUtil.encrypt(userPrincipal.getId().toString()), EXCHANGE_TTL);
 
         cleanupOAuthState(request, response);
 

@@ -25,6 +25,13 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final Set<String> RATE_LIMITED_PATHS = Set.of(
             "/api/auth/login",
+            // Every code-checking MFA call: without these a stolen session could brute-force the
+            // 6-digit TOTP to strip MFA off the account.
+            "/api/auth/mfa/verify",
+            "/api/auth/mfa/setup",
+            "/api/auth/mfa/enable",
+            "/api/auth/mfa/disable",
+            "/api/auth/mfa/recovery-codes",
             "/api/auth/register",
             "/api/auth/forgot-password",
             "/api/auth/reset-password",

@@ -80,13 +80,40 @@ public class AuthController {
             @Valid @RequestBody LoginRequest request,
             HttpServletRequest httpRequest,
             HttpServletResponse response) {
-        JwtResponse jwtResponse = authService.login(request, clientIp(httpRequest),
-                httpRequest.getHeader("User-Agent"));
+        return loginResponse(authService.login(request, clientIp(httpRequest),
+                httpRequest.getHeader("User-Agent")), response);
+    }
 
-        setRefreshTokenCookie(response, jwtResponse.getRefreshToken());
-        JwtResponse responseBody = new JwtResponse(jwtResponse.getAccessToken(), jwtResponse.getExpiresIn(), jwtResponse.getIdentity());
+    @PostMapping("/mfa/verify")
+    @Operation(summary = "Second login step",
+            description = "Verify a TOTP or recovery code against the challenge from /login or /oauth/exchange")
+    public ResponseEntity<ApiResponse<?>> verifyMfa(
+            @Valid @RequestBody io.github.mesubash.iam.authn.mfa.MfaRequests.Verify body,
+            HttpServletRequest httpRequest,
+            HttpServletResponse response) {
+        JwtResponse tokens = authService.verifyMfaAndIssue(body.challenge(), body.code(),
+                clientIp(httpRequest), httpRequest.getHeader("User-Agent"));
+        return loginResponse(io.github.mesubash.iam.authn.dto.LoginResult.ok(tokens), response);
+    }
 
-        return ResponseEntity.ok(ApiResponse.success("Login successful", responseBody));
+    /**
+     * OK: refresh cookie + access token. MFA_REQUIRED: {status, challenge} for /mfa/verify.
+     * MFA_ENROLLMENT_REQUIRED: {status, enrollmentToken} for /mfa/setup and /mfa/enable.
+     */
+    private ResponseEntity<ApiResponse<?>> loginResponse(io.github.mesubash.iam.authn.dto.LoginResult result,
+                                                         HttpServletResponse response) {
+        return switch (result.status()) {
+            case MFA_REQUIRED -> ResponseEntity.ok(ApiResponse.success("MFA required",
+                    Map.of("status", "MFA_REQUIRED", "challenge", result.mfaToken())));
+            case MFA_ENROLLMENT_REQUIRED -> ResponseEntity.ok(ApiResponse.success("MFA enrollment required",
+                    Map.of("status", "MFA_ENROLLMENT_REQUIRED", "enrollmentToken", result.mfaToken())));
+            case OK -> {
+                JwtResponse tokens = result.tokens();
+                setRefreshTokenCookie(response, tokens.getRefreshToken());
+                yield ResponseEntity.ok(ApiResponse.success("Login successful",
+                        new JwtResponse(tokens.getAccessToken(), tokens.getExpiresIn(), tokens.getIdentity())));
+            }
+        };
     }
 
     @PostMapping("/refresh")
@@ -108,16 +135,12 @@ public class AuthController {
     @PostMapping("/oauth/exchange")
     @Operation(summary = "Exchange OAuth code",
             description = "Swap the single-use code from the OAuth redirect for tokens")
-    public ResponseEntity<ApiResponse<JwtResponse>> exchangeOAuthCode(
+    public ResponseEntity<ApiResponse<?>> exchangeOAuthCode(
             @RequestBody java.util.Map<String, String> body,
+            HttpServletRequest httpRequest,
             HttpServletResponse response) {
-        JwtResponse jwtResponse = authService.exchangeOAuthCode(body.get("code"));
-
-        setRefreshTokenCookie(response, jwtResponse.getRefreshToken());
-        JwtResponse responseBody = new JwtResponse(
-                jwtResponse.getAccessToken(), jwtResponse.getExpiresIn(), jwtResponse.getIdentity());
-
-        return ResponseEntity.ok(ApiResponse.success("Login successful", responseBody));
+        return loginResponse(authService.exchangeOAuthCode(body.get("code"), clientIp(httpRequest),
+                httpRequest.getHeader("User-Agent")), response);
     }
 
     @PostMapping("/logout")

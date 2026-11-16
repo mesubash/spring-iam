@@ -3,6 +3,9 @@ package io.github.mesubash.iam.authn.service.impl;
 import io.github.mesubash.iam.authn.config.JwtConfig;
 import io.github.mesubash.iam.authn.dto.JwtResponse;
 import io.github.mesubash.iam.authn.dto.LoginRequest;
+import io.github.mesubash.iam.authn.dto.LoginResult;
+import io.github.mesubash.iam.authn.mfa.MfaChallengeService;
+import io.github.mesubash.iam.authn.mfa.MfaService;
 import io.github.mesubash.iam.authn.dto.PasswordChangeRequest;
 import io.github.mesubash.iam.authn.dto.RegisterRequest;
 import io.github.mesubash.iam.authn.entity.Credential;
@@ -67,6 +70,12 @@ public class AuthServiceImpl implements AuthService {
     private final SecurityEventService securityEventService;
     private final NotificationPort notificationPort;
     private final LoginAttemptService loginAttemptService;
+    private final MfaService mfaService;
+    private final MfaChallengeService mfaChallengeService;
+
+    /** Roles that must use MFA: holders without it are sent to enrollment instead of a session. */
+    @org.springframework.beans.factory.annotation.Value("${iam.mfa.required-roles:}")
+    private String mfaRequiredRoles;
 
     @Override
     @Transactional
@@ -104,7 +113,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public JwtResponse login(LoginRequest request, String ipAddress, String userAgent) {
+    public LoginResult login(LoginRequest request, String ipAddress, String userAgent) {
         log.info("User attempting to login: {}", request.getEmail());
 
         // Check if account is locked before attempting auth (own tx)
@@ -129,24 +138,70 @@ public class AuthServiceImpl implements AuthService {
         }
 
         ensureAccountActive(identity);
+        return afterFirstFactor(identity, ipAddress, userAgent);
+    }
 
-        // Update last login and reset failed attempts
+    /**
+     * The MFA gate, shared by password login and the OAuth code exchange so neither path can
+     * skip it. Decides before any session exists.
+     */
+    private LoginResult afterFirstFactor(Identity identity, String ipAddress, String userAgent) {
+        if (mfaService.isEnabled(identity.getId())) {
+            return LoginResult.mfaRequired(mfaChallengeService.issueChallenge(identity.getId()));
+        }
+        if (mfaRequiredForRoles(getRolesForIdentity(identity.getId()))) {
+            return LoginResult.enrollmentRequired(mfaChallengeService.issueEnrollment(identity.getId()));
+        }
+        return LoginResult.ok(issueSession(identity, ipAddress, userAgent));
+    }
+
+    private boolean mfaRequiredForRoles(List<String> roles) {
+        if (mfaRequiredRoles == null || mfaRequiredRoles.isBlank()) {
+            return false;
+        }
+        List<String> required = java.util.Arrays.stream(mfaRequiredRoles.split(","))
+                .map(String::trim).filter(r -> !r.isEmpty()).toList();
+        return roles.stream().anyMatch(required::contains);
+    }
+
+    /** Mint a session + tokens for a fully authenticated identity. One session per device. */
+    private JwtResponse issueSession(Identity identity, String ipAddress, String userAgent) {
         identity.setLastLoginAt(OffsetDateTime.now());
         identity.setFailedLoginAttempts(0);
         identity.setAccountLockedUntil(null);
         identityRepository.save(identity);
 
-        // One session per device — other sessions stay alive
-        SessionService.IssuedRefresh issued = sessionService.createSession(
-                identity.getId(), ipAddress, userAgent);
-        String accessToken = jwtTokenProvider.generateAccessToken(
-                userPrincipal, issued.session().getId());
+        UserPrincipal principal = UserPrincipal.create(identity, null, getRolesForIdentity(identity.getId()));
+        SessionService.IssuedRefresh issued = sessionService.createSession(identity.getId(), ipAddress, userAgent);
+        String accessToken = jwtTokenProvider.generateAccessToken(principal, issued.session().getId());
         long expiresIn = jwtConfig.getExpiration() / 1000;
 
-        securityEventService.logEvent(identity, SecurityEventType.LOGIN_SUCCESS, null, null);
-        log.info("User logged in successfully: {}", request.getEmail());
-
+        securityEventService.logEvent(identity, SecurityEventType.LOGIN_SUCCESS, ipAddress, userAgent);
+        log.info("User logged in successfully: {}", identity.getPrimaryEmail());
         return new JwtResponse(accessToken, issued.rawToken(), expiresIn, null); // identity comes from GET /api/authz/me/bootstrap
+    }
+
+    @Override
+    @Transactional
+    public JwtResponse verifyMfaAndIssue(String challenge, String code, String ipAddress, String userAgent) {
+        // Peek: a wrong code must not consume the challenge, so the user can retry within its TTL.
+        UUID identityId = mfaChallengeService.peekChallenge(challenge)
+                .orElseThrow(() -> new UnauthorizedException("Invalid or expired MFA challenge"));
+        if (!mfaService.verifyForLogin(identityId, code)) {
+            int left = mfaChallengeService.registerFailure(challenge);
+            if (left <= 0) {
+                mfaChallengeService.clearChallenge(challenge);
+                throw new UnauthorizedException(
+                        "Verification expired after too many attempts. Sign in again for a new code.");
+            }
+            throw new UnauthorizedException(
+                    "Invalid MFA code: " + left + (left == 1 ? " attempt" : " attempts") + " left.");
+        }
+        mfaChallengeService.clearChallenge(challenge); // burn only on success
+        Identity identity = identityRepository.findById(identityId)
+                .orElseThrow(() -> new UnauthorizedException("User not found"));
+        ensureAccountActive(identity);
+        return issueSession(identity, ipAddress, userAgent);
     }
 
     @Override
@@ -174,7 +229,8 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public JwtResponse exchangeOAuthCode(String code) {
+    @Transactional
+    public LoginResult exchangeOAuthCode(String code, String ipAddress, String userAgent) {
         if (code == null || code.isBlank()) {
             throw new InvalidTokenException("Exchange code is required");
         }
@@ -186,22 +242,13 @@ public class AuthServiceImpl implements AuthService {
             throw new InvalidTokenException("Invalid or expired exchange code");
         }
 
-        String[] bundle = tokenEncryptionUtil.decrypt(encrypted).split("\\|", 3);
-        UUID identityId = UUID.fromString(bundle[0]);
-        UUID sessionId = UUID.fromString(bundle[1]);
-        String rawRefresh = bundle[2];
-
+        // The code carries only the identity: no session exists until the MFA gate has passed,
+        // so social login cannot skip a second factor the password path would require.
+        UUID identityId = UUID.fromString(tokenEncryptionUtil.decrypt(encrypted));
         Identity identity = identityRepository.findById(identityId)
                 .orElseThrow(() -> new InvalidTokenException("Identity not found"));
         ensureAccountActive(identity);
-
-        List<String> roles = getRolesForIdentity(identity.getId());
-        UserPrincipal userPrincipal = UserPrincipal.create(identity, null, roles);
-
-        String accessToken = jwtTokenProvider.generateAccessToken(userPrincipal, sessionId);
-        long expiresIn = jwtConfig.getExpiration() / 1000;
-
-        return new JwtResponse(accessToken, rawRefresh, expiresIn, null); // identity comes from GET /api/authz/me/bootstrap
+        return afterFirstFactor(identity, ipAddress, userAgent);
     }
 
     @Override

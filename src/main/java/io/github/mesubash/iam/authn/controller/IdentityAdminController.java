@@ -74,6 +74,15 @@ public class IdentityAdminController {
     }
 
     @PutMapping("/{id}/status")
+    @DeleteMapping("/{id}/mfa")
+    @PreAuthorize("hasAnyRole('SuperAdmin','SecurityAdmin')")
+    @Operation(summary = "Reset an identity's MFA",
+            description = "Clears MFA so the user must re-enroll (lost device). Recorded as a security event.")
+    public ResponseEntity<Void> resetMfa(@AuthenticationPrincipal UserPrincipal caller, @PathVariable UUID id) {
+        identityAdminService.resetMfa(caller, id);
+        return ResponseEntity.noContent().build();
+    }
+
     @PreAuthorize("hasAnyRole('SuperAdmin','CountryAdmin','SecurityAdmin')")
     @Operation(summary = "Change account status",
             description = "ACTIVE / SUSPENDED / DEACTIVATED; non-active revokes sessions; cannot target yourself")

@@ -128,6 +128,12 @@ iam:
       lockout-duration-minutes: 30
       window-minutes: 15       # only failures within this window count toward a lock
 
+  mfa:
+    issuer: ${IAM_MFA_ISSUER:spring-iam}          # name shown in authenticator apps
+    # Comma-separated roles that must use MFA. Holders without it are sent to enrollment at
+    # login instead of getting a session. Recommended: SuperAdmin.
+    required-roles: ${IAM_MFA_REQUIRED_ROLES:}
+
   rate-limit:
     max-requests: 10        # per IP per endpoint per window
     window-seconds: 60      # sliding window

@@ -147,6 +147,11 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/auth/register",
                                 "/api/auth/login",
+                                // MFA second step and forced enrollment carry their own tokens;
+                                // a signed-in caller still authenticates normally on setup/enable.
+                                "/api/auth/mfa/verify",
+                                "/api/auth/mfa/setup",
+                                "/api/auth/mfa/enable",
                                 "/api/auth/refresh",
                                 "/api/auth/oauth/**",
                                 "/api/auth/verify-email",
