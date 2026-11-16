@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { permissionsApi } from "@/api/resources";
+import type { Permission } from "@/api/types";
 import { useAuthz } from "@/context/AuthzContext";
 import { PageHeader } from "@/components/iam/PageHeader";
-import { DataTable, type Column } from "@/components/iam/DataTable";
-import { Tag } from "@/components/iam/badges";
-import { Input } from "@/components/ui/input";
+import { PermissionTree } from "@/components/iam/PermissionTree";
 
 export const Route = createFileRoute("/_authenticated/me/access")({
   component: MyAccessPage,
@@ -12,48 +13,45 @@ export const Route = createFileRoute("/_authenticated/me/access")({
 
 function MyAccessPage() {
   const { permissions, isLoading } = useAuthz();
-  const [filter, setFilter] = useState("");
-  const rows = useMemo(() => {
-    const arr = Array.from(permissions).sort();
-    const f = filter.trim().toLowerCase();
-    return f ? arr.filter((k) => k.toLowerCase().includes(f)) : arr;
-  }, [permissions, filter]);
 
-  const columns: Column<string>[] = [
-    {
-      key: "key",
-      header: "Permission",
-      render: (k) => <span className="font-mono text-[13px]">{k}</span>,
-    },
-    {
-      key: "domain",
-      header: "Domain",
-      width: "140px",
-      render: (k) => <Tag>{k.split(".")[0] ?? "—"}</Tag>,
-    },
-  ];
+  // Catalog gives the human descriptions; forbidden for users without
+  // catalog access, in which case the tree still renders from the bare keys.
+  const catalogQ = useQuery({
+    queryKey: ["permissions"],
+    queryFn: () => permissionsApi.list(),
+    retry: false,
+  });
+
+  const perms = useMemo<Permission[]>(() => {
+    const byKey = new Map((catalogQ.data ?? []).map((p) => [p.key, p]));
+    return Array.from(permissions)
+      .sort()
+      .map((key) => {
+        const known = byKey.get(key);
+        if (known) return known;
+        const parts = key.split(".");
+        return {
+          id: key,
+          key,
+          domain: parts[0] ?? "other",
+          resource: parts.slice(1, -1).join(".") || "other",
+          action: parts[parts.length - 1] ?? "",
+          description: null,
+        };
+      });
+  }, [permissions, catalogQ.data]);
 
   return (
     <div>
       <PageHeader
         title="My Access"
-        description="Permissions granted to you at the selected scope."
+        description="Permissions granted to you at the selected scope, grouped by domain and resource."
       />
-      <div className="mb-3">
-        <Input
-          placeholder="Filter permissions..."
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="max-w-xs"
-        />
-      </div>
-      <DataTable
-        columns={columns}
-        rows={rows}
-        loading={isLoading}
-        empty="No permissions at this scope."
-        rowKey={(k) => k}
-      />
+      {isLoading ? (
+        <div className="py-8 text-sm text-[var(--muted-foreground)]">Loading...</div>
+      ) : (
+        <PermissionTree perms={perms} />
+      )}
     </div>
   );
 }

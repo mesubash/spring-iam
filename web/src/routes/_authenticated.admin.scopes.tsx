@@ -22,6 +22,8 @@ import { ConfirmDialog } from "@/components/iam/ConfirmDialog";
 import { Tag } from "@/components/iam/badges";
 import { cn } from "@/lib/utils";
 import { useAuthz } from "@/context/AuthzContext";
+import { buildScopeTree, withAncestors, type ScopeNode } from "@/lib/scope-tree";
+import { Network } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/scopes")({
   component: () => (
@@ -39,23 +41,44 @@ function ScopesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const { can } = useAuthz();
 
   const sorted = useMemo(
     () => [...(q.data ?? [])].sort((a, b) => a.path.localeCompare(b.path)),
     [q.data],
   );
-  const visible = useMemo(() => {
-    const f = filter.trim().toLowerCase();
-    if (!f) return sorted;
-    return sorted.filter(
+
+  // Filtering keeps every ancestor of a match so the tree stays connected,
+  // and holds the matched branches open.
+  const f = filter.trim().toLowerCase();
+  const tree = useMemo(() => {
+    const all = q.data ?? [];
+    if (!f) return buildScopeTree(all);
+    const matches = all.filter(
       (s) =>
         s.name.toLowerCase().includes(f) ||
         s.code.toLowerCase().includes(f) ||
         s.path.toLowerCase().includes(f) ||
         s.type.toLowerCase().includes(f),
     );
-  }, [sorted, filter]);
+    return buildScopeTree(
+      withAncestors(
+        all,
+        matches.map((s) => s.id),
+      ),
+    );
+  }, [q.data, f]);
+
+  const toggleCollapse = (id: string) => {
+    if (f) return;
+    setCollapsed((prev) => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id);
+      else s.add(id);
+      return s;
+    });
+  };
 
   const selected = useMemo(
     () => sorted.find((s) => s.id === selectedId) ?? null,
@@ -93,19 +116,21 @@ function ScopesPage() {
         <div className="overflow-x-auto rounded border border-[var(--border)] bg-[var(--card)]">
           {q.isLoading ? (
             <div className="p-3 text-sm text-[var(--muted-foreground)]">Loading…</div>
-          ) : visible.length === 0 ? (
+          ) : tree.length === 0 ? (
             <div className="p-6 text-center text-sm text-[var(--muted-foreground)]">
               {filter ? "No scopes match the filter." : "No scopes yet."}
             </div>
           ) : (
             <ul className="py-1">
-              {visible.map((s) => (
-                <ScopeRow
-                  key={s.id}
-                  scope={s}
-                  indent={filter ? 0 : s.depth}
-                  active={selectedId === s.id}
-                  onSelect={() => setSelectedId(s.id)}
+              {tree.map((n) => (
+                <ScopeTreeRow
+                  key={n.scope.id}
+                  node={n}
+                  depth={0}
+                  selectedId={selectedId}
+                  collapsed={collapsed}
+                  onSelect={setSelectedId}
+                  onToggle={toggleCollapse}
                 />
               ))}
             </ul>
@@ -160,51 +185,110 @@ function ScopesPage() {
         defaultParentId={selected?.id}
       />
       {selected ? (
-        <MoveScopeDialog
-          open={moveOpen}
-          onOpenChange={setMoveOpen}
-          scope={selected}
-          all={sorted}
-        />
+        <MoveScopeDialog open={moveOpen} onOpenChange={setMoveOpen} scope={selected} all={sorted} />
       ) : null}
     </div>
   );
 }
 
-function ScopeRow({
-  scope,
-  indent,
-  active,
+function ScopeTreeRow({
+  node,
+  depth,
+  selectedId,
+  collapsed,
   onSelect,
+  onToggle,
 }: {
-  scope: Scope;
-  indent: number;
-  active: boolean;
-  onSelect: () => void;
+  node: ScopeNode;
+  depth: number;
+  selectedId: string | null;
+  collapsed: Set<string>;
+  onSelect: (id: string) => void;
+  onToggle: (id: string) => void;
 }) {
+  const { scope, children } = node;
+  const active = selectedId === scope.id;
+  const hasChildren = children.length > 0;
+  const open = !collapsed.has(scope.id);
+
   return (
     <li>
-      <button
-        type="button"
-        onClick={onSelect}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onSelect(scope.id)}
+        onKeyDown={(e) => e.key === "Enter" && onSelect(scope.id)}
         className={cn(
-          "flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm hover:bg-[var(--background)] focus:outline-none focus:ring-1 focus:ring-[var(--ring)]",
+          "flex w-full cursor-pointer items-stretch px-2 text-left text-sm hover:bg-[var(--background)] focus:outline-none focus:ring-1 focus:ring-inset focus:ring-[var(--ring)]",
           active && "bg-[var(--primary-subtle)]",
         )}
-        style={{ paddingLeft: 10 + indent * 18 }}
       >
-        <span className={cn("font-medium", active && "text-[var(--primary)]")}>
-          {scope.name}
+        {/* drawn tree guides, one per ancestor level */}
+        {Array.from({ length: depth }, (_, i) => (
+          <span
+            key={i}
+            className="relative w-5 shrink-0 self-stretch border-l border-[var(--border)]"
+          >
+            {i === depth - 1 ? (
+              <span className="absolute left-0 top-1/2 h-px w-4 bg-[var(--border)]" />
+            ) : null}
+          </span>
+        ))}
+        <span className="flex min-w-0 flex-1 items-center gap-2 py-1.5">
+          {hasChildren ? (
+            <button
+              type="button"
+              aria-label={open ? "Collapse" : "Expand"}
+              aria-expanded={open}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggle(scope.id);
+              }}
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-[var(--border)] text-xs leading-none text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
+            >
+              {open ? "−" : "+"}
+            </button>
+          ) : (
+            <Network
+              className={cn(
+                "h-4 w-4 shrink-0",
+                active ? "text-[var(--primary)]" : "text-[var(--muted-foreground)]",
+              )}
+            />
+          )}
+          <span className="flex min-w-0 flex-col">
+            <span className={cn("font-medium leading-tight", active && "text-[var(--primary)]")}>
+              {scope.name}
+              {hasChildren ? (
+                <span className="ml-2 text-xs font-normal text-[var(--muted-foreground)]">
+                  {children.length}
+                </span>
+              ) : null}
+            </span>
+            <span className="truncate font-mono text-[11px] text-[var(--muted-foreground)]">
+              {scope.code} · {scope.path}
+            </span>
+          </span>
+          <span className="ml-auto shrink-0">
+            <Tag tone="neutral">{scope.type}</Tag>
+          </span>
         </span>
-        <span className="font-mono text-xs text-[var(--muted-foreground)]">{scope.code}</span>
-        <span className="hidden truncate font-mono text-xs text-[var(--muted-foreground)] md:inline">
-          {scope.path}
-        </span>
-        <span className="ml-auto flex items-center gap-2">
-          <span className="text-xs text-[var(--muted-foreground)]">d{scope.depth}</span>
-          <Tag tone="neutral">{scope.type}</Tag>
-        </span>
-      </button>
+      </div>
+      {hasChildren && open ? (
+        <ul>
+          {children.map((c) => (
+            <ScopeTreeRow
+              key={c.scope.id}
+              node={c}
+              depth={depth + 1}
+              selectedId={selectedId}
+              collapsed={collapsed}
+              onSelect={onSelect}
+              onToggle={onToggle}
+            />
+          ))}
+        </ul>
+      ) : null}
     </li>
   );
 }
