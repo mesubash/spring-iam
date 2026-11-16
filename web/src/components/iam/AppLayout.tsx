@@ -114,7 +114,9 @@ export function AppLayout() {
               onClick={() => setMenuOpen((v) => !v)}
               className="flex h-8 items-center gap-2 rounded px-2 text-sm hover:bg-[var(--background)]"
             >
-              <span className="text-[var(--muted-foreground)]">{identity?.email ?? "…"}</span>
+              <span className="text-[var(--muted-foreground)]" title={identity?.email}>
+                {identity?.displayName?.trim() || identity?.email || "…"}
+              </span>
             </button>
             {menuOpen ? (
               <div className="absolute right-0 top-9 z-20 w-48 rounded border border-[var(--border)] bg-[var(--card)] py-1 shadow-sm">

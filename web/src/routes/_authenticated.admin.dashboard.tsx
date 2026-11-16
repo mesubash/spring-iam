@@ -32,6 +32,7 @@ function DashboardPage() {
   const { can } = useAuthz();
   const { identity } = useAuth();
   const subjectId = identity?.id;
+  const displayName = identity?.displayName?.trim();
 
   const roles = useQuery({
     queryKey: ["roles"],
@@ -83,7 +84,10 @@ function DashboardPage() {
 
   return (
     <div>
-      <PageHeader title="Dashboard" description="Snapshot of your authorization system." />
+      <PageHeader
+        title={displayName ? `Welcome back, ${displayName}` : "Dashboard"}
+        description="Snapshot of your authorization system."
+      />
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Roles" value={roles.data?.length ?? "—"} loading={roles.isLoading} />
         <Stat label="Active assignments" value={activeAssignments ?? "—"} loading={assignments.isLoading} />
