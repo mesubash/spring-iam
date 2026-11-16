@@ -15,7 +15,7 @@ public final class PasswordUtil {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
-    public static final int MIN_PASSWORD_LENGTH = 6;
+    public static final int MIN_PASSWORD_LENGTH = 8;
     // BCrypt only hashes the first 72 bytes; longer input is wasted work and a CPU-DoS vector.
     public static final int MAX_PASSWORD_LENGTH = 72;
 

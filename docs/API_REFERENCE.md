@@ -108,7 +108,7 @@ TOTP (RFC 6238, 6 digits, 30 s) plus ten single-use recovery codes.
 > Note: there is **no `/api/auth/me`** endpoint in the code. Login/refresh responses carry the identity summary; use `/api/authz/me/*` (§6) for scopes/permissions.
 
 **Request shapes**
-- `register` — body `RegisterRequest`: `{ "email": string, "password": string(min 6) }`
+- `register` — body `RegisterRequest`: `{ "email": string, "password": string(8–72, a letter and a digit) }`
 - `login` — body `LoginRequest`: `{ "email": string, "password": string }`
 - `refresh` — no body; refresh token read from `__Host-Refresh` cookie.
 - `oauth/exchange` — body `{ "code": string }`
@@ -120,7 +120,7 @@ TOTP (RFC 6238, 6 digits, 30 s) plus ten single-use recovery codes.
 - `change-password` — body `PasswordChangeRequest`: `{ "currentPassword": string, "newPassword": string(min 8), "confirmPassword": string }`; `confirmPassword` must equal `newPassword`.
 - `change-email` — body `{ "newEmail": string, "currentPassword": string }`
 
-**Password policy.** Every path where a user sets their own password (`register`, `reset-password`, `change-password`, `verify-email-and-setup-password`) also enforces 6–72 characters with at least one letter and one digit; a violation is a `400` naming the rule. The 72 cap is BCrypt's input limit. With `IAM_PASSWORD_BREACH_CHECK=true` these paths, and an admin-chosen password, are also rejected (`400`) when the password appears in a known breach.
+**Password policy.** Every path where a user sets their own password (`register`, `reset-password`, `change-password`, `verify-email-and-setup-password`) also enforces 8–72 characters with at least one letter and one digit; a violation is a `400` naming the rule. The 72 cap is BCrypt's input limit. With `IAM_PASSWORD_BREACH_CHECK=true` these paths, and an admin-chosen password, are also rejected (`400`) when the password appears in a known breach.
 
 **`POST /api/auth/login` — example**
 ```json

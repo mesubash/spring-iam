@@ -5,7 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
+
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -21,7 +21,6 @@ class NotificationPortAsyncTest {
     @TestConfiguration
     static class RecordingAdapter {
         @Bean
-        @Primary
         NotificationPort recordingNotificationPort() {
             return new NotificationPort() {
                 @Override public void sendEmailVerification(String email, String token) {}

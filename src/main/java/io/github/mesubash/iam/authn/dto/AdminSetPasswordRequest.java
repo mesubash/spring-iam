@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class AdminSetPasswordRequest {
 
-    @Size(min = 6, message = "Password must be at least 6 characters long")
+    @Size(min = 8, message = "Password must be at least 8 characters long")
     private String newPassword;
 
     /** Revoke the user's sessions so the new password takes effect everywhere. */

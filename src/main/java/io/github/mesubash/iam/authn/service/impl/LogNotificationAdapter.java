@@ -2,17 +2,21 @@ package io.github.mesubash.iam.authn.service.impl;
 
 import io.github.mesubash.iam.authn.service.NotificationPort;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.context.annotation.Fallback;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/** Dev default: logs the token instead of sending anything. */
+/**
+ * Dev default: logs the token instead of sending anything. Marked @Fallback (not
+ * @ConditionalOnMissingBean, which depends on bean registration order in user config) so any
+ * NotificationPort bean a deployment adds wins without further configuration.
+ */
 @Configuration
 @Slf4j
 public class LogNotificationAdapter {
 
     @Bean
-    @ConditionalOnMissingBean(NotificationPort.class)
+    @Fallback
     public NotificationPort logNotificationPort() {
         return new NotificationPort() {
             @Override
