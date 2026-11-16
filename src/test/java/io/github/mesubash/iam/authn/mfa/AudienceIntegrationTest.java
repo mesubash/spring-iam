@@ -45,6 +45,11 @@ class AudienceIntegrationTest {
     @Autowired private TokenEncryptionUtil encryption;
     @Autowired private JwtTokenProvider jwt;
     @Autowired private org.springframework.data.redis.core.StringRedisTemplate redis;
+    @Autowired private io.github.mesubash.iam.authz.repository.PermissionRepository permissionRepository;
+    @Autowired private io.github.mesubash.iam.authz.repository.RoleRepository roleRepository;
+    @Autowired private io.github.mesubash.iam.authz.repository.RolePermissionRepository rolePermissionRepository;
+    @Autowired private io.github.mesubash.iam.authz.repository.AssignmentRepository assignmentRepository;
+    @Autowired private io.github.mesubash.iam.authz.repository.ServiceClientRepository serviceClientRepository;
 
     private String newVerifiedUser() {
         String email = "aud-" + UUID.randomUUID() + "@example.com";
@@ -140,5 +145,54 @@ class AudienceIntegrationTest {
         assertThat(jwt.parseToken(tokens.getAccessToken()).get("amr")).isEqualTo(java.util.List.of("google"));
         assertThatThrownBy(() -> authService.exchangeOAuthCode("c2", null, "junit"))
                 .isInstanceOf(BadRequestException.class);
+    }
+
+    private io.github.mesubash.iam.authz.entity.Permission permission(String key) {
+        String[] seg = key.split("\\.");
+        return permissionRepository.findByKey(key).orElseGet(() -> permissionRepository.save(
+                io.github.mesubash.iam.authz.entity.Permission.builder().key(key).domain(seg[0])
+                        .resource(seg[1]).action(seg[2]).createdBy("test").build()));
+    }
+
+    private String[] mePermissions(JwtResponse tokens) throws Exception {
+        String bearer = "Bearer " + tokens.getAccessToken();
+        String perms = mvc.perform(get("/api/authz/me/permissions")
+                        .param("scopeId", "00000000-0000-0000-0000-000000000001").header("Authorization", bearer))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String boot = mvc.perform(get("/api/authz/me/bootstrap").header("Authorization", bearer))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        java.util.List<String> fromPerms = com.jayway.jsonpath.JsonPath.read(perms, "$.data");
+        java.util.List<String> fromBoot = com.jayway.jsonpath.JsonPath.read(boot, "$.data.permissions");
+        assertThat(fromBoot).containsExactlyInAnyOrderElementsOf(fromPerms);
+        return fromPerms.toArray(String[]::new);
+    }
+
+    @Test
+    void mePermissionsAreScopedToTheAudiencesRegisteredDomains() throws Exception {
+        if (serviceClientRepository.findByName("billing").isEmpty()) {
+            serviceClientRepository.save(io.github.mesubash.iam.authz.entity.ServiceClient.builder()
+                    .name("billing").displayName("Billing").ownedDomains(java.util.List.of("billing"))
+                    .apiKeyHash("not-a-key-" + UUID.randomUUID()).createdAt(java.time.Instant.now()).build());
+        }
+        var role = roleRepository.save(io.github.mesubash.iam.authz.entity.Role.builder()
+                .name("AudScoped" + UUID.randomUUID().toString().substring(0, 8))
+                .isSystemRole(false).active(true).createdBy("test").build());
+        for (String key : new String[]{"billing.invoice.read", "sales.order.read"}) {
+            rolePermissionRepository.save(io.github.mesubash.iam.authz.entity.RolePermission.builder()
+                    .roleId(role.getId()).permissionId(permission(key).getId())
+                    .grantedAt(java.time.Instant.now()).grantedBy("test").build());
+        }
+        String email = newVerifiedUser();
+        UUID id = identityRepository.findByPrimaryEmail(email).orElseThrow().getId();
+        assignmentRepository.save(io.github.mesubash.iam.authz.entity.Assignment.builder()
+                .subjectId(id.toString()).roleId(role.getId())
+                .scopeId(UUID.fromString("00000000-0000-0000-0000-000000000001"))
+                .grantedBy("test").grantedAt(java.time.Instant.now()).build());
+
+        // billing is registered and owns "billing": its token sees only that domain.
+        assertThat(mePermissions(login(email, "billing").tokens())).containsExactly("billing.invoice.read");
+        // portal has no registered service: unfiltered.
+        assertThat(mePermissions(login(email, "portal").tokens()))
+                .containsExactlyInAnyOrder("billing.invoice.read", "sales.order.read");
     }
 }
