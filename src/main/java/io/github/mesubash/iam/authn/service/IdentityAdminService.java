@@ -44,4 +44,10 @@ public interface IdentityAdminService {
 
     /** Clears MFA so the user must re-enroll (lost device). Refused on a SuperAdmin unless caller is one. */
     void resetMfa(UserPrincipal caller, UUID id);
+
+    /**
+     * Whether the identity holds SuperAdmin or any role at ROOT. Callers with no identity of their
+     * own to rank (a service on an API key) must leave such an account alone.
+     */
+    boolean isPlatformAdmin(UUID id);
 }

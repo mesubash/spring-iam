@@ -18,7 +18,7 @@ Filter order is **RateLimit → API key → service JWT → user JWT** (`Securit
 |-----------|-------------|--------------------|---------|
 | **User access token** | `Authorization: Bearer <jwt>` | Business roles: `SuperAdmin`, `CountryAdmin`, `AccessAdmin`, `SecurityAdmin`, `AuditViewer`, `User`, … (Spring `ROLE_<name>`) | End users / admin console |
 | **Service (system) JWT** | `Authorization: Bearer <jwt>` | Roles from the token's `roles`/`scope` claims (falls back to `ROLE_USER`) | Trusted services |
-| **Internal / service API key** | `X-Internal-Api-Key: <key>` **or** `Authorization: ApiKey <key>` | `ROLE_INTERNAL` (principal `internal-client`, or `service:<name>` when the service-registry flag is on and a per-service key matches) | Service-to-service calls (PDP, introspection, manifest sync) |
+| **Internal / service API key** | `X-Internal-Api-Key: <key>` **or** `Authorization: ApiKey <key>` | `ROLE_INTERNAL` (principal `internal-client`, or `service:<name>` when the service-registry flag is on and a per-service key matches) | Service-to-service calls (PDP, introspection, manifest sync, internal accounts/provisioning) |
 
 - **Access tokens are RS256.** Consumers verify them locally against the public keys at `GET /.well-known/jwks.json` (`kid` in the header selects the key).
 - **Service JWTs are HS256** (shared secret `iam.security.jwt.secret`), tried before the user-JWT filter; a `Bearer` value that fails HMAC verification falls through to RS256 user-token verification.
@@ -584,6 +584,44 @@ Controller: `TokenIntrospectionController` (`/api/v1/token`), path rule **`INTER
 | POST | `/api/v1/break-glass` | Authenticated | Grant emergency, time-boxed elevation (creates a short-lived `BREAK_GLASS` assignment). **404** when `break-glass` off. |
 
 Body `BreakGlassRequest` `{ subjectId, roleId, scopeId, durationMinutes=60, reason, referenceId? }` → the created `Assignment` (201). `reason` is mandatory.
+
+### Internal accounts — `InternalAccountController` (`/api/v1/internal/accounts`) — **INTERNAL or SuperAdmin**
+
+For resource servers on an API key. Raw JSON. Never returns password hashes. `AccountView` is
+`{ id, email, emailVerified, provider ("LOCAL" | "GOOGLE" | "APPLE" | "MICROSOFT"), providerUserId, displayName }`.
+
+| Method | Path | Body → Response | Purpose |
+|--------|------|-----------------|---------|
+| GET | `/api/v1/internal/accounts/{id}` | → `AccountView` · 404 | Account by id. |
+| GET | `/api/v1/internal/accounts?email=…` | → `AccountView` · 404 | Account by email (case-insensitive). |
+| GET | `/api/v1/internal/accounts/{id}/scopes` | → `ScopeSummaryDto[]` | Scopes the account holds assignments in, for scope-aware decisions when the user's token cannot be forwarded. |
+| POST | `/api/v1/internal/accounts` | `{ email, passwordHash?, verified?, provider?, providerUserId?, sendVerificationEmail? }` → 201 `AccountView` · 409 | Create an account. `passwordHash` is already hashed in the configured encoder format. An unverified LOCAL account is sent the verification email unless `sendVerificationEmail:false`. |
+| DELETE | `/api/v1/internal/accounts/{id}` | → 204 · 409 | Discard an account the caller could not finish provisioning. Refused (409) once it has signed in or holds an assignment. Idempotent. |
+| POST | `/api/v1/internal/accounts/{id}/verification-email` | → 204 | Re-send the verification email; no-op once verified. |
+| POST | `/api/v1/internal/accounts/{id}/verification-token` | → `{ token }` · 409 | Mint a verification token without sending email (the caller mails its own link to `/api/auth/verify-email?token=…`). 409 when already verified. |
+| PUT | `/api/v1/internal/accounts/{id}/password` | `{ passwordHash, endSessions? }` → 204 · **403** | Set the password hash; `endSessions:true` also signs the account out everywhere. |
+| PUT | `/api/v1/internal/accounts/{id}/verify` | → 204 · **403** | Mark the email verified. |
+| POST | `/api/v1/internal/accounts/{id}/deactivate` | → 204 · 409 · **403** | Self-deactivation relayed by the service after it confirmed the person: ends every session and mails the reactivation link. Only an `ACTIVE` account (409 otherwise); no-op when already deactivated. |
+| POST | `/api/v1/internal/accounts/{id}/verify-password` | `{ password }` → 204 · 401 · **403** | Confirm the person's current password. Wrong answers count toward the account lock. |
+
+**Platform-admin floor.** API keys carry one undifferentiated `ROLE_INTERNAL`, so there is no
+caller to rank against the target. The **403** rows are refused outright when the target holds
+SuperAdmin or any role at ROOT: an administrator recovers through `/api/v1/identities`, not over a key.
+
+### Internal provisioning — `ProvisioningController` (`/api/v1/internal/provisioning`) — **INTERNAL or SuperAdmin**
+
+For a service that reconciles its own users into roles. Grants made here have origin `PROVISIONED`;
+only those are listed or revocable here. Raw JSON.
+
+| Method | Path | Body → Response | Purpose |
+|--------|------|-----------------|---------|
+| POST | `/api/v1/internal/provisioning/grants` | `{ subjectId, roleId, scopeId }` → 204 · **403** | Grant a role. Idempotent. `grantedBy` records the key's principal. |
+| GET | `/api/v1/internal/provisioning/grants` | → `[{ assignmentId, subjectId, roleId, scopeId }]` | Active `PROVISIONED` grants, for diffing. |
+| DELETE | `/api/v1/internal/provisioning/grants/{assignmentId}?reason=…` | → 204 · 404 · **403** | Revoke a `PROVISIONED` grant (404 for any other assignment). |
+
+**Escalation floor.** Every grant and revoke here is refused (403) at the ROOT scope and for any
+system role (SuperAdmin and the other built-in administrator roles). These run without a
+delegating identity, so nothing else would stop a key holder from granting itself administration.
 
 ---
 

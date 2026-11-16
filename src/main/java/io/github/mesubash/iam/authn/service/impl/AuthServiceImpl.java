@@ -617,6 +617,41 @@ public class AuthServiceImpl implements AuthService {
         log.info("Account reactivated for user: {}", userId);
     }
 
+    @Override
+    @Transactional
+    public void deactivate(UUID identityId) {
+        Identity identity = identityRepository.findById(identityId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        AccountStatus status = identity.getAccountStatus();
+        if (status == AccountStatus.DEACTIVATED) {
+            return;
+        }
+        // Reactivation is self-service, so a suspension must not be escapable through here.
+        if (status != AccountStatus.ACTIVE) {
+            throw new ConflictException("Account is " + status + " and cannot be deactivated");
+        }
+        identity.setAccountStatus(AccountStatus.DEACTIVATED);
+        identityRepository.save(identity);
+        sessionService.revokeAll(identityId, "SELF_DEACTIVATED");
+        securityEventService.logEvent(identity, SecurityEventType.ACCOUNT_DEACTIVATED, null, null,
+                Map.of("by", "self"));
+        requestReactivation(identity.getPrimaryEmail());
+    }
+
+    @Override
+    public void verifyPassword(UUID identityId, String password) {
+        Identity identity = identityRepository.findById(identityId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        loginAttemptService.unlockIfExpired(identity);
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(identity.getPrimaryEmail(), password));
+        } catch (BadCredentialsException ex) {
+            loginAttemptService.recordFailure(identity.getPrimaryEmail());
+            throw new UnauthorizedException("Invalid password");
+        }
+    }
+
     private void ensureAccountActive(Identity identity) {
         AccountStatus status = identity.getAccountStatus();
         if (status != AccountStatus.ACTIVE) {

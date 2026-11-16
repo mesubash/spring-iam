@@ -201,6 +201,11 @@ public class SecurityConfig {
                                 "/api/v1/token/**"
                         ).hasAnyRole("INTERNAL", "SuperAdmin")
 
+                        // Account and grant APIs for resource servers
+                        .requestMatchers(
+                                "/api/v1/internal/**"
+                        ).hasAnyRole("INTERNAL", "SuperAdmin")
+
                         // Manifest sync: the service's own API key or an admin token
                         .requestMatchers(
                                 "/api/v1/services/*/permissions"

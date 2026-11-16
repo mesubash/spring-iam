@@ -264,6 +264,15 @@ public class IdentityAdminServiceImpl implements IdentityAdminService {
         }
     }
 
+    private static final UUID ROOT_SCOPE = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isPlatformAdmin(UUID id) {
+        return isSuperAdmin(id) || authzQueryService.getScopesForIdentity(id).stream()
+                .anyMatch(scope -> ROOT_SCOPE.equals(scope.getId()));
+    }
+
     private boolean isSuperAdmin(UUID identityId) {
         var roles = authzQueryService.getRolesForIdentity(identityId).getRoles();
         return roles != null && roles.contains("SuperAdmin");

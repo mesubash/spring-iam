@@ -54,4 +54,18 @@ public interface AuthService {
     void requestReactivation(String email);
 
     void verifyReactivation(String token);
+
+    /**
+     * Self-deactivation relayed by a service: revokes every session and mails the reactivation
+     * link. Only an ACTIVE account can enter it; a no-op when already deactivated.
+     */
+    void deactivate(java.util.UUID identityId);
+
+    /**
+     * Confirms a person's current password for a service that never sees hashes. Goes through
+     * the login check, so wrong answers count toward the account lock.
+     *
+     * @throws io.github.mesubash.iam.shared.exception.UnauthorizedException when it is wrong
+     */
+    void verifyPassword(java.util.UUID identityId, String password);
 }

@@ -55,6 +55,8 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
                                                 @Param("roleId") UUID roleId,
                                                 @Param("scopeId") UUID scopeId);
 
+    List<Assignment> findByOriginAndActiveTrue(String origin);
+
     @Query("SELECT COUNT(a) FROM Assignment a " +
             "WHERE a.subjectId = :subjectId AND a.active = true")
     long countActiveAssignmentsBySubject(@Param("subjectId") String subjectId);

@@ -157,6 +157,37 @@ get deprecated, never deleted.
 
 ---
 
+## 6a. Account and grant APIs for your service (API key)
+
+A resource server that onboards users itself can do it over its API key
+(`X-Internal-Api-Key`), without an admin token:
+
+```jsonc
+POST {IAM}/api/v1/internal/accounts            // create; unverified LOCAL gets the verification email
+{ "email": "ada@example.com", "passwordHash": "$2a$10$…", "verified": false }
+→ 201 { "id": "…", "email": "ada@example.com", "emailVerified": false, "provider": "LOCAL", … }
+
+POST {IAM}/api/v1/internal/provisioning/grants   // idempotent
+{ "subjectId": "<identity uuid>", "roleId": "<your role>", "scopeId": "<your scope>" }
+```
+
+- Your own transaction failed after the account was created? `DELETE
+  /api/v1/internal/accounts/{id}` discards it while it is still unused, so the
+  address is not stuck.
+- Mail your own verification link: `POST …/accounts/{id}/verification-token` →
+  `{ token }`, then link to `/api/auth/verify-email?token=…`.
+- "Confirm your password" screens: `POST …/accounts/{id}/verify-password
+  { password }` → 204 or 401 (counts toward the lock).
+- Reconcile: `GET …/provisioning/grants` lists only the grants made through
+  this API; `DELETE …/provisioning/grants/{assignmentId}` revokes one.
+
+The key is shared by every service, so IAM refuses what would let it reach
+administration: no grants at ROOT or of system roles, and no password,
+verification, deactivation or password-check on an account that holds
+SuperAdmin or any ROOT role. See API_REFERENCE § 5.
+
+---
+
 ## 7. Frontend integration
 
 The end-user login flow:
