@@ -1,5 +1,8 @@
 package io.github.mesubash.iam.authn.security.token;
 
+import io.github.mesubash.iam.authn.service.SecurityEventService;
+import io.github.mesubash.iam.authn.entity.enums.SecurityEventType;
+import java.util.Map;
 import io.github.mesubash.iam.util.ClientIpResolver;
 import io.github.mesubash.iam.authn.config.JwtConfig;
 import io.github.mesubash.iam.authn.entity.RefreshToken;
@@ -42,6 +45,7 @@ public class SessionService {
     private final TokenEncryptionUtil encryptionUtil;
     private final StringRedisTemplate redisTemplate;
     private final JwtConfig jwtConfig;
+    private final SecurityEventService securityEventService;
     private final Duration rotationGrace;
     private final int maxSessionsPerIdentity;
     private final SecureRandom secureRandom = new SecureRandom();
@@ -52,6 +56,7 @@ public class SessionService {
                           TokenEncryptionUtil encryptionUtil,
                           StringRedisTemplate redisTemplate,
                           JwtConfig jwtConfig,
+                          SecurityEventService securityEventService,
                           @Value("${iam.authn.session.rotation-grace-seconds:60}") long rotationGraceSeconds,
                           @Value("${iam.authn.session.max-per-identity:10}") int maxSessionsPerIdentity) {
         this.sessionRepository = sessionRepository;
@@ -60,6 +65,7 @@ public class SessionService {
         this.encryptionUtil = encryptionUtil;
         this.redisTemplate = redisTemplate;
         this.jwtConfig = jwtConfig;
+        this.securityEventService = securityEventService;
         this.rotationGrace = Duration.ofSeconds(rotationGraceSeconds);
         this.maxSessionsPerIdentity = maxSessionsPerIdentity;
     }
@@ -182,6 +188,8 @@ public class SessionService {
 
         // Replay outside grace: theft indicator — kill the whole session
         revokeSession(session.getId(), "REUSE_DETECTED");
+        securityEventService.logEvent(session.getIdentityId(), SecurityEventType.REUSE_DETECTED,
+                Map.of("sessionId", session.getId().toString()));
         log.warn("Refresh token reuse detected — session {} revoked (identity {})",
                 session.getId(), session.getIdentityId());
         throw new TokenReuseException("Refresh token reuse detected; session revoked");
@@ -193,6 +201,8 @@ public class SessionService {
         List<Session> active = sessionRepository.findActiveByIdentity(identityId, Instant.now());
         for (int i = active.size() - 1; i >= maxSessionsPerIdentity - 1 && i >= 0; i--) {
             revokeSession(active.get(i).getId(), "EVICTED");
+            securityEventService.logEvent(identityId, SecurityEventType.SESSION_EVICTED,
+                    Map.of("sessionId", active.get(i).getId().toString()));
             log.info("Evicted LRU session {} for identity {}", active.get(i).getId(), identityId);
         }
     }

@@ -46,6 +46,7 @@ public class JwtTokenProvider {
 
         var builder = Jwts.builder()
                 .header().keyId(key.kid()).and()
+                .issuer(jwtConfig.getIssuer())
                 .subject(principal.getId().toString())
                 .id(UUID.randomUUID().toString())                     // jti — blacklist handle
                 .claim("sid", sessionId != null ? sessionId.toString() : null)
@@ -53,6 +54,9 @@ public class JwtTokenProvider {
                 .claim("email_verified", principal.getIdentity() != null
                         && Boolean.TRUE.equals(principal.getIdentity().getEmailVerified()));
 
+        if (jwtConfig.getAudience() != null && !jwtConfig.getAudience().isBlank()) {
+            builder.audience().add(jwtConfig.getAudience()).and();
+        }
         if (!"minimal".equalsIgnoreCase(mode)) {
             builder.claim("roles", principal.getRoles());
         }
@@ -76,11 +80,23 @@ public class JwtTokenProvider {
 
     public Claims parseToken(String token) {
         try {
-            return Jwts.parser()
-                    .keyLocator(header -> resolveKey((ProtectedHeader) header))
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
+            var parser = Jwts.parser()
+                    .keyLocator(header -> resolveKey((ProtectedHeader) header));
+            // Bind tokens to this issuer: a token from another issuer is rejected, not merely
+            // signature-checked.
+            String issuer = jwtConfig.getIssuer();
+            if (issuer != null && !issuer.isBlank()) {
+                parser.requireIssuer(issuer);
+            }
+            Claims claims = parser.build().parseSignedClaims(token).getPayload();
+            String audience = jwtConfig.getAudience();
+            if (audience != null && !audience.isBlank()
+                    && (claims.getAudience() == null || !claims.getAudience().contains(audience))) {
+                throw new InvalidTokenException("Token audience mismatch");
+            }
+            return claims;
+        } catch (io.jsonwebtoken.IncorrectClaimException | io.jsonwebtoken.MissingClaimException e) {
+            throw new InvalidTokenException("Token issuer mismatch", e);
         } catch (ExpiredJwtException e) {
             throw new TokenExpiredException("Token has expired", e);
         } catch (UnsupportedJwtException e) {

@@ -236,7 +236,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<SuccessResponse>> resendVerification(@RequestParam String email) {
         authService.resendVerification(email);
         return ResponseEntity.ok(ApiResponse.success("Verification email sent",
-                SuccessResponse.of("Verification email has been sent to your email address")));
+                SuccessResponse.of("If the account exists and is unverified, a verification email has been sent")));
     }
 
     private String clientIp(HttpServletRequest request) {

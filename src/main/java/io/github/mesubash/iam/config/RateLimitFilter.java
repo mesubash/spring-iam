@@ -41,7 +41,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private int windowSeconds;
 
     // open = allow when Redis is down (availability) | closed = reject (strict)
-    @Value("${iam.rate-limit.fail-mode:open}")
+    @Value("${iam.rate-limit.fail-mode:closed}")
     private String failMode;
 
     public RateLimitFilter(StringRedisTemplate redisTemplate) {

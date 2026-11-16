@@ -77,7 +77,8 @@ management:
       base-path: /actuator
   endpoint:
     health:
-      show-details: always
+      # /actuator/** is public: "always" leaked DB/Redis component states to anonymous callers.
+      show-details: never
   metrics:
     distribution:
       percentiles-histogram:
@@ -129,7 +130,7 @@ iam:
   rate-limit:
     max-requests: 10        # per IP per endpoint per window
     window-seconds: 60      # sliding window
-    fail-mode: open         # open (availability) | closed (reject when Redis down)
+    fail-mode: ${IAM_RATELIMIT_FAIL_MODE:closed}   # closed (reject when Redis down) | open (availability)
 
   features:
     resource-grants: false    # per-instance ReBAC grants
@@ -155,6 +156,8 @@ iam:
       encryption-key: ${IAM_COOKIE_KEY:}          # independent from signing keys
     keys:
       encryption-key: ${IAM_KEY_ENCRYPTION_KEY:}  # encrypts private signing keys at rest
+      rotation-days: ${IAM_KEY_ROTATION_DAYS:90}  # nightly check rotates the active key past this age; 0 = off
+      rotation-cron: "0 20 3 * * *"
 
   security:
     # If empty, API key check is disabled
@@ -171,7 +174,12 @@ app:
     # Access tokens are RS256-signed with keys from signing_keys (bootstrap-
     # generated). This secret only feeds the legacy cookie-key fallback when
     # iam.authn.cookie.encryption-key is unset.
-    secret: ${APP_JWT_SECRET:changeThisToALongRandomSecretKeyForProduction}
+    # Unset -> an ephemeral boot-time secret (fine single-instance; set it for multi-instance OAuth).
+    secret: ${APP_JWT_SECRET:}
+    # iss claim on issued access tokens; parseToken rejects tokens from any other issuer.
+    issuer: ${APP_JWT_ISSUER:spring-iam}
+    # Optional aud claim. When set, tokens without it are rejected.
+    audience: ${APP_JWT_AUDIENCE:}
     expiration: 900000                   # access token, 15 minutes
     refresh-expiration: 604800000        # session lifetime, 7 days
     claims-mode: ${APP_JWT_CLAIMS_MODE:roles}   # minimal | roles | permissions

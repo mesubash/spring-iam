@@ -107,16 +107,19 @@ public class SecurityConfig {
                 )
                 .headers(headers -> headers
                     .frameOptions(frame -> frame.deny())
-                    .contentTypeOptions(contentType -> contentType.disable())
+                    .contentTypeOptions(contentType -> {})  // X-Content-Type-Options: nosniff
                     .xssProtection(xss -> xss.disable())
                     .contentSecurityPolicy(csp -> csp
                         .policyDirectives(
                             "default-src 'self'; " +
-                            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+                            "script-src 'self'; " +
                             "style-src 'self' 'unsafe-inline'; " +
                             "img-src 'self' data: https: blob:; " +
                             "font-src 'self' data:; " +
                             "connect-src 'self'; " +
+                            "object-src 'none'; " +
+                            "base-uri 'none'; " +
+                            "form-action 'self'; " +
                             "frame-ancestors 'none';"
                         )
                     )

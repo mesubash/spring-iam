@@ -391,16 +391,16 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void resendVerification(String email) {
-        Identity identity = identityRepository.findByPrimaryEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-        if (Boolean.TRUE.equals(identity.getEmailVerified())) {
-            throw new BadRequestException("Email already verified");
-        }
-
-        String verificationToken = PasswordUtil.generateSecureToken(32);
-        tokenService.store(identity.getId().toString(), verificationToken, TokenType.EMAIL_VERIFICATION);
-        notificationPort.sendEmailVerification(email, verificationToken);
+        // Non-revealing: unknown or already-verified emails silently no-op so the endpoint
+        // can't be used to enumerate accounts.
+        identityRepository.findByPrimaryEmail(email).ifPresent(identity -> {
+            if (Boolean.TRUE.equals(identity.getEmailVerified())) {
+                return;
+            }
+            String verificationToken = PasswordUtil.generateSecureToken(32);
+            tokenService.store(identity.getId().toString(), verificationToken, TokenType.EMAIL_VERIFICATION);
+            notificationPort.sendEmailVerification(email, verificationToken);
+        });
     }
 
     @Override
@@ -418,16 +418,16 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void requestReactivation(String email) {
-        Identity identity = identityRepository.findByPrimaryEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-        if (identity.getAccountStatus() != AccountStatus.DEACTIVATED) {
-            throw new BadRequestException("Account is not deactivated");
-        }
-
-        String reactivationToken = PasswordUtil.generateSecureToken(32);
-        tokenService.store(identity.getId().toString(), reactivationToken, TokenType.ACCOUNT_REACTIVATION);
-        notificationPort.sendReactivation(email, reactivationToken);
+        // Non-revealing: only a deactivated account triggers an email; everything else
+        // silently no-ops so the endpoint can't enumerate accounts or their states.
+        identityRepository.findByPrimaryEmail(email).ifPresent(identity -> {
+            if (identity.getAccountStatus() != AccountStatus.DEACTIVATED) {
+                return;
+            }
+            String reactivationToken = PasswordUtil.generateSecureToken(32);
+            tokenService.store(identity.getId().toString(), reactivationToken, TokenType.ACCOUNT_REACTIVATION);
+            notificationPort.sendReactivation(email, reactivationToken);
+        });
     }
 
     @Override

@@ -26,16 +26,13 @@ public class TokenEncryptionUtil {
 
     public TokenEncryptionUtil(
             @Value("${iam.authn.cookie.encryption-key:}") String cookieKey,
-            @Value("${app.jwt.secret:}") String legacySecret) {
+            io.github.mesubash.iam.authn.config.JwtConfig jwtConfig) {
         String keySource = cookieKey;
         if (keySource == null || keySource.isBlank()) {
-            if (legacySecret == null || legacySecret.isBlank()) {
-                throw new IllegalStateException(
-                        "No cookie encryption key configured — set IAM_COOKIE_KEY");
-            }
+            // getSecret() never returns a known constant: APP_JWT_SECRET, or an ephemeral boot secret.
             log.warn("Cookie encryption key derived from app.jwt.secret — "
                     + "set IAM_COOKIE_KEY for an independent key in production");
-            keySource = legacySecret;
+            keySource = jwtConfig.getSecret();
         }
         try {
             byte[] keyBytes = java.security.MessageDigest.getInstance("SHA-256")
