@@ -29,17 +29,24 @@ migrations create them.
 
 | Key (env) | Default | Purpose |
 |---|---|---|
-| `APP_JWT_SECRET` | dev placeholder | **Legacy** — only feeds the cookie-key fallback now. Access tokens are RS256 from `signing_keys`, not this secret. |
+| `APP_JWT_SECRET` | *(random per boot)* | Signs OAuth state cookies and feeds the cookie-key fallback. Access tokens are RS256 from `signing_keys`, not this secret. Unset = a random secret per boot (logged): fine for one instance, set it when running several. |
+| `APP_JWT_ISSUER` | `spring-iam` | `iss` claim on issued access tokens; tokens from any other issuer are rejected |
+| `APP_JWT_AUDIENCE` | *(empty)* | optional `aud` claim; when set, tokens without it are rejected |
 | `IAM_KEY_ENCRYPTION_KEY` | *(empty)* | AES-GCM-encrypts signing private keys at rest. **Set in production** — unset stores them plaintext (logged loudly). |
-| `IAM_COOKIE_KEY` | *(falls back to `APP_JWT_SECRET`)* | Independent key for refresh-cookie encryption. Set it to decouple from the JWT secret. |
+| `IAM_COOKIE_KEY` | *(derived from `APP_JWT_SECRET`)* | Independent key for refresh-cookie encryption. Set it to decouple from the JWT secret. |
 | `app.jwt.expiration` | `900000` (15 min) | access-token TTL (ms) |
 | `app.jwt.refresh-expiration` | `604800000` (7 d) | session lifetime (ms) |
 | `APP_JWT_CLAIMS_MODE` | `roles` | `minimal` \| `roles` \| `permissions` — how much authz data rides in the token |
 | `iam.authn.session.max-per-identity` | `10` | active sessions per user before LRU eviction |
 | `iam.authn.session.rotation-grace-seconds` | `60` | refresh retry window before a replay is treated as theft |
+| `IAM_KEY_ROTATION_DAYS` | `90` | nightly job rotates the active signing key past this age (`0` = off) |
+| `iam.authn.keys.rotation-cron` | `0 20 3 * * *` | when that check runs |
 
 **Signing keys bootstrap themselves** on first start (an RSA-2048 key pair is
-generated and stored). Rotate via `POST /api/v1/keys/rotate` (SuperAdmin).
+generated and stored, one key even when several replicas start together).
+They rotate automatically (see `IAM_KEY_ROTATION_DAYS`) or on demand via
+`POST /api/v1/keys/rotate` (SuperAdmin). A rotated key keeps verifying for an
+hour, and every replica picks up the new active key within a minute.
 
 ---
 
@@ -117,9 +124,10 @@ SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_SECRET=...
 |---|---|---|
 | `iam.account.lockout.max-attempts` | `5` | failed logins before lockout |
 | `iam.account.lockout.lockout-duration-minutes` | `30` | lockout duration |
+| `iam.account.lockout.window-minutes` | `15` | sliding window: only failures this recent count toward a lockout |
 | `iam.rate-limit.max-requests` | `10` | requests per IP per auth endpoint per window |
 | `iam.rate-limit.window-seconds` | `60` | rate-limit window |
-| `iam.rate-limit.fail-mode` | `open` | `open` (allow when Redis down) \| `closed` (reject) |
+| `iam.rate-limit.fail-mode` (`IAM_RATELIMIT_FAIL_MODE`) | `closed` | `closed` (reject when Redis is down) \| `open` (allow) |
 | `iam.integrity.fail-on-error` | `false` | refuse startup on broken invariants |
 | `iam.integrity.reconciliation-cron` | `-` | nightly closure/ltree drift check (`-` disables) |
 | `iam.break-glass.webhook-url` (`IAM_BREAK_GLASS_WEBHOOK`) | *(empty)* | optional alert POST on break-glass grant |
@@ -131,6 +139,8 @@ SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_SECRET=...
 
 - [ ] Set `IAM_KEY_ENCRYPTION_KEY` (encrypts signing keys at rest)
 - [ ] Set `IAM_COOKIE_KEY` (independent from any JWT secret)
+- [ ] Set `APP_JWT_SECRET` when running more than one instance
+- [ ] Exactly one trusted reverse proxy in front: the client IP is the rightmost `X-Forwarded-For` hop
 - [ ] Set a strong `IAM_INTERNAL_API_KEY` (or enable the service registry)
 - [ ] `APP_COOKIE_SECURE=true` (default) behind HTTPS
 - [ ] `iam.integrity.fail-on-error=true`

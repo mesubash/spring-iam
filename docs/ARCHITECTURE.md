@@ -52,7 +52,7 @@ its own service later without redesign.
 - **Credentials**: password (bcrypt-12) and OAuth2 (Google, flag-gated) coexist
   per identity. OAuth completes via a single-use exchange code — tokens never
   ride in a URL.
-- **Lifecycle**: register → email-verify → active; lockout after 5 fails / 30 min;
+- **Lifecycle**: register → email-verify → active; lockout after 5 fails within 15 min, for 30 min;
   suspend / deactivate / reactivate; password + email change flows.
 - Identity holds only what an issuer needs (email, status, flags). **Profile data
   lives in consuming services**, not here.

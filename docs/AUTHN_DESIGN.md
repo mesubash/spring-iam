@@ -487,11 +487,11 @@ Login handle changes are a top account-takeover target — hence re-auth + verif
 | T2 | Stolen refresh token | rotation + reuse detection ⇒ session death (§4.3); hashed at rest; HttpOnly+Secure+`__Host-` cookie; AES-GCM cookie encryption |
 | T3 | Stolen access token | 15-min TTL; jti blacklist on logout/revoke; `sid` enables session-level kill; introspection for high-security consumers |
 | T4 | Account enumeration | register / forgot-password / resend-verification / change-email return uniform bodies; login runs a **dummy bcrypt compare when the user doesn't exist** (identical work ⇒ identical timing) and never distinguishes "no user" from "bad password" |
-| T5 | Brute force | per-IP+path rate limit (Redis window) + per-account lockout (5 / 30 min) — two independent layers |
+| T5 | Brute force | per-IP+path rate limit (Redis window) + per-account lockout (5 failures within 15 min ⇒ locked 30 min) — two independent layers |
 | T6 | Key-reuse blast radius | three independent keys: signing keypair (DB, encrypted), cookie AES key (`IAM_COOKIE_KEY`), key-encryption key (`IAM_KEY_ENCRYPTION_KEY`); losing one ≠ losing all |
 | T7 | Cookie theft / CSRF | `__Host-` + Secure (default ON) + HttpOnly + SameSite=Lax; refresh endpoint accepts cookie only from same site; state-changing endpoints are Bearer-authenticated (no cookie-auth for APIs ⇒ CSRF surface ≈ refresh only, which returns tokens to the caller's JS context, useless cross-site) |
 | T8 | Redis outage degradation | no silent fallbacks: blacklist checks fail closed; refresh falls through to DB (correct, slower); loud alerts. `fail-mode` config, default closed |
-| T9 | OAuth redirect abuse | enforced allowlist (exact-prefix, empty ⇒ same-origin); one-time 60 s exchange code; no tokens in URLs ever |
+| T9 | OAuth redirect abuse | enforced allowlist (exact scheme + host, whole path segments after normalization; empty ⇒ same-origin); one-time 60 s exchange code; no tokens in URLs ever |
 | T10 | OAuth account takeover | linking matrix §8.3 — no auto-link on unverified provider email |
 | T11 | Timing attacks on token compare | all one-time/refresh comparisons via SHA-256-then-lookup (no string compare of secrets); API-key check keeps `MessageDigest.isEqual` |
 | T12 | Session fixation | session id minted server-side at login only; never accepted from client input |
