@@ -393,6 +393,7 @@ All raw-JSON. Path-level auth from `SecurityConfig`; some controllers add method
 | GET | `/api/v1/roles/{id}/permissions` | Authenticated | List a role's permissions. |
 | POST | `/api/v1/roles` | Authenticated | Create a role. Body `CreateRoleRequest` `{ name, displayName?, description?, orgType?, ownerScopeId?, permissionIds? }` (`ownerScopeId` null = global role). |
 | PUT | `/api/v1/roles/{id}/permissions` | Authenticated | Replace a role's permissions. Body is a raw `uuid[]`. 200 empty. |
+| DELETE | `/api/v1/roles/{id}` | SuperAdmin (global role) / manager of the owning scope (tenant role) | Delete a custom role. 204. 400 for a system role, 409 while the role has active assignments (revoke them first), 404 if absent. Revoked assignment rows for the role are removed with it; permission grants and hierarchy edges cascade. |
 
 ### Role hierarchy — `RoleHierarchyController` (`/api/v1/role-hierarchy`) — **SuperAdmin**
 

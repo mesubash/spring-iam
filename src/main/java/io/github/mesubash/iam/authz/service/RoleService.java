@@ -4,10 +4,14 @@ import io.github.mesubash.iam.authn.security.UserPrincipal;
 import io.github.mesubash.iam.authz.entity.Permission;
 import io.github.mesubash.iam.authz.entity.Role;
 import io.github.mesubash.iam.authz.entity.RolePermission;
+import io.github.mesubash.iam.authz.repository.AssignmentRepository;
 import io.github.mesubash.iam.authz.repository.PermissionRepository;
 import io.github.mesubash.iam.authz.repository.RoleHierarchyRepository;
 import io.github.mesubash.iam.authz.repository.RolePermissionRepository;
 import io.github.mesubash.iam.authz.repository.RoleRepository;
+import io.github.mesubash.iam.shared.exception.ConflictException;
+import io.github.mesubash.iam.shared.exception.ForbiddenException;
+import io.github.mesubash.iam.shared.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,6 +36,8 @@ public class RoleService {
     private final PermissionRepository permissionRepository;
     private final AuthorizationService authorizationService;
     private final DelegatedManagementGuard delegationGuard;
+    private final AssignmentRepository assignmentRepository;
+    private final CacheService cacheService;
 
     @Transactional(readOnly = true)
     public List<Role> getAllActive() {
@@ -177,6 +183,42 @@ public class RoleService {
 
         log.info("Deactivated role: {}", role.getName());
         return updated;
+    }
+
+    /**
+     * Deletes a custom role. Refused for system roles and while any active assignment still uses
+     * the role, so nobody silently loses access: revoke first. A global role needs a SuperAdmin;
+     * a tenant role needs authority over its owning scope.
+     */
+    @Transactional
+    public void delete(UserPrincipal caller, UUID roleId) {
+        Role role = roleRepository.findById(roleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Role not found"));
+
+        if (Boolean.TRUE.equals(role.getIsSystemRole())) {
+            throw new IllegalArgumentException("Cannot delete a system role");
+        }
+        if (role.getOwnerScopeId() != null) {
+            delegationGuard.assertCanManageScope(caller, role.getOwnerScopeId());
+        } else if (!delegationGuard.isPlatformAdmin(caller)) {
+            throw new ForbiddenException("Only a SuperAdmin may delete a global role");
+        }
+
+        long active = assignmentRepository.countByRoleIdAndActiveTrue(roleId);
+        if (active > 0) {
+            throw new ConflictException(
+                    "Role has " + active + " active assignment(s); revoke them before deleting");
+        }
+
+        // Revoking only deactivates an assignment, so revoked rows still hold the
+        // assignments.role_id foreign key (ON DELETE RESTRICT). Permission grants and hierarchy
+        // edges cascade with the role.
+        assignmentRepository.deleteByRoleId(roleId);
+        roleRepository.delete(role);
+
+        // Roles that inherited from this one change too, so drop every role entry, not just this one.
+        cacheService.invalidateAllRolePermissions();
+        log.info("Deleted role: {} ({})", role.getName(), roleId);
     }
 
     private Set<UUID> resolveRoleHierarchy(UUID roleId) {

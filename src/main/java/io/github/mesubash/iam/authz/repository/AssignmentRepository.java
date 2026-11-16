@@ -1,6 +1,7 @@
 package io.github.mesubash.iam.authz.repository;
 import io.github.mesubash.iam.authz.entity.*;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -13,6 +14,13 @@ import java.util.UUID;
 
 @Repository
 public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
+
+    long countByRoleIdAndActiveTrue(UUID roleId);
+
+    /** Every assignment row for a role, revoked ones included; used only when deleting the role. */
+    @Modifying
+    @Query("DELETE FROM Assignment a WHERE a.roleId = :roleId")
+    void deleteByRoleId(@Param("roleId") UUID roleId);
 
     @Query("SELECT a FROM Assignment a " +
             "WHERE a.subjectId = :subjectId " +

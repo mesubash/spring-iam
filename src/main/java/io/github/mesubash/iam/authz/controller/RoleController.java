@@ -75,4 +75,13 @@ public class RoleController {
         roleService.updatePermissions(caller, id, permissionIds);
         return ResponseEntity.ok().build();
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteRole(
+            @AuthenticationPrincipal UserPrincipal caller,
+            @PathVariable UUID id) {
+
+        roleService.delete(caller, id);
+        return ResponseEntity.noContent().build();
+    }
 }
