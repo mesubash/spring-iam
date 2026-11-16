@@ -118,7 +118,10 @@ function unwrapEnvelope<T>(body: unknown): T {
 export async function request<T = unknown>(path: string, opts: Options = {}): Promise<T> {
   let res = await doFetch(path, opts);
 
-  if (res.status === 401 && !opts.skipAuthRetry && !path.includes("/api/auth/")) {
+  // Authn calls (login, refresh, password flows) go through requestEnvelope with
+  // skipAuthRetry. Everything else, bearer endpoints under /api/auth/ included
+  // (sessions), refreshes once and retries before falling back to the login redirect.
+  if (res.status === 401 && !opts.skipAuthRetry) {
     const { ok } = await refreshAccessToken();
     if (ok) {
       res = await doFetch(path, opts);

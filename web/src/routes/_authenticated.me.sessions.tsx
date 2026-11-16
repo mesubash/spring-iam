@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { authApi } from "@/api/resources";
 import type { Session } from "@/api/types";
@@ -23,6 +23,20 @@ function MySessionsPage() {
   const q = useQuery({ queryKey: ["sessions"], queryFn: () => authApi.sessions() });
   const [toRevoke, setToRevoke] = useState<Session | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmSelected, setConfirmSelected] = useState(false);
+
+  const sessions = useMemo(() => q.data ?? [], [q.data]);
+  const allSelected = sessions.length > 0 && sessions.every((s) => selected.has(s.id));
+
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id);
+      else s.add(id);
+      return s;
+    });
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(sessions.map((s) => s.id)));
 
   const revoke = useMutation({
     mutationFn: (id: string) => authApi.revokeSession(id),
@@ -30,6 +44,24 @@ function MySessionsPage() {
       toast.success("Session revoked");
       qc.invalidateQueries({ queryKey: ["sessions"] });
       setToRevoke(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const revokeSelected = useMutation({
+    mutationFn: async () => {
+      const results = await Promise.allSettled(
+        Array.from(selected).map((id) => authApi.revokeSession(id)),
+      );
+      const failed = results.filter((r) => r.status === "rejected").length;
+      return { total: results.length, failed };
+    },
+    onSuccess: ({ total, failed }) => {
+      if (failed === 0) toast.success(`${total} session${total === 1 ? "" : "s"} revoked`);
+      else toast.warning(`${total - failed} revoked, ${failed} failed`);
+      setSelected(new Set());
+      setConfirmSelected(false);
+      qc.invalidateQueries({ queryKey: ["sessions"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -45,6 +77,29 @@ function MySessionsPage() {
   });
 
   const columns: Column<Session>[] = [
+    {
+      key: "select",
+      width: "36px",
+      header: (
+        <input
+          type="checkbox"
+          className="h-4 w-4 cursor-pointer"
+          aria-label="Select all sessions"
+          checked={allSelected}
+          onChange={toggleAll}
+        />
+      ),
+      render: (s) => (
+        <input
+          type="checkbox"
+          className="h-4 w-4 cursor-pointer"
+          aria-label="Select session"
+          checked={selected.has(s.id)}
+          onChange={() => toggle(s.id)}
+          onClick={(e) => e.stopPropagation()}
+        />
+      ),
+    },
     { key: "device", header: "Device", render: (s) => s.deviceLabel ?? "—" },
     { key: "ip", header: "IP", render: (s) => s.createdIp ?? "—" },
     { key: "created", header: "Created", render: (s) => formatDate(s.createdAt) },
@@ -72,9 +127,20 @@ function MySessionsPage() {
         title="My Sessions"
         description="Devices signed in with your account."
         actions={
-          <Button variant="outline" onClick={() => setConfirmAll(true)}>
-            Log out all devices
-          </Button>
+          <div className="flex items-center gap-2">
+            {selected.size > 0 ? (
+              <Button
+                variant="outline"
+                style={{ color: "var(--destructive)" }}
+                onClick={() => setConfirmSelected(true)}
+              >
+                Revoke selected ({selected.size})
+              </Button>
+            ) : null}
+            <Button variant="outline" onClick={() => setConfirmAll(true)}>
+              Log out all devices
+            </Button>
+          </div>
         }
       />
       <DataTable
@@ -94,6 +160,17 @@ function MySessionsPage() {
         destructive
         pending={revoke.isPending}
         onConfirm={() => toRevoke && revoke.mutate(toRevoke.id)}
+      />
+      <ConfirmDialog
+        open={confirmSelected}
+        onOpenChange={setConfirmSelected}
+        title="Revoke selected sessions"
+        description="The selected devices are signed out immediately. If this device is among them you will be logged out too."
+        target={`${selected.size} session${selected.size === 1 ? "" : "s"}`}
+        confirmLabel="Revoke selected"
+        destructive
+        pending={revokeSelected.isPending}
+        onConfirm={() => revokeSelected.mutate()}
       />
       <ConfirmDialog
         open={confirmAll}

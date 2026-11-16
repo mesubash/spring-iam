@@ -121,7 +121,7 @@ function AssignmentsPage() {
             <span>{formatDate(a.expiresAt)}</span>
           )
         ) : (
-          <span className="text-[var(--muted-foreground)]">—</span>
+          <span className="text-[var(--muted-foreground)]">Never</span>
         ),
     },
     {
