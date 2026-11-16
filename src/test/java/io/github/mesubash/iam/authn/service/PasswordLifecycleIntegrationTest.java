@@ -21,7 +21,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Reset and change against real Postgres + Redis: policy, session revocation. */
+/** Reset and change against real Postgres + Redis: policy, session revocation, email proof. */
 @SpringBootTest
 class PasswordLifecycleIntegrationTest {
 
@@ -62,6 +62,15 @@ class PasswordLifecycleIntegrationTest {
         authService.resetPassword(resetToken(identity), "new-pass-2");
 
         assertThat(sessionService.listActiveSessions(identity.getId())).isEmpty();
+    }
+
+    @Test
+    void resetVerifiesTheEmailItWasMailedTo() {
+        Identity identity = newIdentity(false);
+
+        authService.resetPassword(resetToken(identity), "new-pass-2");
+
+        assertThat(identityRepository.findById(identity.getId()).orElseThrow().getEmailVerified()).isTrue();
     }
 
     @Test

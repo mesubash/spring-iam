@@ -310,6 +310,13 @@ public class AuthServiceImpl implements AuthService {
         credential.setSecretHash(passwordEncoder.encode(newPassword));
         credentialRepository.save(credential);
 
+        // The token was mailed to this address, so using it proves the inbox is theirs. Without
+        // this an unverified user who resets is still turned away at login as unverified.
+        if (!Boolean.TRUE.equals(identity.getEmailVerified())) {
+            identity.setEmailVerified(true);
+            identityRepository.save(identity);
+        }
+
         // A reset usually follows a compromise: whoever holds a session from before it is out.
         sessionService.revokeAll(identity.getId(), "SECURITY");
 

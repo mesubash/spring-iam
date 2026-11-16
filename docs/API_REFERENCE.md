@@ -69,7 +69,7 @@ Controller: `AuthController` (envelope responses). Public endpoints per `Securit
 | POST | `/api/auth/verify-email-and-setup-password` | Public | Verify an invited user's email and set the initial password (one token). |
 | POST | `/api/auth/resend-verification` | Public | Resend the verification email. |
 | POST | `/api/auth/forgot-password` | Public | Send a password-reset email. |
-| POST | `/api/auth/reset-password` | Public | Reset password using `token` + `newPassword`. Ends every session of the account. |
+| POST | `/api/auth/reset-password` | Public | Reset password using `token` + `newPassword`. Ends every session of the account and marks the email verified (the token was mailed there). |
 | POST | `/api/auth/change-password` | Bearer (authenticated) | Change password (requires current password). Ends every session of the account, the caller's included, so the client signs in again. |
 | POST | `/api/auth/change-email` | Bearer (authenticated) | Change login email; verification sent to the new address. |
 | POST | `/api/auth/verify-email-change` | Public | Confirm the email change via `token`. |
