@@ -5,17 +5,24 @@ export type Identity = {
   id: string;
   email: string;
   emailVerified?: boolean;
+  mfaEnabled?: boolean;
   displayName?: string | null;
   [k: string]: unknown;
 };
 
 export type LoginResponse = {
-  accessToken: string;
-  expiresIn: number;
+  accessToken?: string;
+  expiresIn?: number;
   tokenType?: string;
+  /** MFA continuation: no tokens issued yet. */
+  status?: "MFA_REQUIRED" | "MFA_ENROLLMENT_REQUIRED";
+  challenge?: string;
+  enrollmentToken?: string;
   /** No longer returned by login/refresh — identity comes from /me/bootstrap. */
   identity?: Identity;
 };
+
+export type MfaSetup = { otpauthUri: string; secret: string };
 
 export type Scope = {
   id: string;

@@ -16,6 +16,7 @@ import type {
   IdentityAdmin,
   LoginResponse,
   MeBootstrap,
+  MfaSetup,
   ManifestSyncResult,
   Permission,
   PermissionGroup,
@@ -37,6 +38,11 @@ export const authApi = {
     requestEnvelope("/api/auth/register", { method: "POST", body: { email, password } }),
   login: (email: string, password: string) =>
     requestEnvelope<LoginResponse>("/api/auth/login", { method: "POST", body: { email, password } }),
+  mfaVerify: (challenge: string, code: string) =>
+    requestEnvelope<LoginResponse>("/api/auth/mfa/verify", {
+      method: "POST",
+      body: { challenge, code },
+    }),
   logout: () => requestEnvelope("/api/auth/logout", { method: "POST" }),
   logoutAll: () => requestEnvelope("/api/auth/logout-all", { method: "POST" }),
   changePassword: (currentPassword: string, newPassword: string) =>
@@ -112,6 +118,7 @@ export const identitiesApi = {
     api.put<AdminPasswordSet>(`/api/v1/identities/${id}/password`, input),
   setStatus: (id: string, status: string, reason?: string) =>
     api.put<IdentityAdmin>(`/api/v1/identities/${id}/status`, { status, reason }),
+  resetMfa: (id: string) => api.del(`/api/v1/identities/${id}/mfa`),
 };
 
 /* -------------------------------- Scopes -------------------------------- */
@@ -298,4 +305,26 @@ export const breakGlassApi = {
 
 export const keysApi = {
   rotate: () => api.post<{ kid: string }>("/api/v1/keys/rotate"),
+};
+
+/* ---------------------------------- MFA --------------------------------- */
+
+export const mfaApi = {
+  setup: (enrollmentToken?: string) =>
+    requestEnvelope<MfaSetup>("/api/auth/mfa/setup", {
+      method: "POST",
+      body: enrollmentToken ? { enrollmentToken } : {},
+    }),
+  enable: (code: string, enrollmentToken?: string) =>
+    requestEnvelope<{ recoveryCodes: string[] }>("/api/auth/mfa/enable", {
+      method: "POST",
+      body: { code, ...(enrollmentToken ? { enrollmentToken } : {}) },
+    }),
+  disable: (code: string) =>
+    requestEnvelope("/api/auth/mfa/disable", { method: "POST", body: { code } }),
+  recoveryCodes: (code: string) =>
+    requestEnvelope<{ recoveryCodes: string[] }>("/api/auth/mfa/recovery-codes", {
+      method: "POST",
+      body: { code },
+    }),
 };

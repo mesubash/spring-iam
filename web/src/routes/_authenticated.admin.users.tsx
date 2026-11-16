@@ -386,6 +386,7 @@ function UserDetailDialog({
           {can("platform.identity.update") ? (
             <>
               <AdminPasswordSection user={u} />
+              {u.mfaEnabled ? <MfaResetSection user={u} /> : null}
               <StatusSection
                 user={u}
                 onChanged={() => {
@@ -650,6 +651,52 @@ function AdminPasswordSection({ user }: { user: IdentityAdmin }) {
           </button>
         </div>
       ) : null}
+    </section>
+  );
+}
+
+/* ------------------------------- MFA reset ------------------------------ */
+
+function MfaResetSection({ user }: { user: IdentityAdmin }) {
+  const qc = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+
+  const reset = useMutation({
+    mutationFn: () => identitiesApi.resetMfa(user.id),
+    onSuccess: () => {
+      toast.success("MFA reset. The user sets it up again at next sign-in if required.");
+      setConfirming(false);
+      qc.invalidateQueries({ queryKey: ["identities"] });
+      qc.invalidateQueries({ queryKey: ["identity", user.id] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <section className="rounded border border-[var(--border)] p-3">
+      <h3 className="text-sm font-semibold">Two-factor authentication</h3>
+      <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
+        MFA is enabled. Reset it when the user has lost their authenticator and recovery codes.
+      </p>
+      <Button
+        variant="outline"
+        className="mt-2"
+        style={{ color: "var(--destructive)" }}
+        onClick={() => setConfirming(true)}
+      >
+        Reset MFA
+      </Button>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="Reset this user's MFA"
+        description="Removes their authenticator and recovery codes. If MFA is required for their role, they must set it up again at next sign-in. This is audited."
+        target={user.email}
+        confirmLabel="Reset MFA"
+        destructive
+        pending={reset.isPending}
+        onConfirm={() => reset.mutate()}
+      />
     </section>
   );
 }

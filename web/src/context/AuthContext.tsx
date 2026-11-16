@@ -4,11 +4,17 @@ import { setAccessToken, setUnauthorizedHandler, refreshAccessToken } from "@/ap
 import { authApi, authzApi } from "@/api/resources";
 import type { Identity, MeBootstrap } from "@/api/types";
 
+export type LoginOutcome =
+  | { kind: "ok"; message?: string }
+  | { kind: "mfa"; challenge: string }
+  | { kind: "enroll"; enrollmentToken: string };
+
 type AuthState = {
   identity: Identity | null;
   isAuthenticated: boolean;
   isBootstrapping: boolean;
-  login: (email: string, password: string) => Promise<{ message?: string }>;
+  login: (email: string, password: string) => Promise<LoginOutcome>;
+  completeMfaLogin: (challenge: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
   setIdentity: (id: Identity | null) => void;
 };
@@ -66,20 +72,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => setUnauthorizedHandler(null);
   }, []);
 
-  const value = useMemo<AuthState>(
-    () => ({
+  const value = useMemo<AuthState>(() => {
+    const establishSession = async (token: string) => {
+      setAccessToken(token);
+      const stored = sessionStorage.getItem(SCOPE_KEY) ?? undefined;
+      const b = await authzApi.bootstrap(stored);
+      primeFromBootstrap(qc, b);
+      setIdentity(b.identity);
+    };
+    return {
       identity,
       isAuthenticated: !!identity,
       isBootstrapping,
       setIdentity,
       login: async (email, password) => {
         const env = await authApi.login(email, password);
-        setAccessToken(env.data.accessToken);
-        const stored = sessionStorage.getItem(SCOPE_KEY) ?? undefined;
-        const b = await authzApi.bootstrap(stored);
-        primeFromBootstrap(qc, b);
-        setIdentity(b.identity);
-        return { message: env.message };
+        const d = env.data;
+        if (d.status === "MFA_REQUIRED") return { kind: "mfa", challenge: d.challenge! };
+        if (d.status === "MFA_ENROLLMENT_REQUIRED")
+          return { kind: "enroll", enrollmentToken: d.enrollmentToken! };
+        await establishSession(d.accessToken!);
+        return { kind: "ok", message: env.message };
+      },
+      completeMfaLogin: async (challenge, code) => {
+        const env = await authApi.mfaVerify(challenge, code);
+        await establishSession(env.data.accessToken!);
       },
       logout: async () => {
         try {
@@ -90,9 +107,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAccessToken(null);
         setIdentity(null);
       },
-    }),
-    [identity, isBootstrapping, qc],
-  );
+    };
+  }, [identity, isBootstrapping, qc]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
