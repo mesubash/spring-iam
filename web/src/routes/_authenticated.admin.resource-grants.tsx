@@ -244,9 +244,9 @@ function CreateGrantDialog({
             </div>
           </div>
           <div>
-            <Label>Permission key</Label>
+            <Label htmlFor="rg-perm">Permission key</Label>
             <div className="mt-1">
-              <PermissionCombobox value={permissionKey} onChange={setPermissionKey} />
+              <PermissionCombobox id="rg-perm" value={permissionKey} onChange={setPermissionKey} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">

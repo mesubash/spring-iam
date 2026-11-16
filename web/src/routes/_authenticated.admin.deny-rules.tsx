@@ -237,6 +237,7 @@ function CreateDialog({
           </select>
           <Label htmlFor="d-perm">Permission key</Label>
           <PermissionCombobox
+            id="d-perm"
             value={permissionKey}
             onChange={setPermissionKey}
             placeholder="invoice.payment.write"

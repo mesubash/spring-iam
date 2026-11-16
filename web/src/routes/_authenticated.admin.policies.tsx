@@ -256,6 +256,7 @@ function PolicyDialog({
             />
             <Label htmlFor="p-perm">Permission key (optional)</Label>
             <PermissionCombobox
+              id="p-perm"
               value={permissionKey ?? ""}
               onChange={setPermissionKey}
               placeholder="Any permission"

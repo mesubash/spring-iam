@@ -19,11 +19,14 @@ import { cn } from "@/lib/utils";
  * typing a value not in the list (wildcards like `invoice.*.*`) keeps it.
  */
 export function PermissionCombobox({
+  id,
   value,
   onChange,
   placeholder = "domain.resource.action",
   allowFreeText = true,
 }: {
+  /** Put on the trigger button so a <Label htmlFor> names the picker. */
+  id?: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
@@ -52,6 +55,7 @@ export function PermissionCombobox({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          id={id}
           type="button"
           variant="outline"
           role="combobox"
