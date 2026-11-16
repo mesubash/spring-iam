@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { assignmentsApi, breakGlassApi, rolesApi, scopesApi } from "@/api/resources";
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConfirmDialog } from "@/components/iam/ConfirmDialog";
+import { Pager } from "@/components/iam/Pager";
 import {
   Dialog,
   DialogContent,
@@ -43,9 +44,16 @@ function statusOf(a: Assignment): { label: string; tone: "success" | "destructiv
 function AssignmentsPage() {
   const [subjectFilter, setSubjectFilter] = useState("");
   const subjectId = subjectFilter.trim();
+  const [page, setPage] = useState(0);
+  // One subject's assignments come back whole; the full list is paged, newest first.
   const q = useQuery({
-    queryKey: ["assignments", subjectId || "all"],
-    queryFn: () => assignmentsApi.list(subjectId ? { subjectId } : undefined),
+    queryKey: ["assignments", subjectId || "all", subjectId ? 0 : page],
+    queryFn: async () => {
+      if (subjectId) return { rows: await assignmentsApi.list({ subjectId }), totalPages: 1 };
+      const res = await assignmentsApi.page(page);
+      return { rows: res.content, totalPages: res.totalPages };
+    },
+    placeholderData: keepPreviousData,
   });
   const rolesQ = useQuery({ queryKey: ["roles"], queryFn: () => rolesApi.list() });
   const scopesQ = useQuery({ queryKey: ["scopes"], queryFn: () => scopesApi.list() });
@@ -174,17 +182,21 @@ function AssignmentsPage() {
       <div className="mb-3 max-w-sm">
         <SubjectPicker
           value={subjectFilter}
-          onChange={setSubjectFilter}
+          onChange={(id) => {
+            setSubjectFilter(id);
+            setPage(0);
+          }}
           placeholder="Filter by user…"
         />
       </div>
       <DataTable
         columns={columns}
-        rows={q.data}
+        rows={q.data?.rows}
         loading={q.isLoading}
         empty={subjectId ? "No assignments for this subject." : "No assignments."}
         rowKey={(a) => a.id}
       />
+      <Pager page={page} onPage={setPage} totalPages={q.data?.totalPages ?? 0} />
       {createOpen ? <GrantDialog open onOpenChange={setCreateOpen} /> : null}
       {breakGlassOpen ? <BreakGlassDialog open onOpenChange={setBreakGlassOpen} /> : null}
       <ConfirmDialog
