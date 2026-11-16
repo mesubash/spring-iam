@@ -20,7 +20,7 @@ public interface IdentityAdminService {
 
     record PasswordSet(String temporaryPassword, boolean sessionsRevoked) {}
 
-    List<IdentityAdminView> search(String query, String status, int limit);
+    List<IdentityAdminView> search(String query, String status, int limit, int page);
 
     IdentityAdminView get(UUID id);
 

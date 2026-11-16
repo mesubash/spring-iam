@@ -1,5 +1,6 @@
 package io.github.mesubash.iam.authz.repository;
 import io.github.mesubash.iam.authz.entity.*;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,12 +14,14 @@ public interface AuthorizationAuditRepository extends JpaRepository<Authorizatio
     @Query("SELECT aa FROM AuthorizationAudit aa " +
             "WHERE aa.subjectId = :subjectId " +
             "ORDER BY aa.timestamp DESC")
-    List<AuthorizationAudit> findBySubjectIdOrderByTimestampDesc(@Param("subjectId") String subjectId);
+    List<AuthorizationAudit> findBySubjectIdOrderByTimestampDesc(@Param("subjectId") String subjectId,
+                                                               Pageable pageable);
 
     @Query("SELECT aa FROM AuthorizationAudit aa " +
             "WHERE aa.resourceType = :resourceType " +
             "AND aa.resourceId = :resourceId " +
             "ORDER BY aa.timestamp DESC")
     List<AuthorizationAudit> findByResourceOrderByTimestampDesc(@Param("resourceType") String resourceType,
-                                                                @Param("resourceId") String resourceId);
+                                                                @Param("resourceId") String resourceId,
+                                                                Pageable pageable);
 }

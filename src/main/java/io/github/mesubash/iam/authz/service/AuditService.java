@@ -4,6 +4,8 @@ import io.github.mesubash.iam.authz.entity.AuthorizationAudit;
 import io.github.mesubash.iam.authz.repository.AuthorizationAuditRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,31 +23,23 @@ public class AuditService {
     private final AuthorizationAuditRepository auditRepository;
 
     @Transactional(readOnly = true)
-    public List<AuthorizationAudit> getBySubjectId(String subjectId, int limit) {
-        List<AuthorizationAudit> audits = auditRepository
-                .findBySubjectIdOrderByTimestampDesc(subjectId);
-
-        return audits.stream()
-                .limit(limit)
-                .collect(Collectors.toList());
+    public List<AuthorizationAudit> getBySubjectId(String subjectId, int limit, int page) {
+        return auditRepository.findBySubjectIdOrderByTimestampDesc(subjectId, page(limit, page));
     }
 
     @Transactional(readOnly = true)
     public List<AuthorizationAudit> getByResource(String resourceType,
                                                   String resourceId,
-                                                  int limit) {
-        List<AuthorizationAudit> audits = auditRepository
-                .findByResourceOrderByTimestampDesc(resourceType, resourceId);
-
-        return audits.stream()
-                .limit(limit)
-                .collect(Collectors.toList());
+                                                  int limit,
+                                                  int page) {
+        return auditRepository.findByResourceOrderByTimestampDesc(resourceType, resourceId,
+                page(limit, page));
     }
 
     @Transactional(readOnly = true)
     public Map<String, Object> getStatistics(String subjectId, Instant since) {
         List<AuthorizationAudit> audits = auditRepository
-                .findBySubjectIdOrderByTimestampDesc(subjectId);
+                .findBySubjectIdOrderByTimestampDesc(subjectId, Pageable.unpaged());
 
         long total = audits.stream()
                 .filter(a -> a.getTimestamp().isAfter(since))
@@ -73,5 +67,10 @@ public class AuditService {
         stats.put("byPermission", byPermission);
 
         return stats;
+    }
+
+    // Paged in the database: the audit table is large and was previously loaded whole.
+    private static Pageable page(int limit, int page) {
+        return PageRequest.of(Math.max(0, page), Math.clamp(limit, 1, 1000));
     }
 }

@@ -23,9 +23,10 @@ public class AuditController {
     @GetMapping("/subject/{subjectId}")
     public ResponseEntity<List<AuthorizationAudit>> getAuditBySubject(
             @PathVariable String subjectId,
-            @RequestParam(defaultValue = "100") int limit) {
+            @RequestParam(defaultValue = "100") int limit,
+            @RequestParam(defaultValue = "0") int page) {
 
-        List<AuthorizationAudit> audits = auditService.getBySubjectId(subjectId, limit);
+        List<AuthorizationAudit> audits = auditService.getBySubjectId(subjectId, limit, page);
         return ResponseEntity.ok(audits);
     }
 
@@ -33,10 +34,11 @@ public class AuditController {
     public ResponseEntity<List<AuthorizationAudit>> getAuditByResource(
             @PathVariable String resourceType,
             @PathVariable String resourceId,
-            @RequestParam(defaultValue = "100") int limit) {
+            @RequestParam(defaultValue = "100") int limit,
+            @RequestParam(defaultValue = "0") int page) {
 
         List<AuthorizationAudit> audits = auditService.getByResource(
-                resourceType, resourceId, limit);
+                resourceType, resourceId, limit, page);
         return ResponseEntity.ok(audits);
     }
 

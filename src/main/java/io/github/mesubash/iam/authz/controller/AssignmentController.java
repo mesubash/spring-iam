@@ -5,15 +5,17 @@ import io.github.mesubash.iam.authz.dto.CreateAssignmentRequest;
 import io.github.mesubash.iam.authz.entity.Assignment;
 import io.github.mesubash.iam.authz.service.AuthorizationService;
 import io.github.mesubash.iam.authz.service.AssignmentService;
+import io.github.mesubash.iam.shared.dto.PageResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -25,15 +27,26 @@ public class AssignmentController {
     private final AssignmentService assignmentService;
     private final AuthorizationService authorizationService;
 
+    /**
+     * Without {@code page} the full list is returned (the original shape); with it, the full
+     * listing comes back as a {@link PageResponse}, newest grant first. A subject's own list is
+     * small and is never paged.
+     */
     @GetMapping
-    public ResponseEntity<List<Assignment>> getAssignments(
-            @RequestParam(required = false) String subjectId) {
+    public ResponseEntity<?> getAssignments(
+            @RequestParam(required = false) String subjectId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(defaultValue = "50") int size) {
 
-        List<Assignment> assignments = subjectId != null
-                ? assignmentService.getBySubjectId(subjectId)
-                : assignmentService.getAll();
-
-        return ResponseEntity.ok(assignments);
+        if (subjectId != null) {
+            return ResponseEntity.ok(assignmentService.getBySubjectId(subjectId));
+        }
+        if (page != null) {
+            PageRequest pageable = PageRequest.of(Math.max(0, page), Math.clamp(size, 1, 200),
+                    Sort.by("grantedAt").descending());
+            return ResponseEntity.ok(PageResponse.of(assignmentService.getAll(pageable)));
+        }
+        return ResponseEntity.ok(assignmentService.getAll());
     }
 
     @PostMapping

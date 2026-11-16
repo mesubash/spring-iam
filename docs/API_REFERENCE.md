@@ -24,6 +24,16 @@ Filter order is **RateLimit → API key → service JWT → user JWT** (`Securit
 - **Service JWTs are HS256** (shared secret `iam.security.jwt.secret`), tried before the user-JWT filter; a `Bearer` value that fails HMAC verification falls through to RS256 user-token verification.
 - The **refresh token is an opaque value** (not a JWT). On web it is returned only in a `__Host-Refresh` HttpOnly, Secure, SameSite cookie (encrypted at rest in the cookie); mobile/other clients that cannot use cookies read it from the login/refresh response. `/api/auth/refresh` reads it from the cookie.
 
+### Paged responses
+
+Endpoints documented as returning a `PageResponse` use this flat shape (Spring's `PageImpl` JSON is not used):
+
+```json
+{ "content": [ … ], "totalElements": 123, "totalPages": 3, "number": 0, "size": 50 }
+```
+
+`number` is the 0-based page index. Out-of-range `page`/`size` values are clamped, not rejected.
+
 ### Response envelopes
 
 - **`/api/auth/*`, `/api/auth/sessions/*`, `/api/authz/me/*`, and the OAuth controller** wrap results in a **success envelope**:
@@ -410,7 +420,7 @@ All raw-JSON. Path-level auth from `SecurityConfig`; some controllers add method
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| GET | `/api/v1/assignments` | Authenticated | List assignments; optional `?subjectId=`. |
+| GET | `/api/v1/assignments` | Authenticated | List assignments; optional `?subjectId=`. Add `?page=0&size=50` (size max 200) to get the full listing as a `PageResponse`, newest grant first; without `page` the plain array is returned. `subjectId` lists are never paged. |
 | POST | `/api/v1/assignments` | Authenticated | Assign a role to a subject at a scope. Body `CreateAssignmentRequest` `{ subjectId, subjectType="USER", roleId, scopeId, expiresAt?, conditions? }`. |
 | DELETE | `/api/v1/assignments/{id}?reason=…` | Authenticated | Revoke an assignment. 200 empty. |
 
@@ -446,8 +456,8 @@ Path falls under `anyRequest().authenticated()`; method security narrows.
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| GET | `/api/v1/audit/subject/{subjectId}?limit=100` | (above roles) | Audit records for a subject. |
-| GET | `/api/v1/audit/resource/{resourceType}/{resourceId}?limit=100` | (above roles) | Audit records for a resource. |
+| GET | `/api/v1/audit/subject/{subjectId}?limit=100&page=0` | (above roles) | Audit records for a subject, newest first. `limit` is the page size (max 1000), `page` is 0-based. |
+| GET | `/api/v1/audit/resource/{resourceType}/{resourceId}?limit=100&page=0` | (above roles) | Audit records for a resource, newest first; paged like the subject read. |
 | GET | `/api/v1/audit/statistics/{subjectId}?sinceDaysAgo=7` | (above roles) | Decision statistics for a subject (default window 7 days). Returns a `Map`. |
 
 ### Resource grants — `ResourceGrantController` (`/api/v1/resource-grants`) — **Authenticated** · flag `resource-grants`

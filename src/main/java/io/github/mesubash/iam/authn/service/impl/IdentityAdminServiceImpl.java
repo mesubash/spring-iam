@@ -58,12 +58,12 @@ public class IdentityAdminServiceImpl implements IdentityAdminService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<IdentityAdminView> search(String query, String status, int limit) {
-        int capped = Math.max(1, Math.min(limit, 200));
+    public List<IdentityAdminView> search(String query, String status, int limit, int page) {
+        int capped = Math.clamp(limit, 1, 200);
         AccountStatus statusFilter = parseStatus(status);
         String q = StringUtils.hasText(query) ? query.trim().toLowerCase() : "";
         List<Identity> identities = identityRepository.search(q, statusFilter,
-                PageRequest.of(0, capped));
+                PageRequest.of(Math.max(0, page), capped));
         return identities.stream().map(IdentityAdminView::from).toList();
     }
 

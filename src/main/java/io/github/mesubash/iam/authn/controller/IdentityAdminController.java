@@ -36,12 +36,14 @@ public class IdentityAdminController {
     @PreAuthorize("hasAnyRole('SuperAdmin','CountryAdmin','AccessAdmin','SecurityAdmin'," +
             "'OperationsAdmin','AuditViewer','GovernmentOversight')")
     @Operation(summary = "List/search users",
-            description = "Substring match on email; optional status filter; capped at 200 rows")
+            description = "Substring match on email; optional status filter; `limit` rows (max 200) "
+                    + "per `page` (0-based)")
     public ResponseEntity<List<IdentityAdminView>> search(
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String status,
-            @RequestParam(defaultValue = "50") int limit) {
-        return ResponseEntity.ok(identityAdminService.search(query, status, limit));
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") int page) {
+        return ResponseEntity.ok(identityAdminService.search(query, status, limit, page));
     }
 
     @GetMapping("/{id}")
