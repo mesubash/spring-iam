@@ -121,8 +121,6 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         return path.startsWith("/api/v1/health")
                 || path.startsWith("/actuator")
-                || path.startsWith("/swagger-ui")
-                || path.startsWith("/api-docs")
-                || path.startsWith("/v3/api-docs");
+                || path.startsWith("/docs");
     }
 }

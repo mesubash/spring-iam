@@ -596,4 +596,4 @@ Controller: `HealthController`. Not in the public allowlist → **authenticated*
 | GET | `/api/v1/health/cache-stats` | Authenticated | Authorization cache statistics (`CacheStats`). |
 | GET | `/api/v1/health/metrics` | Authenticated | Decision counters, latency timers, and cache stats (`Map`). |
 
-Public infra endpoints (permit-all, not part of these controllers): `/actuator/**`, `/health`, `/swagger-ui/**`, `/v3/api-docs/**`, `/.well-known/**`, `GET /` (redirects to `/actuator/health`).
+Public infra endpoints (permit-all, not part of these controllers): `/actuator/**`, `/health`, `/docs/**` (Swagger UI at `/docs`, OpenAPI JSON at `/docs/openapi.json`), `/.well-known/**`, `GET /` (redirects to `/actuator/health`).

@@ -256,8 +256,10 @@ server:
 # Swagger/OpenAPI Configuration
 springdoc:
   api-docs:
-    path: /api-docs/openapi.json
+    path: /docs/openapi.json
   swagger-ui:
-    path: /api-docs
+    # springdoc serves the UI assets next to this path's parent, so this keeps them all
+    # under /docs (/docs/swagger-ui/**); GET /docs redirects there.
+    path: /docs/swagger-ui.html
     operations-sorter: method
     tags-sorter: alpha

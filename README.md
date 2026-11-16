@@ -45,7 +45,7 @@ docker compose up -d
 ./mvnw spring-boot:run
 
 # 4. Explore
-#    Swagger UI:  http://localhost:8080/api-docs
+#    Swagger UI:  http://localhost:8080/docs
 #    JWKS:        http://localhost:8080/.well-known/jwks.json
 #    Health:      http://localhost:8080/actuator/health
 ```

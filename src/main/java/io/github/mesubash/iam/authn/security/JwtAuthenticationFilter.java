@@ -110,9 +110,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                path.endsWith(".css") ||
                path.endsWith(".js") ||
                path.endsWith(".ico") ||
-               path.startsWith("/swagger-ui") ||
-               path.startsWith("/api-docs") ||
-               path.startsWith("/v3/api-docs");
+               path.startsWith("/docs");
     }
 
     private String getJwtFromRequest(HttpServletRequest request) {

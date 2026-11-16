@@ -10,4 +10,9 @@ public class RootRedirectController {
     public String redirectToHealth() {
         return "redirect:/actuator/health";
     }
+
+    @GetMapping("/docs")
+    public String redirectToApiDocs() {
+        return "redirect:/docs/swagger-ui/index.html";
+    }
 }

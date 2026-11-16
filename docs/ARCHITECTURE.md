@@ -144,7 +144,7 @@ carries a `policyVersion` consistency token.
 | Cache / sessions | Redis (Lettuce) |
 | Migrations | Flyway (`V1` core → `V5` example seed) |
 | Tokens | RS256 JWT (jjwt) + opaque refresh + OAuth2 |
-| API docs | springdoc / Swagger UI at `/api-docs` |
+| API docs | springdoc / Swagger UI at `/docs` (spec: `/docs/openapi.json`) |
 | Metrics | Micrometer + Prometheus |
 
 See [`CONFIGURATION.md`](CONFIGURATION.md) for every setting and
