@@ -28,5 +28,9 @@ public class RegisterRequest {
     @Schema(description = "Password (minimum 6 characters)", example = "SecurePass123", required = true, minLength = 6, format = "password")
     private String password;
 
+    @Size(max = 150, message = "Name must be at most 150 characters")
+    @Schema(description = "Display name (optional)", example = "John Doe")
+    private String name;
+
 }
 

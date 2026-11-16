@@ -43,6 +43,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -92,6 +93,7 @@ public class AuthServiceImpl implements AuthService {
         // Create identity
         Identity identity = Identity.builder()
                 .primaryEmail(request.getEmail())
+                .displayName(StringUtils.hasText(request.getName()) ? request.getName().trim() : null)
                 .emailVerified(false)
                 .accountStatus(AccountStatus.ACTIVE)
                 .build();

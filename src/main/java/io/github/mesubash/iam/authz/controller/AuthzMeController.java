@@ -62,7 +62,7 @@ public class AuthzMeController {
                 new MeBootstrapResponse.Identity(
                         identity.getId(),
                         identity.getPrimaryEmail(),
-                        null,
+                        identity.getDisplayName(),
                         identity.getEmailVerified(),
                         Boolean.TRUE.equals(identity.getMfaEnabled())),
                 active,

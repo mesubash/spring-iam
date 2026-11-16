@@ -28,6 +28,9 @@ public class Identity {
     @Column(name = "primary_email", nullable = false, unique = true, length = 150)
     private String primaryEmail;
 
+    @Column(name = "display_name", length = 150)
+    private String displayName;
+
     @Column(name = "email_verified", nullable = false)
     @Builder.Default
     private Boolean emailVerified = false;

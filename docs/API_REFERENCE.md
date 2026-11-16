@@ -118,7 +118,7 @@ TOTP (RFC 6238, 6 digits, 30 s) plus ten single-use recovery codes.
 > Note: there is **no `/api/auth/me`** endpoint in the code. Login/refresh responses carry the identity summary; use `/api/authz/me/*` (§6) for scopes/permissions.
 
 **Request shapes**
-- `register` — body `RegisterRequest`: `{ "email": string, "password": string(8–72, a letter and a digit) }`
+- `register` — body `RegisterRequest`: `{ "email": string, "password": string(8–72, a letter and a digit), "name"?: string(max 150) }` (`name` becomes the identity's display name, returned by `/api/authz/me/bootstrap` as `identity.displayName`; null when not given)
 - `login` — body `LoginRequest`: `{ "email": string, "password": string }`
 - `refresh` — no body; refresh token read from `__Host-Refresh` cookie.
 - `oauth/exchange` — body `{ "code": string }`
